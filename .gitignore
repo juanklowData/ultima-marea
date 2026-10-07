@@ -1,0 +1,14 @@
+# Caché y exportaciones de Godot
+.godot/
+godot/android/
+*.apk
+*.aab
+
+# Descargas en bruto y copias de seguridad locales
+descargas_musica/
+muestras_musica/
+respaldo_codigo_*/
+
+# Archivos de prueba temporales
+prueba_temporal.gd
+prueba_temporal.gd.uid

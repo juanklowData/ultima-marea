@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Última Marea</title>
+  <link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+  <canvas id="mar"></canvas>
+
+  <div id="hud" hidden>
+    <div class="vida-caja" aria-hidden="true"><div id="vida"></div></div>
+    <p id="vivos">A flote: 12</p>
+    <p id="tormenta">Tormenta: 22s</p>
+  </div>
+
+  <div id="controles" hidden>
+    <div id="joystick" class="joy">
+      <div id="knob"></div>
+    </div>
+    <button id="fuego" type="button">Fuego</button>
+  </div>
+
+  <section id="menu" class="panel">
+    <p class="sobre">Battle royale naval</p>
+    <h1>Última Marea</h1>
+    <p>Doce barcos entran al mar. La tormenta cierra el círculo. Gana el último que siga a flote.</p>
+    <ul>
+      <li>Navega con la palanca, o con WASD y las flechas.</li>
+      <li>Dispara hacia la proa con Fuego o con Espacio.</li>
+      <li>Los barriles reparan el casco.</li>
+      <li>Los islotes detienen las balas.</li>
+      <li>Fuera del círculo claro, la tormenta te hunde.</li>
+    </ul>
+    <button id="zarpar" type="button">Zarpar</button>
+  </section>
+
+  <section id="final" class="panel" hidden>
+    <p class="sobre" id="final-sobre">Marea cerrada</p>
+    <h2 id="final-titulo">Victoria</h2>
+    <p id="final-texto">Tu barco quedó solo en el mar.</p>
+    <button id="otra" type="button">Otra marea</button>
+  </section>
+
+  <script src="juego.js"></script>
+</body>
+</html>

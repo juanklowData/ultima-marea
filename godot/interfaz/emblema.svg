@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="cielo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b3a5c"/>
+      <stop offset="0.6" stop-color="#1b5a6a"/>
+      <stop offset="1" stop-color="#0b2430"/>
+    </linearGradient>
+    <linearGradient id="mar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2aa6ad"/>
+      <stop offset="1" stop-color="#0c4752"/>
+    </linearGradient>
+    <linearGradient id="oro" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6d68a"/>
+      <stop offset="0.5" stop-color="#e2b15a"/>
+      <stop offset="1" stop-color="#9c6a24"/>
+    </linearGradient>
+    <clipPath id="disco">
+      <circle cx="128" cy="128" r="104"/>
+    </clipPath>
+  </defs>
+
+  <circle cx="128" cy="128" r="124" fill="url(#oro)"/>
+  <circle cx="128" cy="128" r="113" fill="#5c3c16"/>
+  <circle cx="128" cy="128" r="106" fill="url(#cielo)"/>
+
+  <g clip-path="url(#disco)">
+    <path d="M30 70 Q60 52 92 62 Q110 44 140 52 Q170 40 196 58 Q226 56 240 74 L240 92 Q200 84 170 90 Q130 82 100 90 Q60 84 30 92 Z" fill="#141c2e" opacity="0.75"/>
+    <path d="M196 70 L182 104 L194 104 L176 142 L206 96 L192 96 L206 70 Z" fill="#fff4d6"/>
+
+    <rect x="105" y="58" width="5" height="100" fill="#3b2412"/>
+    <rect x="147" y="72" width="5" height="86" fill="#3b2412"/>
+    <path d="M84 70 Q107 64 130 70 Q125 92 130 112 Q107 106 84 112 Q90 92 84 70 Z" fill="#f6efe2"/>
+    <path d="M88 116 Q107 111 128 116 Q124 132 128 146 Q107 141 88 146 Q92 132 88 116 Z" fill="#f6efe2"/>
+    <path d="M131 82 Q150 77 168 82 Q164 100 168 116 Q150 111 131 116 Q136 100 131 82 Z" fill="#e8dcc4"/>
+    <path d="M134 120 Q150 116 165 120 Q162 133 165 145 Q150 141 134 145 Q138 133 134 120 Z" fill="#e8dcc4"/>
+    <path d="M110 56 L130 61 L110 66 Z" fill="#c62f2f"/>
+    <path d="M150 158 L196 140 L198 145 L156 162 Z" fill="#3b2412"/>
+
+    <path d="M62 156 L196 156 L180 182 L80 182 Z" fill="#6b3a1c"/>
+    <rect x="62" y="152" width="134" height="7" fill="url(#oro)"/>
+    <circle cx="96" cy="168" r="3.5" fill="#1b1b1b"/>
+    <circle cx="118" cy="168" r="3.5" fill="#1b1b1b"/>
+    <circle cx="140" cy="168" r="3.5" fill="#1b1b1b"/>
+    <circle cx="162" cy="168" r="3.5" fill="#1b1b1b"/>
+
+    <path d="M0 178 Q22 164 44 178 T88 178 T132 178 T176 178 T220 178 T264 178 V256 H0 Z" fill="url(#mar)"/>
+    <path d="M0 178 Q22 164 44 178 T88 178 T132 178 T176 178 T220 178 T264 178" fill="none" stroke="#f6efe2" stroke-width="5" stroke-linecap="round"/>
+    <path d="M-20 206 Q4 194 28 206 T76 206 T124 206 T172 206 T220 206 T268 206 V256 H-20 Z" fill="#0b3a44"/>
+    <path d="M-20 206 Q4 194 28 206 T76 206 T124 206 T172 206 T220 206 T268 206" fill="none" stroke="#9fe0dc" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <circle cx="128" cy="128" r="106" fill="none" stroke="#f6d68a" stroke-width="4"/>
+</svg>
