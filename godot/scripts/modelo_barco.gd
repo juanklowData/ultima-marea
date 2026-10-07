@@ -62,18 +62,7 @@ static func crear(aspecto: Personalizacion) -> Node3D:
 	var y_proa := altura_cubierta(0.9, alto) + 0.1
 	if forma.get("castillo", false):
 		y_proa += _castillo_proa(raiz, largo, ancho, alto, casco, adorno)
-	var estilo_canon: String = aspecto.pieza("canones").get("estilo", "clasico")
-	_canon(raiz, estilo_canon, hierro, Vector3(0, y_proa, -largo * 0.4), Vector3(0, 0, -1), 1.5)
-	_pieza(raiz, _caja(Vector3(0.2, 0.08, 0.28)), COLOR_MADERA, Vector3(0, y_proa - 0.08, -largo * 0.39))
-
-	var por_lado := CANONES_POR_LADO
-	for k in por_lado:
-		var t := 0.35 + 0.35 * (k + 0.5) / por_lado
-		var media := media_manga(t, ancho)
-		var y := altura_cubierta(t, alto) - 0.22
-		var z := lerpf(largo / 2.0, -largo / 2.0, t)
-		for lado: float in [-1.0, 1.0]:
-			_canon(raiz, estilo_canon, hierro, Vector3(lado * (media + 0.06), y, z), Vector3(lado, 0, 0), 1.0)
+	_armar_canones(raiz, aspecto.pieza("canones").get("estilo", "clasico"), hierro, largo, ancho, alto, y_proa)
 
 	var largo_baupres: float = largo * 0.32 * forma.get("baupres", 1.0)
 	var direccion := Vector3(0, sin(0.35), -cos(0.35))
@@ -120,27 +109,48 @@ static func crear(aspecto: Personalizacion) -> Node3D:
 
 	var foques: int = forma.get("foques", 0)
 	for f in foques:
-		var proa_palo: Node3D = palos[0]
-		var alto_palo: float = mastiles[0].y
-		var cabeza := proa_palo.position + proa_palo.basis * Vector3(0, alto_palo * (0.82 - 0.2 * f), 0)
 		var amura: Vector3 = punta - direccion * largo_baupres * 0.3 * f
-		var z_escota := proa_palo.position.z - 0.25
-		var escota := Vector3(0, altura_cubierta(_t_de_z(z_escota, largo), alto) + 0.35, z_escota)
-		var plano := Node3D.new()
-		plano.rotation.y = PI / 2.0
-		raiz.add_child(plano)
-		_tela(plano, _vela_esquinas(Vector2(-escota.z, escota.y), Vector2(-amura.z, amura.y), Vector2(-cabeza.z, cabeza.y), Vector2(-cabeza.z, cabeza.y), 0.12), textura_vela, Vector3.ZERO)
-		_entre(raiz, cabeza, amura, 0.012, COLOR_MADERA)
+		_poner_foque(raiz, palos[0], mastiles[0].y, f, amura, largo, alto, textura_vela)
 
-	var largo_asta := punta_asta - base_asta + 0.1
-	_pieza(palo_bandera, _cilindro(0.018, 0.03, largo_asta), COLOR_MADERA, Vector3(0, punta_asta - largo_asta / 2.0, 0))
-	_pieza(palo_bandera, _esfera(0.045), adorno, Vector3(0, punta_asta + 0.03, 0))
-	var trapo := _pieza(palo_bandera, _vela(0.7, 0.42, 0.07), Color.WHITE, Vector3(0, punta_asta - 0.25, 0.37))
-	trapo.material_override = _material_tela(Dibujos.textura(aspecto.pieza("bandera"), 100, 60), true)
-	trapo.rotation.y = PI / 2.0
-	trapo.name = "Bandera"
+	_izar_bandera(palo_bandera, base_asta, punta_asta, adorno, aspecto.pieza("bandera"))
 	_adornar(raiz, aspecto.pieza("adorno"), largo, ancho, alto, forma.get("castillo", false), punta, cimas)
 	return raiz
+
+
+# Un cañón de caza en la proa y una fila de cañones asomando por cada costado.
+static func _armar_canones(raiz: Node3D, estilo_canon: String, hierro: Color, largo: float, ancho: float, alto: float, y_proa: float) -> void:
+	_canon(raiz, estilo_canon, hierro, Vector3(0, y_proa, -largo * 0.4), Vector3(0, 0, -1), 1.5)
+	_pieza(raiz, _caja(Vector3(0.2, 0.08, 0.28)), COLOR_MADERA, Vector3(0, y_proa - 0.08, -largo * 0.39))
+	for k in CANONES_POR_LADO:
+		var t := 0.35 + 0.35 * (k + 0.5) / CANONES_POR_LADO
+		var media := media_manga(t, ancho)
+		var y := altura_cubierta(t, alto) - 0.22
+		var z := lerpf(largo / 2.0, -largo / 2.0, t)
+		for lado: float in [-1.0, 1.0]:
+			_canon(raiz, estilo_canon, hierro, Vector3(lado * (media + 0.06), y, z), Vector3(lado, 0, 0), 1.0)
+
+
+# Vela triangular entre el palo de proa y el bauprés; "numero" baja cada foque un poco más.
+static func _poner_foque(raiz: Node3D, proa_palo: Node3D, alto_palo: float, numero: int, amura: Vector3, largo: float, alto: float, textura_vela: Texture2D) -> void:
+	var cabeza := proa_palo.position + proa_palo.basis * Vector3(0, alto_palo * (0.82 - 0.2 * numero), 0)
+	var z_escota := proa_palo.position.z - 0.25
+	var escota := Vector3(0, altura_cubierta(_t_de_z(z_escota, largo), alto) + 0.35, z_escota)
+	var plano := Node3D.new()
+	plano.rotation.y = PI / 2.0
+	raiz.add_child(plano)
+	_tela(plano, _vela_esquinas(Vector2(-escota.z, escota.y), Vector2(-amura.z, amura.y), Vector2(-cabeza.z, cabeza.y), Vector2(-cabeza.z, cabeza.y), 0.12), textura_vela, Vector3.ZERO)
+	_entre(raiz, cabeza, amura, 0.012, COLOR_MADERA)
+
+
+# Asta en la punta del palo más alto, con su bola y la bandera ondeando.
+static func _izar_bandera(palo: Node3D, base_asta: float, punta_asta: float, adorno: Color, bandera: Dictionary) -> void:
+	var largo_asta := punta_asta - base_asta + 0.1
+	_pieza(palo, _cilindro(0.018, 0.03, largo_asta), COLOR_MADERA, Vector3(0, punta_asta - largo_asta / 2.0, 0))
+	_pieza(palo, _esfera(0.045), adorno, Vector3(0, punta_asta + 0.03, 0))
+	var trapo := _pieza(palo, _vela(0.7, 0.42, 0.07), Color.WHITE, Vector3(0, punta_asta - 0.25, 0.37))
+	trapo.material_override = _material_tela(Dibujos.textura(bandera, 100, 60), true)
+	trapo.rotation.y = PI / 2.0
+	trapo.name = "Bandera"
 
 
 # Decoración de la pieza "adorno"; va de la popa (t = 0) a la proa (t = 1) siguiendo la borda.
@@ -441,150 +451,203 @@ static func _popa(raiz: Node3D, pieza: Dictionary, tipo: String, largo: float, a
 			_pieza(raiz, _caja(Vector3(ancho * 0.8, 0.05, 0.34)), adorno, Vector3(0, techo + 0.02, z_balcon - 0.02))
 
 
+# Medidas y colores que comparten todos los camarotes especiales de popa.
+class Camarote:
+	var largo: float
+	var h: float
+	var z: float
+	var fondo: float
+	var w: float
+	var base: float
+	var trasera: float
+	var pared: Color
+	var adorno: Color
+	var luz: Color
+	var brillo: StandardMaterial3D
+
+
 static func _popa_especial(raiz: Node3D, estilo: String, largo: float, ancho: float, alto: float, h: float, pared: Color, adorno: Color, luz: Color) -> void:
-	var z := largo * 0.34
-	var fondo := largo * 0.22
-	var w := ancho * 0.7
-	var base := altura_cubierta(_t_de_z(z, largo), alto) - 0.12
-	var trasera := z + fondo / 2.0 + 0.02
-	var brillo := _material(luz, true)
+	var cam := Camarote.new()
+	cam.largo = largo
+	cam.h = h
+	cam.z = largo * 0.34
+	cam.fondo = largo * 0.22
+	cam.w = ancho * 0.7
+	cam.base = altura_cubierta(_t_de_z(cam.z, largo), alto) - 0.12
+	cam.trasera = cam.z + cam.fondo / 2.0 + 0.02
+	cam.pared = pared
+	cam.adorno = adorno
+	cam.luz = luz
+	cam.brillo = _material(luz, true)
 	match estilo:
 		"pagoda":
-			var alto_bajo := h * 1.1
-			_pieza(raiz, _caja(Vector3(w * 0.9, alto_bajo, fondo * 0.9)), pared, Vector3(0, base + alto_bajo / 2.0, z))
-			for i in 3:
-				_pieza(raiz, _caja(Vector3(0.12, 0.14, 0.03)), luz, Vector3((i - 1) * w * 0.28, base + alto_bajo * 0.55, z + fondo * 0.45 + 0.01)).material_override = brillo
-			for esquina in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-				_pieza(raiz, _cilindro(0.035, 0.035, alto_bajo), Color("b5302a"), Vector3(esquina.x * w * 0.47, base + alto_bajo / 2.0, z + esquina.y * fondo * 0.47))
-			var y := base + alto_bajo
-			for piso in 2:
-				var escala := 1.0 - 0.38 * piso
-				var tejado := Node3D.new()
-				tejado.position = Vector3(0, y + 0.12 * escala, z)
-				tejado.scale.x = w / fondo
-				raiz.add_child(tejado)
-				_pieza(tejado, _piramide(fondo * 0.78 * escala, 0.05, 0.24 * escala), pared.darkened(0.45), Vector3.ZERO).rotation.y = PI / 4.0
-				for esquina in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-					var punta := _pieza(raiz, _cilindro(0.0, 0.035, 0.14), adorno, Vector3(esquina.x * w * 0.62 * escala, y + 0.06, z + esquina.y * fondo * 0.62 * escala))
-					punta.rotation = Vector3(esquina.y * 0.7, 0.0, -esquina.x * 0.7)
-				y += 0.24 * escala
-				if piso == 0:
-					var alto_alto := h * 0.55
-					_pieza(raiz, _caja(Vector3(w * 0.5, alto_alto, fondo * 0.5)), pared, Vector3(0, y + alto_alto / 2.0, z))
-					y += alto_alto
-			_pieza(raiz, _esfera(0.05), adorno, Vector3(0, y + 0.05, z))
+			_camarote_pagoda(raiz, cam)
 		"fortaleza":
-			var muro := h * 1.25
-			_pieza(raiz, _caja(Vector3(w, muro, fondo)), pared, Vector3(0, base + muro / 2.0, z))
-			_pieza(raiz, _caja(Vector3(w * 1.04, 0.06, fondo * 1.04)), pared.darkened(0.2), Vector3(0, base + muro, z))
-			var almena := Vector3(0.1, 0.13, 0.1)
-			for i in 5:
-				var x := lerpf(-w / 2.0 + 0.05, w / 2.0 - 0.05, i / 4.0)
-				for lado_z in [-1.0, 1.0]:
-					_pieza(raiz, _caja(almena), pared, Vector3(x, base + muro + 0.09, z + lado_z * (fondo / 2.0 - 0.05)))
-			for i in 3:
-				var zz := lerpf(z - fondo / 2.0 + 0.05, z + fondo / 2.0 - 0.05, (i + 1) / 4.0)
-				for lado in [-1.0, 1.0]:
-					_pieza(raiz, _caja(almena), pared, Vector3(lado * (w / 2.0 - 0.05), base + muro + 0.09, zz))
-			for i in 2:
-				_pieza(raiz, _caja(Vector3(0.05, 0.16, 0.03)), Color("141414"), Vector3((i - 0.5) * w * 0.4, base + muro * 0.55, trasera))
-			for lado in [-1.0, 1.0]:
-				var torre := Vector3(lado * w / 2.0, 0, z + fondo / 2.0)
-				_pieza(raiz, _cilindro(0.13, 0.15, muro * 1.35), pared.lightened(0.08), torre + Vector3(0, base + muro * 0.67, 0))
-				_pieza(raiz, _cilindro(0.0, 0.18, 0.3), adorno, torre + Vector3(0, base + muro * 1.35 + 0.15, 0))
-				_pieza(raiz, _caja(Vector3(0.04, 0.12, 0.04)), luz, torre + Vector3(lado * 0.1, base + muro * 0.9, 0.1)).material_override = brillo
+			_camarote_fortaleza(raiz, cam)
 		"timonera":
-			_pieza(raiz, _caja(Vector3(w * 1.05, 0.2, fondo * 1.1)), pared, Vector3(0, base + 0.1, z))
-			_pieza(raiz, _caja(Vector3(w * 1.12, 0.04, fondo * 1.16)), COLOR_CUBIERTA, Vector3(0, base + 0.22, z))
-			var suelo := base + 0.24
-			for lado in [-1.0, 1.0]:
-				_pieza(raiz, _caja(Vector3(0.03, 0.14, fondo * 1.1)), adorno, Vector3(lado * w * 0.55, suelo + 0.07, z))
-			_pieza(raiz, _caja(Vector3(w * 1.1, 0.14, 0.03)), adorno, Vector3(0, suelo + 0.07, z + fondo * 0.55))
-			var rueda := Node3D.new()
-			rueda.position = Vector3(0, suelo + 0.36, z - fondo * 0.15)
-			rueda.rotation.x = PI / 2.0
-			raiz.add_child(rueda)
-			var aro := TorusMesh.new()
-			aro.inner_radius = 0.15
-			aro.outer_radius = 0.19
-			_pieza(rueda, aro, COLOR_MADERA, Vector3.ZERO)
-			_pieza(rueda, _cilindro(0.04, 0.04, 0.06), adorno, Vector3.ZERO)
-			for k in 8:
-				_pieza(rueda, _cilindro(0.012, 0.012, 0.5), COLOR_MADERA, Vector3.ZERO).rotation = Vector3(PI / 2.0, k * PI / 4.0, 0.0)
-			_pieza(raiz, _caja(Vector3(0.08, 0.3, 0.08)), COLOR_MADERA, Vector3(0, suelo + 0.15, z - fondo * 0.15 + 0.06))
-			var alto_toldo := 0.85 + h * 0.3
-			for esquina in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-				_pieza(raiz, _cilindro(0.022, 0.022, alto_toldo), COLOR_MADERA, Vector3(esquina.x * w * 0.5, suelo + alto_toldo / 2.0, z + esquina.y * fondo * 0.5))
-			for i in 5:
-				var tira := _pieza(raiz, _caja(Vector3(w * 1.08 / 5.0, 0.03, fondo * 1.1)), adorno if i % 2 == 0 else Color("f3ecdf"), Vector3((i - 2) * w * 1.08 / 5.0, suelo + alto_toldo + 0.02, z))
-				tira.rotation.x = 0.08
+			_camarote_timonera(raiz, cam)
 		"cupula":
-			_pieza(raiz, _caja(Vector3(w, h, fondo)), pared, Vector3(0, base + h / 2.0, z))
-			_pieza(raiz, _caja(Vector3(w * 1.08, 0.06, fondo * 1.08)), adorno, Vector3(0, base + h, z))
-			for i in 3:
-				_pieza(raiz, _caja(Vector3(0.12, 0.16, 0.03)), luz, Vector3((i - 1) * w * 0.28, base + h * 0.5, trasera)).material_override = brillo
-			var radio := minf(w, fondo) * 0.4
-			_pieza(raiz, _cilindro(radio, radio, 0.16), pared.lightened(0.1), Vector3(0, base + h + 0.08, z))
-			for k in 6:
-				var a := k * TAU / 6.0
-				_pieza(raiz, _caja(Vector3(0.05, 0.08, 0.02)), luz, Vector3(sin(a) * radio, base + h + 0.09, z + cos(a) * radio)).rotation.y = a
-			var cupula := _pieza(raiz, _esfera(radio * 1.05), adorno, Vector3(0, base + h + 0.16, z))
-			cupula.scale.y = 0.85
-			_pieza(raiz, _cilindro(0.0, 0.03, 0.2), adorno, Vector3(0, base + h + 0.16 + radio * 0.9 + 0.08, z))
+			_camarote_cupula(raiz, cam)
 		"torre":
-			var radio := minf(w, fondo) * 0.36
-			var alto_torre := h * 0.9 + 0.7
-			_pieza(raiz, _caja(Vector3(w, h * 0.7, fondo)), pared.darkened(0.15), Vector3(0, base + h * 0.35, z))
-			_pieza(raiz, _cilindro(radio * 0.9, radio, alto_torre), pared, Vector3(0, base + alto_torre / 2.0, z))
-			for franja in 2:
-				_pieza(raiz, _cilindro(radio * 0.95, radio * 0.95, 0.07), adorno, Vector3(0, base + alto_torre * (0.4 + 0.3 * franja), z))
-			var y := base + alto_torre
-			_pieza(raiz, _cilindro(radio * 1.15, radio * 1.15, 0.05), COLOR_MADERA, Vector3(0, y, z))
-			_pieza(raiz, _cilindro(radio * 0.6, radio * 0.6, 0.2), luz, Vector3(0, y + 0.12, z)).material_override = brillo
-			_pieza(raiz, _cilindro(0.0, radio * 0.95, 0.3), adorno, Vector3(0, y + 0.37, z))
+			_camarote_torre(raiz, cam)
 		"fanales":
-			_pieza(raiz, _caja(Vector3(w, h, fondo)), pared, Vector3(0, base + h / 2.0, z))
-			_pieza(raiz, _caja(Vector3(w * 1.1, 0.07, largo * 0.25)), COLOR_CUBIERTA, Vector3(0, base + h + 0.035, z))
-			for i in 3:
-				_pieza(raiz, _caja(Vector3(0.12, 0.12, 0.03)), luz, Vector3((i - 1) * w * 0.28, base + h * 0.5, trasera)).material_override = brillo
-			for i in 3:
-				var x := (i - 1) * w * 0.36
-				var grande := 1.75 if i == 1 else 1.4
-				var y := base + h + 0.3 * grande + 0.1
-				var farol := Vector3(x, y, trasera + 0.14)
-				_entre(raiz, Vector3(x, base + h, trasera - 0.05), farol + Vector3(0, 0.15 * grande, 0), 0.02, adorno)
-				var vidrio := _cilindro(0.075 * grande, 0.06 * grande, 0.2 * grande)
-				vidrio.radial_segments = 6
-				_pieza(raiz, vidrio, luz, farol).material_override = brillo
-				_pieza(raiz, _cilindro(0.0, 0.1 * grande, 0.12 * grande), adorno, farol + Vector3(0, 0.15 * grande, 0))
-				_pieza(raiz, _cilindro(0.06 * grande, 0.0, 0.08 * grande), adorno, farol - Vector3(0, 0.14 * grande, 0))
+			_camarote_fanales(raiz, cam)
 		"toldo":
-			_pieza(raiz, _caja(Vector3(w * 1.05, 0.12, fondo * 1.1)), COLOR_CUBIERTA, Vector3(0, base + 0.06, z))
-			var alto_toldo := 0.7 + h * 0.4
-			for esquina in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-				_pieza(raiz, _cilindro(0.025, 0.025, alto_toldo), COLOR_MADERA, Vector3(esquina.x * w * 0.5, base + alto_toldo / 2.0, z + esquina.y * fondo * 0.5))
-			for i in 4:
-				var lona := PrismMesh.new()
-				lona.size = Vector3(w * 1.15, 0.4, fondo * 1.15 / 4.0)
-				_pieza(raiz, lona, pared if i % 2 == 0 else Color("f3ecdf"), Vector3(0, base + alto_toldo + 0.2, z + (i - 1.5) * fondo * 1.15 / 4.0))
-			for i in 2:
-				_pieza(raiz, _cilindro(0.09, 0.09, 0.22), COLOR_MADERA, Vector3((i - 0.5) * w * 0.4, base + 0.23, z + fondo * 0.1))
-				_pieza(raiz, _cilindro(0.095, 0.095, 0.03), COLOR_HIERRO, Vector3((i - 0.5) * w * 0.4, base + 0.27, z + fondo * 0.1))
-			_pieza(raiz, _esfera(0.05), luz, Vector3(0, base + alto_toldo - 0.1, z)).material_override = brillo
+			_camarote_toldo(raiz, cam)
 		"cabana":
-			_pieza(raiz, _caja(Vector3(w, h, fondo)), pared, Vector3(0, base + h / 2.0, z))
-			for i in 4:
-				_pieza(raiz, _caja(Vector3(w * 1.01, 0.02, fondo * 1.01)), pared.darkened(0.3), Vector3(0, base + h * (0.2 + 0.2 * i), z))
-			var tejado := PrismMesh.new()
-			tejado.size = Vector3(w * 1.2, 0.45, fondo * 1.15)
-			_pieza(raiz, tejado, COLOR_MADERA.lightened(0.1), Vector3(0, base + h + 0.225, z))
-			var chimenea := Vector3(w * 0.28, base + h + 0.35, z - fondo * 0.15)
-			_pieza(raiz, _caja(Vector3(0.11, 0.4, 0.11)), adorno, chimenea)
-			_pieza(raiz, _caja(Vector3(0.14, 0.05, 0.14)), adorno.darkened(0.3), chimenea + Vector3(0, 0.2, 0))
-			var ventana := _pieza(raiz, _cilindro(0.08, 0.08, 0.03), luz, Vector3(0, base + h * 0.55, trasera))
-			ventana.rotation.x = PI / 2.0
-			ventana.material_override = brillo
-			_pieza(raiz, _caja(Vector3(0.2, 0.03, 0.04)), COLOR_MADERA, Vector3(0, base + h * 0.55, trasera + 0.02))
+			_camarote_cabana(raiz, cam)
+
+
+static func _camarote_pagoda(raiz: Node3D, cam: Camarote) -> void:
+	var alto_bajo := cam.h * 1.1
+	_pieza(raiz, _caja(Vector3(cam.w * 0.9, alto_bajo, cam.fondo * 0.9)), cam.pared, Vector3(0, cam.base + alto_bajo / 2.0, cam.z))
+	for i in 3:
+		_pieza(raiz, _caja(Vector3(0.12, 0.14, 0.03)), cam.luz, Vector3((i - 1) * cam.w * 0.28, cam.base + alto_bajo * 0.55, cam.z + cam.fondo * 0.45 + 0.01)).material_override = cam.brillo
+	for esquina in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		_pieza(raiz, _cilindro(0.035, 0.035, alto_bajo), Color("b5302a"), Vector3(esquina.x * cam.w * 0.47, cam.base + alto_bajo / 2.0, cam.z + esquina.y * cam.fondo * 0.47))
+	var y := cam.base + alto_bajo
+	for piso in 2:
+		var escala := 1.0 - 0.38 * piso
+		var tejado := Node3D.new()
+		tejado.position = Vector3(0, y + 0.12 * escala, cam.z)
+		tejado.scale.x = cam.w / cam.fondo
+		raiz.add_child(tejado)
+		_pieza(tejado, _piramide(cam.fondo * 0.78 * escala, 0.05, 0.24 * escala), cam.pared.darkened(0.45), Vector3.ZERO).rotation.y = PI / 4.0
+		for esquina in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+			var punta := _pieza(raiz, _cilindro(0.0, 0.035, 0.14), cam.adorno, Vector3(esquina.x * cam.w * 0.62 * escala, y + 0.06, cam.z + esquina.y * cam.fondo * 0.62 * escala))
+			punta.rotation = Vector3(esquina.y * 0.7, 0.0, -esquina.x * 0.7)
+		y += 0.24 * escala
+		if piso == 0:
+			var alto_alto := cam.h * 0.55
+			_pieza(raiz, _caja(Vector3(cam.w * 0.5, alto_alto, cam.fondo * 0.5)), cam.pared, Vector3(0, y + alto_alto / 2.0, cam.z))
+			y += alto_alto
+	_pieza(raiz, _esfera(0.05), cam.adorno, Vector3(0, y + 0.05, cam.z))
+
+
+static func _camarote_fortaleza(raiz: Node3D, cam: Camarote) -> void:
+	var muro := cam.h * 1.25
+	_pieza(raiz, _caja(Vector3(cam.w, muro, cam.fondo)), cam.pared, Vector3(0, cam.base + muro / 2.0, cam.z))
+	_pieza(raiz, _caja(Vector3(cam.w * 1.04, 0.06, cam.fondo * 1.04)), cam.pared.darkened(0.2), Vector3(0, cam.base + muro, cam.z))
+	var almena := Vector3(0.1, 0.13, 0.1)
+	for i in 5:
+		var x := lerpf(-cam.w / 2.0 + 0.05, cam.w / 2.0 - 0.05, i / 4.0)
+		for lado_z in [-1.0, 1.0]:
+			_pieza(raiz, _caja(almena), cam.pared, Vector3(x, cam.base + muro + 0.09, cam.z + lado_z * (cam.fondo / 2.0 - 0.05)))
+	for i in 3:
+		var zz := lerpf(cam.z - cam.fondo / 2.0 + 0.05, cam.z + cam.fondo / 2.0 - 0.05, (i + 1) / 4.0)
+		for lado in [-1.0, 1.0]:
+			_pieza(raiz, _caja(almena), cam.pared, Vector3(lado * (cam.w / 2.0 - 0.05), cam.base + muro + 0.09, zz))
+	for i in 2:
+		_pieza(raiz, _caja(Vector3(0.05, 0.16, 0.03)), Color("141414"), Vector3((i - 0.5) * cam.w * 0.4, cam.base + muro * 0.55, cam.trasera))
+	for lado in [-1.0, 1.0]:
+		var torre := Vector3(lado * cam.w / 2.0, 0, cam.z + cam.fondo / 2.0)
+		_pieza(raiz, _cilindro(0.13, 0.15, muro * 1.35), cam.pared.lightened(0.08), torre + Vector3(0, cam.base + muro * 0.67, 0))
+		_pieza(raiz, _cilindro(0.0, 0.18, 0.3), cam.adorno, torre + Vector3(0, cam.base + muro * 1.35 + 0.15, 0))
+		_pieza(raiz, _caja(Vector3(0.04, 0.12, 0.04)), cam.luz, torre + Vector3(lado * 0.1, cam.base + muro * 0.9, 0.1)).material_override = cam.brillo
+
+
+static func _camarote_timonera(raiz: Node3D, cam: Camarote) -> void:
+	_pieza(raiz, _caja(Vector3(cam.w * 1.05, 0.2, cam.fondo * 1.1)), cam.pared, Vector3(0, cam.base + 0.1, cam.z))
+	_pieza(raiz, _caja(Vector3(cam.w * 1.12, 0.04, cam.fondo * 1.16)), COLOR_CUBIERTA, Vector3(0, cam.base + 0.22, cam.z))
+	var suelo := cam.base + 0.24
+	for lado in [-1.0, 1.0]:
+		_pieza(raiz, _caja(Vector3(0.03, 0.14, cam.fondo * 1.1)), cam.adorno, Vector3(lado * cam.w * 0.55, suelo + 0.07, cam.z))
+	_pieza(raiz, _caja(Vector3(cam.w * 1.1, 0.14, 0.03)), cam.adorno, Vector3(0, suelo + 0.07, cam.z + cam.fondo * 0.55))
+	var rueda := Node3D.new()
+	rueda.position = Vector3(0, suelo + 0.36, cam.z - cam.fondo * 0.15)
+	rueda.rotation.x = PI / 2.0
+	raiz.add_child(rueda)
+	var aro := TorusMesh.new()
+	aro.inner_radius = 0.15
+	aro.outer_radius = 0.19
+	_pieza(rueda, aro, COLOR_MADERA, Vector3.ZERO)
+	_pieza(rueda, _cilindro(0.04, 0.04, 0.06), cam.adorno, Vector3.ZERO)
+	for k in 8:
+		_pieza(rueda, _cilindro(0.012, 0.012, 0.5), COLOR_MADERA, Vector3.ZERO).rotation = Vector3(PI / 2.0, k * PI / 4.0, 0.0)
+	_pieza(raiz, _caja(Vector3(0.08, 0.3, 0.08)), COLOR_MADERA, Vector3(0, suelo + 0.15, cam.z - cam.fondo * 0.15 + 0.06))
+	var alto_toldo := 0.85 + cam.h * 0.3
+	for esquina in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		_pieza(raiz, _cilindro(0.022, 0.022, alto_toldo), COLOR_MADERA, Vector3(esquina.x * cam.w * 0.5, suelo + alto_toldo / 2.0, cam.z + esquina.y * cam.fondo * 0.5))
+	for i in 5:
+		var tira := _pieza(raiz, _caja(Vector3(cam.w * 1.08 / 5.0, 0.03, cam.fondo * 1.1)), cam.adorno if i % 2 == 0 else Color("f3ecdf"), Vector3((i - 2) * cam.w * 1.08 / 5.0, suelo + alto_toldo + 0.02, cam.z))
+		tira.rotation.x = 0.08
+
+
+static func _camarote_cupula(raiz: Node3D, cam: Camarote) -> void:
+	_pieza(raiz, _caja(Vector3(cam.w, cam.h, cam.fondo)), cam.pared, Vector3(0, cam.base + cam.h / 2.0, cam.z))
+	_pieza(raiz, _caja(Vector3(cam.w * 1.08, 0.06, cam.fondo * 1.08)), cam.adorno, Vector3(0, cam.base + cam.h, cam.z))
+	for i in 3:
+		_pieza(raiz, _caja(Vector3(0.12, 0.16, 0.03)), cam.luz, Vector3((i - 1) * cam.w * 0.28, cam.base + cam.h * 0.5, cam.trasera)).material_override = cam.brillo
+	var radio := minf(cam.w, cam.fondo) * 0.4
+	_pieza(raiz, _cilindro(radio, radio, 0.16), cam.pared.lightened(0.1), Vector3(0, cam.base + cam.h + 0.08, cam.z))
+	for k in 6:
+		var a := k * TAU / 6.0
+		_pieza(raiz, _caja(Vector3(0.05, 0.08, 0.02)), cam.luz, Vector3(sin(a) * radio, cam.base + cam.h + 0.09, cam.z + cos(a) * radio)).rotation.y = a
+	var cupula := _pieza(raiz, _esfera(radio * 1.05), cam.adorno, Vector3(0, cam.base + cam.h + 0.16, cam.z))
+	cupula.scale.y = 0.85
+	_pieza(raiz, _cilindro(0.0, 0.03, 0.2), cam.adorno, Vector3(0, cam.base + cam.h + 0.16 + radio * 0.9 + 0.08, cam.z))
+
+
+static func _camarote_torre(raiz: Node3D, cam: Camarote) -> void:
+	var radio := minf(cam.w, cam.fondo) * 0.36
+	var alto_torre := cam.h * 0.9 + 0.7
+	_pieza(raiz, _caja(Vector3(cam.w, cam.h * 0.7, cam.fondo)), cam.pared.darkened(0.15), Vector3(0, cam.base + cam.h * 0.35, cam.z))
+	_pieza(raiz, _cilindro(radio * 0.9, radio, alto_torre), cam.pared, Vector3(0, cam.base + alto_torre / 2.0, cam.z))
+	for franja in 2:
+		_pieza(raiz, _cilindro(radio * 0.95, radio * 0.95, 0.07), cam.adorno, Vector3(0, cam.base + alto_torre * (0.4 + 0.3 * franja), cam.z))
+	var y := cam.base + alto_torre
+	_pieza(raiz, _cilindro(radio * 1.15, radio * 1.15, 0.05), COLOR_MADERA, Vector3(0, y, cam.z))
+	_pieza(raiz, _cilindro(radio * 0.6, radio * 0.6, 0.2), cam.luz, Vector3(0, y + 0.12, cam.z)).material_override = cam.brillo
+	_pieza(raiz, _cilindro(0.0, radio * 0.95, 0.3), cam.adorno, Vector3(0, y + 0.37, cam.z))
+
+
+static func _camarote_fanales(raiz: Node3D, cam: Camarote) -> void:
+	_pieza(raiz, _caja(Vector3(cam.w, cam.h, cam.fondo)), cam.pared, Vector3(0, cam.base + cam.h / 2.0, cam.z))
+	_pieza(raiz, _caja(Vector3(cam.w * 1.1, 0.07, cam.largo * 0.25)), COLOR_CUBIERTA, Vector3(0, cam.base + cam.h + 0.035, cam.z))
+	for i in 3:
+		_pieza(raiz, _caja(Vector3(0.12, 0.12, 0.03)), cam.luz, Vector3((i - 1) * cam.w * 0.28, cam.base + cam.h * 0.5, cam.trasera)).material_override = cam.brillo
+	for i in 3:
+		var x := (i - 1) * cam.w * 0.36
+		var grande := 1.75 if i == 1 else 1.4
+		var y := cam.base + cam.h + 0.3 * grande + 0.1
+		var farol := Vector3(x, y, cam.trasera + 0.14)
+		_entre(raiz, Vector3(x, cam.base + cam.h, cam.trasera - 0.05), farol + Vector3(0, 0.15 * grande, 0), 0.02, cam.adorno)
+		var vidrio := _cilindro(0.075 * grande, 0.06 * grande, 0.2 * grande)
+		vidrio.radial_segments = 6
+		_pieza(raiz, vidrio, cam.luz, farol).material_override = cam.brillo
+		_pieza(raiz, _cilindro(0.0, 0.1 * grande, 0.12 * grande), cam.adorno, farol + Vector3(0, 0.15 * grande, 0))
+		_pieza(raiz, _cilindro(0.06 * grande, 0.0, 0.08 * grande), cam.adorno, farol - Vector3(0, 0.14 * grande, 0))
+
+
+static func _camarote_toldo(raiz: Node3D, cam: Camarote) -> void:
+	_pieza(raiz, _caja(Vector3(cam.w * 1.05, 0.12, cam.fondo * 1.1)), COLOR_CUBIERTA, Vector3(0, cam.base + 0.06, cam.z))
+	var alto_toldo := 0.7 + cam.h * 0.4
+	for esquina in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		_pieza(raiz, _cilindro(0.025, 0.025, alto_toldo), COLOR_MADERA, Vector3(esquina.x * cam.w * 0.5, cam.base + alto_toldo / 2.0, cam.z + esquina.y * cam.fondo * 0.5))
+	for i in 4:
+		var lona := PrismMesh.new()
+		lona.size = Vector3(cam.w * 1.15, 0.4, cam.fondo * 1.15 / 4.0)
+		_pieza(raiz, lona, cam.pared if i % 2 == 0 else Color("f3ecdf"), Vector3(0, cam.base + alto_toldo + 0.2, cam.z + (i - 1.5) * cam.fondo * 1.15 / 4.0))
+	for i in 2:
+		_pieza(raiz, _cilindro(0.09, 0.09, 0.22), COLOR_MADERA, Vector3((i - 0.5) * cam.w * 0.4, cam.base + 0.23, cam.z + cam.fondo * 0.1))
+		_pieza(raiz, _cilindro(0.095, 0.095, 0.03), COLOR_HIERRO, Vector3((i - 0.5) * cam.w * 0.4, cam.base + 0.27, cam.z + cam.fondo * 0.1))
+	_pieza(raiz, _esfera(0.05), cam.luz, Vector3(0, cam.base + alto_toldo - 0.1, cam.z)).material_override = cam.brillo
+
+
+static func _camarote_cabana(raiz: Node3D, cam: Camarote) -> void:
+	_pieza(raiz, _caja(Vector3(cam.w, cam.h, cam.fondo)), cam.pared, Vector3(0, cam.base + cam.h / 2.0, cam.z))
+	for i in 4:
+		_pieza(raiz, _caja(Vector3(cam.w * 1.01, 0.02, cam.fondo * 1.01)), cam.pared.darkened(0.3), Vector3(0, cam.base + cam.h * (0.2 + 0.2 * i), cam.z))
+	var tejado := PrismMesh.new()
+	tejado.size = Vector3(cam.w * 1.2, 0.45, cam.fondo * 1.15)
+	_pieza(raiz, tejado, COLOR_MADERA.lightened(0.1), Vector3(0, cam.base + cam.h + 0.225, cam.z))
+	var chimenea := Vector3(cam.w * 0.28, cam.base + cam.h + 0.35, cam.z - cam.fondo * 0.15)
+	_pieza(raiz, _caja(Vector3(0.11, 0.4, 0.11)), cam.adorno, chimenea)
+	_pieza(raiz, _caja(Vector3(0.14, 0.05, 0.14)), cam.adorno.darkened(0.3), chimenea + Vector3(0, 0.2, 0))
+	var ventana := _pieza(raiz, _cilindro(0.08, 0.08, 0.03), cam.luz, Vector3(0, cam.base + cam.h * 0.55, cam.trasera))
+	ventana.rotation.x = PI / 2.0
+	ventana.material_override = cam.brillo
+	_pieza(raiz, _caja(Vector3(0.2, 0.03, 0.04)), COLOR_MADERA, Vector3(0, cam.base + cam.h * 0.55, cam.trasera + 0.02))
 
 
 static func _piramide(radio: float, arriba: float, alto: float) -> CylinderMesh:

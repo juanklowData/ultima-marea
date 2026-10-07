@@ -663,4 +663,4 @@ func animar(delta: float) -> void:
 			if isla.espera_humo <= 0.0:
 				isla.espera_humo = 0.45
 				var vel := Vector3(randf_range(-0.1, 0.1), 0.6, randf_range(-0.1, 0.1))
-				mundo._efecto(mundo.malla_humo, Color(0.55, 0.55, 0.55, 0.4), centro + isla.fogata, vel, 2.5, 0.22, 0.9, 0.0, true)
+				mundo.crear_efecto(mundo.malla_humo, Color(0.55, 0.55, 0.55, 0.4), centro + isla.fogata, vel, 2.5, 0.22, 0.9, 0.0, true)

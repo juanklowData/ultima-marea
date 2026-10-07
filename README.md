@@ -25,11 +25,20 @@ En el celular, el dedo en la mitad izquierda es la palanca y aparece donde tocas
 
 ## Archivos
 
-- `godot/scripts/principal.gd`: la partida, la cámara, los efectos, el menú, el astillero y los controles.
-- `godot/scripts/barco.gd`: cómo navega cada barco y cómo piensan los rivales.
-- `godot/scripts/modelo_barco.gd`: construye el modelo 3D de cada barco.
-- `godot/scripts/personalizacion.gd`: colores y tipos del astillero, y su guardado.
-- `godot/shaders/`: el agua y la cortina de la tormenta.
+En `godot/scripts/`:
+
+- `principal.gd`: la partida, la cámara, la tormenta, los efectos, los controles y las pantallas.
+- `barco.gd`: cómo navega cada barco y cómo piensan los rivales.
+- `islas.gd` y `circulo.gd`: dónde caen las islas y rocas, su forma y su modelo 3D.
+- `peligros.gd`: remolinos, ventiscas y el kraken.
+- `fauna.gd`: gaviotas, cangrejos, tortugas, monos, delfines y peces.
+- `modelo_barco.gd` y `mascarones.gd`: el modelo 3D de cada barco y sus figuras de proa.
+- `catalogo.gd`, `dibujos.gd` y `miniaturas.gd`: las piezas de la tienda, sus velas y banderas, y sus fotos.
+- `personalizacion.gd`: lo elegido en la tienda, monedas, nivel y guardado.
+- `sonidos.gd` y `musica.gd`: efectos de sonido sintetizados y música.
+- `ui.gd`, `boton_idioma.gd`, `moneda_voladora.gd`, `insignia.gd` e `idioma.gd`: piezas de la interfaz e idiomas.
+
+`godot/shaders/` tiene el agua, las orillas, las nubes, la tormenta, las telas y el kraken.
 - `prototipo/`: la primera versión de navegador, como referencia.
 
 ## Pasarlo al celular Android

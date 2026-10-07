@@ -14,6 +14,16 @@ static func textura(pieza: Dictionary, ancho: int, alto: int) -> ImageTexture:
 
 	var imagen := Image.create(ancho, alto, false, Image.FORMAT_RGBA8)
 	imagen.fill(fondo)
+	_pintar(imagen, diseno, fondo, figura)
+	var nueva := ImageTexture.create_from_image(imagen)
+	_texturas[clave] = nueva
+	return nueva
+
+
+# Dibuja el diseño de la vela o bandera con el color de figura sobre el fondo ya pintado.
+static func _pintar(imagen: Image, diseno: String, fondo: Color, figura: Color) -> void:
+	var ancho := imagen.get_width()
+	var alto := imagen.get_height()
 	var centro := Vector2(ancho, alto) / 2.0
 	var s := float(mini(ancho, alto))
 	match diseno:
@@ -80,10 +90,6 @@ static func textura(pieza: Dictionary, ancho: int, alto: int) -> ImageTexture:
 					var d := Vector2(absf(x + 0.5 - centro.x) / media.x, absf(y + 0.5 - centro.y) / media.y)
 					if d.x + d.y <= 1.0:
 						imagen.set_pixel(x, y, figura)
-
-	var nueva := ImageTexture.create_from_image(imagen)
-	_texturas[clave] = nueva
-	return nueva
 
 
 static func _disco(imagen: Image, centro: Vector2, radio: float, color: Color) -> void:

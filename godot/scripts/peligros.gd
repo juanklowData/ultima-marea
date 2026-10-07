@@ -141,7 +141,7 @@ func preparar(nuevo_mundo: Principal) -> void:
 	malla_tentaculo.cap_bottom = false
 
 	rumor = AudioStreamPlayer.new()
-	rumor.stream = _sonido_rumor()
+	rumor.stream = Sonidos.rumor_remolino()
 	rumor.bus = "Efectos"
 	rumor.volume_db = -60.0
 	add_child(rumor)
@@ -270,7 +270,14 @@ func _crear_kraken(kraken: Kraken) -> void:
 	kraken.piel = ShaderMaterial.new()
 	kraken.piel.shader = SHADER_KRAKEN
 	kraken.piel.set_shader_parameter("fase", kraken.fase)
+	_crear_cuerpo_kraken(kraken)
+	_crear_ojos_kraken(kraken)
+	for j in TENTACULOS:
+		_crear_tentaculo(kraken, j)
+	_crear_aviso_golpe(kraken)
 
+
+func _crear_cuerpo_kraken(kraken: Kraken) -> void:
 	var esfera := SphereMesh.new()
 	esfera.radius = 1.0
 	esfera.height = 2.0
@@ -290,6 +297,9 @@ func _crear_kraken(kraken: Kraken) -> void:
 	cabeza.scale = Vector3(1.5, 1.1, 1.3)
 	kraken.nodo.add_child(cabeza)
 
+
+# Ojos dorados con pupila de raya; parpadean escalando el nodo de cada ojo.
+func _crear_ojos_kraken(kraken: Kraken) -> void:
 	var bola := SphereMesh.new()
 	bola.radius = 0.3
 	bola.height = 0.6
@@ -322,35 +332,39 @@ func _crear_kraken(kraken: Kraken) -> void:
 		ojo.add_child(raya)
 		kraken.ojos.append(ojo)
 
-	for j in TENTACULOS:
-		var alrededor := TAU * (j + 0.5) / TENTACULOS
-		var afuera := Vector2(sin(alrededor), -cos(alrededor))
-		var tentaculo := MeshInstance3D.new()
-		tentaculo.mesh = malla_tentaculo
-		tentaculo.position = Vector3(afuera.x * RAIZ_TENTACULO, -0.25, afuera.y * RAIZ_TENTACULO)
-		var angulo := atan2(afuera.x, afuera.y)
-		tentaculo.rotation.y = angulo
-		tentaculo.extra_cull_margin = 16.0
-		var materia := ShaderMaterial.new()
-		materia.shader = SHADER_TENTACULO
-		var delantero := j == 0 or j == TENTACULOS - 1
-		var largo := randf_range(6.4, 7.0) if delantero else randf_range(5.2, 6.2)
-		var fase := randf() * TAU
-		materia.set_shader_parameter("largo", largo)
-		materia.set_shader_parameter("grosor", 0.5 if delantero else randf_range(0.38, 0.46))
-		materia.set_shader_parameter("fase", fase)
-		materia.set_shader_parameter("vaiven", randf_range(0.25, 0.4))
-		tentaculo.material_override = materia
-		kraken.nodo.add_child(tentaculo)
-		kraken.tentaculos.append(tentaculo)
-		kraken.materiales.append(materia)
-		kraken.angulos.append(angulo)
-		kraken.largos.append(largo)
-		kraken.fases.append(fase)
-		kraken.poses.append(Vector4(0.8, 2.0, 0.5, largo))
-		kraken.giros.append(angulo)
 
-	# Aviso del golpe: la sombra del tentáculo bajo el agua y un aro de espuma que se cierra.
+# Los delanteros son más largos y gruesos: son los que suelen golpear.
+func _crear_tentaculo(kraken: Kraken, j: int) -> void:
+	var alrededor := TAU * (j + 0.5) / TENTACULOS
+	var afuera := Vector2(sin(alrededor), -cos(alrededor))
+	var tentaculo := MeshInstance3D.new()
+	tentaculo.mesh = malla_tentaculo
+	tentaculo.position = Vector3(afuera.x * RAIZ_TENTACULO, -0.25, afuera.y * RAIZ_TENTACULO)
+	var angulo := atan2(afuera.x, afuera.y)
+	tentaculo.rotation.y = angulo
+	tentaculo.extra_cull_margin = 16.0
+	var materia := ShaderMaterial.new()
+	materia.shader = SHADER_TENTACULO
+	var delantero := j == 0 or j == TENTACULOS - 1
+	var largo := randf_range(6.4, 7.0) if delantero else randf_range(5.2, 6.2)
+	var fase := randf() * TAU
+	materia.set_shader_parameter("largo", largo)
+	materia.set_shader_parameter("grosor", 0.5 if delantero else randf_range(0.38, 0.46))
+	materia.set_shader_parameter("fase", fase)
+	materia.set_shader_parameter("vaiven", randf_range(0.25, 0.4))
+	tentaculo.material_override = materia
+	kraken.nodo.add_child(tentaculo)
+	kraken.tentaculos.append(tentaculo)
+	kraken.materiales.append(materia)
+	kraken.angulos.append(angulo)
+	kraken.largos.append(largo)
+	kraken.fases.append(fase)
+	kraken.poses.append(Vector4(0.8, 2.0, 0.5, largo))
+	kraken.giros.append(angulo)
+
+
+# Aviso del golpe: la sombra del tentáculo bajo el agua y un aro de espuma que se cierra.
+func _crear_aviso_golpe(kraken: Kraken) -> void:
 	var disco := CylinderMesh.new()
 	disco.top_radius = RADIO_GOLPE * Principal.ESCALA
 	disco.bottom_radius = disco.top_radius
@@ -608,7 +622,7 @@ func _golpear(kraken: Kraken) -> void:
 	var sitio := mundo.a_3d(punto)
 	var h := mundo.altura_mar(sitio.x, sitio.z)
 	for i in 3:
-		mundo._efecto(mundo.malla_espuma, Color(1, 1, 1, 0.75 - i * 0.2), sitio + Vector3(0, h + 0.08, 0), Vector3.ZERO, 1.1 + i * 0.5, 1.0 + i * 0.6, 2.8 + i * 1.4)
+		mundo.crear_efecto(mundo.malla_espuma, Color(1, 1, 1, 0.75 - i * 0.2), sitio + Vector3(0, h + 0.08, 0), Vector3.ZERO, 1.1 + i * 0.5, 1.0 + i * 0.6, 2.8 + i * 1.4)
 	var cercania := clampf(1.0 - sitio.distance_to(mundo.foco) / 45.0, 0.0, 1.0)
 	if cercania > 0.0:
 		for voz in mundo.voces_canon:
@@ -663,7 +677,7 @@ func _vencer(kraken: Kraken, dueno: Barco) -> void:
 	var giro := randf() * TAU
 	for k in COFRES_KRAKEN:
 		var a := giro + TAU * k / COFRES_KRAKEN + randf_range(-0.4, 0.4)
-		mundo._soltar_cofre(kraken.pos + Vector2.from_angle(a) * (RADIO_KRAKEN + randf_range(12.0, 30.0)), randi_range(1, 3))
+		mundo.soltar_cofre(kraken.pos + Vector2.from_angle(a) * (RADIO_KRAKEN + randf_range(12.0, 30.0)), randi_range(1, 3))
 
 
 # Hacia dónde debería escapar un bot; Vector2.ZERO si no hay peligro cerca.
@@ -858,7 +872,7 @@ func _salpicar_remolino(remolino: Remolino, delta: float) -> void:
 	var tangente := Vector2(-rel.y, rel.x).normalized() * remolino.giro * 2.2
 	for _i in 2:
 		var vel := Vector3(tangente.x + randf_range(-0.4, 0.4), randf_range(1.6, 3.0), tangente.y + randf_range(-0.4, 0.4))
-		mundo._efecto(mundo.malla_gota, Color(0.92, 0.97, 1.0, 0.85), sitio + Vector3(0, h + 0.1, 0), vel, 0.8, 0.9, 0.0, 9.0)
+		mundo.crear_efecto(mundo.malla_gota, Color(0.92, 0.97, 1.0, 0.85), sitio + Vector3(0, h + 0.1, 0), vel, 0.8, 0.9, 0.0, 9.0)
 
 
 func _animar_kraken(kraken: Kraken, delta: float, t: float, foco_plano: Vector2) -> void:
@@ -871,18 +885,31 @@ func _animar_kraken(kraken: Kraken, delta: float, t: float, foco_plano: Vector2)
 
 	var h := mundo.altura_mar(centro.x, centro.y)
 	kraken.altura = lerpf(kraken.altura, h, minf(1.0, delta * 3.0))
-	# Fases del ataque, cada una de 0 a 1.
+	var fases := _fases_ataque(kraken.ataque)
+	var muere := clampf(kraken.agonia / DURACION_AGONIA, 0.0, 1.0) if kraken.agonia >= 0.0 else 0.0
+	var destello := _animar_cuerpo_kraken(kraken, delta, t, centro, fases, muere)
+	_animar_tentaculos(kraken, delta, t, fases, muere, destello)
+	_animar_aviso_golpe(kraken, t)
+	_espumar_kraken(kraken, delta, centro)
+
+
+# Fases del ataque, cada una de 0 a 1: (carga, látigo, arrastre, recoge).
+func _fases_ataque(a: float) -> Vector4:
+	if a < 0.0:
+		return Vector4.ZERO
+	return Vector4(
+		smoothstep(0.0, INICIO_LATIGO, a),
+		clampf((a - INICIO_LATIGO) / (MOMENTO_GOLPE - INICIO_LATIGO), 0.0, 1.0),
+		clampf((a - MOMENTO_GOLPE) / (FIN_ARRASTRE - MOMENTO_GOLPE), 0.0, 1.0),
+		smoothstep(FIN_ARRASTRE, 1.0, a))
+
+
+# El cuerpo asoma, se alza al cargar y se lanza hacia el golpe; los ojos parpadean.
+# Devuelve el destello con que brilla la piel.
+func _animar_cuerpo_kraken(kraken: Kraken, delta: float, t: float, centro: Vector2, fases: Vector4, muere: float) -> float:
 	var a := kraken.ataque
-	var carga := 0.0
-	var latigo := 0.0
-	var arrastre := 0.0
-	var recoge := 0.0
-	if a >= 0.0:
-		carga = smoothstep(0.0, INICIO_LATIGO, a)
-		latigo = clampf((a - INICIO_LATIGO) / (MOMENTO_GOLPE - INICIO_LATIGO), 0.0, 1.0)
-		arrastre = clampf((a - MOMENTO_GOLPE) / (FIN_ARRASTRE - MOMENTO_GOLPE), 0.0, 1.0)
-		recoge = smoothstep(FIN_ARRASTRE, 1.0, a)
-	# El cuerpo se alza al cargar y se lanza hacia el golpe.
+	var carga := fases.x
+	var latigo := fases.y
 	var lanzarse := sin(PI * clampf((a - INICIO_LATIGO) / 0.4, 0.0, 1.0)) if a >= 0.0 else 0.0
 	kraken.embestida = lerpf(kraken.embestida, lanzarse, 1.0 - exp(-delta * 10.0))
 
@@ -893,10 +920,8 @@ func _animar_kraken(kraken: Kraken, delta: float, t: float, foco_plano: Vector2)
 	kraken.nodo.position = Vector3(centro.x, kraken.altura - (1.0 - asomado) * 5.0 * TAM_KRAKEN + alzado + sin(t * 0.8 + kraken.fase) * 0.07, centro.y) + adelante
 	kraken.nodo.rotation.y = atan2(-mira.x, -mira.y)
 	kraken.nodo.rotation.z = sin(t * 0.5 + kraken.fase) * 0.04
-	var muere := clampf(kraken.agonia / DURACION_AGONIA, 0.0, 1.0) if kraken.agonia >= 0.0 else 0.0
-	var vencido := kraken.agonia >= 0.0
 	var destello := kraken.destello
-	if vencido:
+	if kraken.agonia >= 0.0:
 		destello = maxf(destello, absf(sin(t * 9.0)) * 0.7 * (1.0 - muere))
 		kraken.nodo.rotation.z += sin(t * 7.0) * 0.12 * (1.0 - muere) + muere * 0.35
 	kraken.cuerpo.rotation.x = 0.45 + carga * (1.0 - latigo) * 0.14 - kraken.embestida * 0.28 + muere * 0.5
@@ -912,7 +937,14 @@ func _animar_kraken(kraken: Kraken, delta: float, t: float, foco_plano: Vector2)
 	cierre = maxf(cierre, maxf(kraken.embestida * 0.55, muere))
 	for ojo in kraken.ojos:
 		ojo.scale = Vector3(1.0, maxf(0.08, 1.0 - cierre), 1.0)
+	return destello
 
+
+func _animar_tentaculos(kraken: Kraken, delta: float, t: float, fases: Vector4, muere: float, destello: float) -> void:
+	var a := kraken.ataque
+	var carga := fases.x
+	var latigo := fases.y
+	var recoge := fases.w
 	var hacia_golpe := 0.0
 	var largo_golpe := 0.0
 	if a >= 0.0:
@@ -938,26 +970,11 @@ func _animar_kraken(kraken: Kraken, delta: float, t: float, foco_plano: Vector2)
 		var rapidez := 5.0
 		if j == kraken.tentaculo and a >= 0.0:
 			var temblor := sin(t * 15.0 + fase) * 0.05 * carga * (1.0 - latigo)
-			var armado := Vector4(-0.25 + temblor, 0.5, -1.6, largo_base * 1.1)
-			var tendido := Vector4(1.42, 0.25, 0.3, largo_golpe)
-			var pose := meta.lerp(armado, carga)
-			if latigo > 0.0:
-				# La base va primero y la punta llega tarde: así restalla como un látigo.
-				var base := latigo * latigo * (3.0 - 2.0 * latigo)
-				var punta := smoothstep(0.3, 1.0, latigo)
-				pose = armado.lerp(tendido, base)
-				pose.z = lerpf(armado.z, tendido.z, punta)
-			if arrastre > 0.0:
-				pose = tendido
-				pose.x += sin(arrastre * PI) * 0.06
-				pose.z = tendido.z + arrastre * 1.3
-				pose.w = largo_golpe * (1.0 - arrastre * 0.12)
-			pose = pose.lerp(meta, recoge)
-			meta = pose
+			meta = _pose_latigo(meta, fases, largo_base, largo_golpe, temblor)
 			onda = lerpf(0.15, onda, recoge)
 			giro_meta = lerp_angle(giro_meta, hacia_golpe, smoothstep(0.0, 0.6, carga) * (1.0 - recoge))
 			rapidez = 35.0 if latigo > 0.0 and latigo < 1.0 else 9.0
-		if vencido:
+		if kraken.agonia >= 0.0:
 			# Se retuerce y después se enrosca mientras se hunde.
 			var retuerce := 1.0 - muere
 			meta = Vector4(
@@ -980,60 +997,56 @@ func _animar_kraken(kraken: Kraken, delta: float, t: float, foco_plano: Vector2)
 		materia.set_shader_parameter("largo", actual.w)
 		materia.set_shader_parameter("destello", destello)
 
-	if a >= 0.0 and a < MOMENTO_GOLPE + 0.06:
-		var sitio := mundo.a_3d(kraken.punto_golpe)
-		var avance := clampf(a / MOMENTO_GOLPE, 0.0, 1.0)
-		var apaga := 1.0 - clampf((a - MOMENTO_GOLPE) / 0.06, 0.0, 1.0)
-		var crece := ease(avance, 0.5)
-		kraken.aviso.visible = true
-		kraken.aviso.position = sitio + Vector3(0.0, mundo.altura_mar(sitio.x, sitio.z) + 0.12, 0.0)
-		kraken.aviso.scale = Vector3(1.0, 1.0, 1.0) * lerpf(0.55, 1.0, crece)
-		kraken.aviso_materia.albedo_color = Color(0.05, 0.02, 0.08, (0.08 + 0.3 * crece) * apaga)
-		var aro: Node3D = kraken.aviso.get_node("Aro")
-		var cierra := lerpf(1.6, 1.0, crece) / lerpf(0.55, 1.0, crece)
-		aro.scale = Vector3(cierra, 1.0, cierra)
-		kraken.aviso_espuma.albedo_color = Color(1, 1, 1, (0.2 + 0.55 * avance + sin(t * 10.0) * 0.08 * avance) * apaga)
 
+# Pose (inclinación, curva, curva de la punta, largo) del tentáculo que ataca:
+# se arma hacia atrás, restalla, arrastra por el agua y vuelve al reposo.
+func _pose_latigo(reposo: Vector4, fases: Vector4, largo_base: float, largo_golpe: float, temblor: float) -> Vector4:
+	var latigo := fases.y
+	var arrastre := fases.z
+	var armado := Vector4(-0.25 + temblor, 0.5, -1.6, largo_base * 1.1)
+	var tendido := Vector4(1.42, 0.25, 0.3, largo_golpe)
+	var pose := reposo.lerp(armado, fases.x)
+	if latigo > 0.0:
+		# La base va primero y la punta llega tarde: así restalla como un látigo.
+		var base := latigo * latigo * (3.0 - 2.0 * latigo)
+		var punta := smoothstep(0.3, 1.0, latigo)
+		pose = armado.lerp(tendido, base)
+		pose.z = lerpf(armado.z, tendido.z, punta)
+	if arrastre > 0.0:
+		pose = tendido
+		pose.x += sin(arrastre * PI) * 0.06
+		pose.z = tendido.z + arrastre * 1.3
+		pose.w = largo_golpe * (1.0 - arrastre * 0.12)
+	return pose.lerp(reposo, fases.w)
+
+
+# Sombra del tentáculo bajo el agua y aro de espuma que se cierra sobre el punto del golpe.
+func _animar_aviso_golpe(kraken: Kraken, t: float) -> void:
+	var a := kraken.ataque
+	if a < 0.0 or a >= MOMENTO_GOLPE + 0.06:
+		return
+	var sitio := mundo.a_3d(kraken.punto_golpe)
+	var avance := clampf(a / MOMENTO_GOLPE, 0.0, 1.0)
+	var apaga := 1.0 - clampf((a - MOMENTO_GOLPE) / 0.06, 0.0, 1.0)
+	var crece := ease(avance, 0.5)
+	kraken.aviso.visible = true
+	kraken.aviso.position = sitio + Vector3(0.0, mundo.altura_mar(sitio.x, sitio.z) + 0.12, 0.0)
+	kraken.aviso.scale = Vector3(1.0, 1.0, 1.0) * lerpf(0.55, 1.0, crece)
+	kraken.aviso_materia.albedo_color = Color(0.05, 0.02, 0.08, (0.08 + 0.3 * crece) * apaga)
+	var aro: Node3D = kraken.aviso.get_node("Aro")
+	var cierra := lerpf(1.6, 1.0, crece) / lerpf(0.55, 1.0, crece)
+	aro.scale = Vector3(cierra, 1.0, cierra)
+	kraken.aviso_espuma.albedo_color = Color(1, 1, 1, (0.2 + 0.55 * avance + sin(t * 10.0) * 0.08 * avance) * apaga)
+
+
+# Espuma alrededor del cuerpo, y salpicaduras mientras sale o se hunde.
+func _espumar_kraken(kraken: Kraken, delta: float, centro: Vector2) -> void:
 	kraken.espera_espuma -= delta
-	if kraken.espera_espuma <= 0.0:
-		kraken.espera_espuma = 0.1
-		var angulo := randf() * TAU
-		var borde := centro + Vector2.from_angle(angulo) * randf_range(1.8, 2.4) * TAM_KRAKEN
-		mundo._efecto(mundo.malla_espuma, Color(1, 1, 1, 0.45), Vector3(borde.x, kraken.altura + 0.08, borde.y), Vector3.ZERO, 1.4, 0.4, 1.1)
-		if kraken.fuerza < 0.98:
-			mundo.salpicar(kraken.pos + Vector2.from_angle(angulo) * RADIO_KRAKEN * 0.9, 3)
-
-
-# Sonidos
-
-func _sonido_rumor() -> AudioStreamWAV:
-	var frecuencia := Principal.FRECUENCIA_AUDIO
-	var largo := frecuencia * 3
-	var cruce := int(frecuencia * 0.4)
-	var crudo := PackedFloat32Array()
-	crudo.resize(largo + cruce)
-	# Agua grave que gira: ruido muy filtrado con un vaivén lento, sin siseo.
-	var a_grave := mundo._paso_grave(220.0)
-	var a_suave := mundo._paso_grave(420.0)
-	var grave_1 := 0.0
-	var grave_2 := 0.0
-	var suave_1 := 0.0
-	var suave_2 := 0.0
-	for i in crudo.size():
-		var t := float(i) / frecuencia
-		var blanco := randf_range(-1.0, 1.0)
-		grave_1 += a_grave * (blanco - grave_1)
-		grave_2 += a_grave * (grave_1 - grave_2)
-		suave_1 += a_suave * (blanco - suave_1)
-		suave_2 += a_suave * (suave_1 - suave_2)
-		var oleaje := 0.7 + 0.3 * sin(TAU * t / 1.5)
-		var remolino := 0.5 + 0.5 * sin(TAU * t / 3.0 + 1.0)
-		crudo[i] = grave_2 * oleaje + suave_2 * 0.35 * remolino
-	var valores := PackedFloat32Array()
-	valores.resize(largo)
-	for i in largo:
-		valores[i] = crudo[i]
-	for i in cruce:
-		var mezcla := float(i) / cruce
-		valores[i] = crudo[i] * mezcla + crudo[largo + i] * (1.0 - mezcla)
-	return mundo._a_wav(valores, true)
+	if kraken.espera_espuma > 0.0:
+		return
+	kraken.espera_espuma = 0.1
+	var angulo := randf() * TAU
+	var borde := centro + Vector2.from_angle(angulo) * randf_range(1.8, 2.4) * TAM_KRAKEN
+	mundo.crear_efecto(mundo.malla_espuma, Color(1, 1, 1, 0.45), Vector3(borde.x, kraken.altura + 0.08, borde.y), Vector3.ZERO, 1.4, 0.4, 1.1)
+	if kraken.fuerza < 0.98:
+		mundo.salpicar(kraken.pos + Vector2.from_angle(angulo) * RADIO_KRAKEN * 0.9, 3)

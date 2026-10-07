@@ -132,7 +132,7 @@ func actualizar(delta: float) -> void:
 		var minimo: float = isla.borde(pos) + radio * 0.7
 		if separacion.length() < minimo and separacion != Vector2.ZERO:
 			pos = isla.pos + separacion.normalized() * minimo
-			if isla.radio <= Principal.RADIO_ROCAS:
+			if isla.radio <= Islas.RADIO_ROCAS:
 				_chocar_roca(-proa().dot(separacion.normalized()) * velocidad / vel_max)
 			velocidad *= 0.96
 

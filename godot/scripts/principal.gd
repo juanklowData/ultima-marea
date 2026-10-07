@@ -39,7 +39,6 @@ const PAUSA_GIRO_MANUAL := 300.0
 const LADO_AGUA := 190.0
 const DIVISIONES_AGUA := 160
 const ANCHO_PANEL := 540.0
-const FRECUENCIA_AUDIO := 22050
 const MONEDAS_VICTORIA := 15
 const MONEDAS_POR_HUNDIDO := 1
 # Monedas con que zarpa cada bot, para que hundirlos deje algo en el mar.
@@ -64,29 +63,9 @@ const TITULOS_PIRATAS: Array[String] = ["Capitán", "Capitana", "Almirante", "Co
 const DURACION_FASES: Array[float] = [68.0, 57.0, 51.0, 46.0, 43.0, 41.0, 40.0]
 const RADIO_FASES: Array[float] = [2750.0, 2100.0, 1550.0, 1050.0, 650.0, 360.0, 190.0]
 
-# Todo el mar se reparte al azar en cada partida.
-const ISLAS_CENTRO := 3
-const ISLAS_GRANDES := 24
-const ARCHIPIELAGOS := 8
-const ISLOTES_CHICOS := 40
-const GRUPOS_ROCAS := 80
-# Hueco mínimo entre orillas: el normal y el de los canales dentro de un archipiélago
-# (cabe un galeón con margen).
-const SEPARACION_ISLAS := 110.0
-const SEPARACION_CANAL := 85.0
-const RADIO_ROCAS := 36.0
-const ALCANCE_ORILLA := 1.55
-const SHADER_ORILLA := preload("res://shaders/orilla.gdshader")
-
 const COLOR_TEXTO := Color("f6efe2")
 const COLOR_ORO := Color("e2b15a")
 const COLOR_PELIGRO := Color("ff8a7a")
-const COLOR_ARENA := Color("e9d6a8")
-const COLOR_HIERBA := Color("4f9a55")
-const COLOR_HIERBA_OSCURA := Color("2f7a48")
-const COLOR_ROCA := Color("8b8f8c")
-const COLOR_TRONCO := Color("8a6a45")
-const COLOR_HOJA := Color("3f9a4f")
 const COLORES_TABLA: Array[Color] = [Color("a7774a"), Color("8e6239"), Color("b88a58")]
 
 enum Estado { MENU, ASTILLERO, BUSCANDO, JUGANDO, FIN, AJUSTES, NIVELES }
@@ -139,6 +118,7 @@ class Efecto:
 	var gravedad := 0.0
 
 
+# Estado de la partida
 var estado := Estado.MENU
 var personalizacion := Personalizacion.new()
 var barcos: Array[Barco] = []
@@ -146,12 +126,20 @@ var jugador: Barco
 var balas: Array = []
 var tablas: Array = []
 var cofres: Array = []
+var efectos: Array = []
+var islotes: Array[Circulo]:
+	get:
+		return islas.islotes
+var hundidos := 0
+var resultado := ""
+var puesto := 0
+var golpe := 0.0
+var tiempo := 0.0
+var tiempo_combate := 0.0
 var avisos_botin: Array = []
 var botin_perdido := 0
-var texto_botin: Label
-var efectos: Array = []
-var islotes: Array = []
 
+# Zona segura que cierra la tormenta
 var zona_centro := Vector2.ZERO
 var zona_radio := ZONA_INICIAL
 var zona_desde := ZONA_INICIAL
@@ -160,38 +148,45 @@ var centro_hacia := Vector2.ZERO
 var fase := 0
 var edad_fase := 0.0
 var cierre := 0.0
-var resultado := ""
-var puesto := 0
-var golpe := 0.0
-var tiempo := 0.0
 
+# Controles táctiles
 var palanca := Vector2.ZERO
 var centro_palanca := Vector2.ZERO
 var palanca_dedo := -1
 var dedos_fuego := {}
 
+# Cámara, en partida y en el puerto
 var camara: Camera3D
 var foco := Vector3.ZERO
-var agua: MeshInstance3D
-var material_agua: ShaderMaterial
-var muro: MeshInstance3D
-var islas_nodo: Node3D
+var angulo_puerto := 0.0
+var altura_vitrina := 5.0
+var distancia_vitrina := 11.0
+var pausa_giro := 0.0
+var dedos_vitrina := {}
+
+# Módulos del mundo
+var islas: Islas
 var peligros: Peligros
 var fauna: Fauna
 var capa_barcos: Node3D
+var musica: Musica
+var miniaturas: Miniaturas
+
+# Escena 3D: mar, luz y mallas compartidas por los efectos
+var entorno: Environment
+var sol: DirectionalLight3D
+var agua: MeshInstance3D
+var material_agua: ShaderMaterial
+var muro: MeshInstance3D
+var material_muro: ShaderMaterial
 var materiales := {}
-var materiales_orilla: Array[ShaderMaterial] = []
 var malla_bala: SphereMesh
 var malla_humo: SphereMesh
 var malla_gota: SphereMesh
 var malla_espuma: CylinderMesh
 var malla_astilla: BoxMesh
-var malla_musgo: SphereMesh
-var malla_mata: SphereMesh
 
-var sol: DirectionalLight3D
-var entorno: Environment
-var material_muro: ShaderMaterial
+# Cielo de tormenta: nubes, lluvia, rayos y el destello en pantalla
 var nubes: MeshInstance3D
 var material_nubes: ShaderMaterial
 var lluvia: GPUParticles3D
@@ -201,23 +196,66 @@ var rayo_vida := 0.0
 var relampago := 0.0
 var proximo_rayo := 2.5
 var truenos: Array = []
+var destello: ColorRect
+
+# Voces de los efectos de sonido
 var voces_trueno: Array[AudioStreamPlayer] = []
 var sonidos_trueno: Array[AudioStreamWAV] = []
 var voces_canon: Array[AudioStreamPlayer] = []
-var voz_monedas: AudioStreamPlayer
 var voces_hundir: Array[AudioStreamPlayer] = []
+var voz_monedas: AudioStreamPlayer
+var voz_moneda: AudioStreamPlayer
 var voz_equipar: AudioStreamPlayer
-var destello: ColorRect
 
+# Interfaz durante la partida
 var velo_golpe: ColorRect
 var marcadores: Control
 var controles: Control
 var hud: VBoxContainer
 var texto_vivos: Label
 var texto_tormenta: Label
+var texto_botin: Label
 var minimapa: Control
+var aviso_giro: Label
+var boton_partida: Button
+var panel_partida: Control
+var boton_salir: Button
+
+# Menú del puerto, ajustes y niveles
 var panel_menu: Control
+var texto_monedas_menu: Label
+var insignia_menu: Insignia
+var texto_nivel_menu: Label
+var texto_xp_menu: Label
+var barra_nivel_menu: Control
+var boton_ajustes: Button
+var boton_idioma: BotonIdioma
+var panel_ajustes: Control
+var campo_nombre: LineEdit
+var deslizadores_volumen: Array[HSlider] = []
+var panel_niveles: Control
+var lista_niveles: VBoxContainer
+var desliz_niveles: ScrollContainer
+
+# Búsqueda de partida
+var panel_busqueda: Control
+var texto_busqueda: Label
+var texto_jugadores: Label
+var tiempo_busqueda := 0.0
+
+# Tienda
 var panel_astillero: Control
+var texto_monedas_tienda: Label
+var botones_categoria: Array = []
+var rejilla_piezas: GridContainer
+var desplazable: ScrollContainer
+var botones_pieza := {}
+var texto_pieza: Label
+var boton_accion: Button
+var categoria := "tipo"
+var seleccion := ""
+
+# Pantalla final y premio
 var panel_final: Control
 var titulo_final: Label
 var texto_final: Label
@@ -229,46 +267,6 @@ var fila_final: HBoxContainer
 var capa_monedas: Control
 var anim_premio: Tween
 var ultimo_conteo := 0
-var voz_moneda: AudioStreamPlayer
-var texto_monedas_menu: Label
-var insignia_menu: Insignia
-var texto_nivel_menu: Label
-var texto_xp_menu: Label
-var barra_nivel_menu: Control
-var panel_niveles: Control
-var lista_niveles: VBoxContainer
-var desliz_niveles: ScrollContainer
-var texto_monedas_tienda: Label
-var botones_categoria: Array = []
-var rejilla_piezas: GridContainer
-var desplazable: ScrollContainer
-var botones_pieza := {}
-var texto_pieza: Label
-var boton_accion: Button
-var categoria := "tipo"
-var seleccion := ""
-var hundidos := 0
-var campo_nombre: LineEdit
-var musica: Musica
-var miniaturas: Miniaturas
-var panel_ajustes: Control
-var boton_ajustes: Button
-var boton_idioma: BotonIdioma
-var boton_partida: Button
-var panel_partida: Control
-var boton_salir: Button
-var deslizadores_volumen: Array[HSlider] = []
-var aviso_giro: Label
-var tiempo_combate := 0.0
-var angulo_puerto := 0.0
-var altura_vitrina := 5.0
-var distancia_vitrina := 11.0
-var pausa_giro := 0.0
-var dedos_vitrina := {}
-var panel_busqueda: Control
-var texto_busqueda: Label
-var texto_jugadores: Label
-var tiempo_busqueda := 0.0
 
 
 func _ready() -> void:
@@ -308,7 +306,9 @@ func _process(delta: float) -> void:
 	_mover_camara(delta)
 	peligros.animar(delta)
 	fauna.animar(delta)
-	_recortar_islas(delta)
+	# En puerto la cámara mira al horizonte y las islas se ven más lejos.
+	var en_partida := estado == Estado.JUGANDO or estado == Estado.FIN
+	islas.recortar(delta, foco, DISTANCIA_VISIBLE + 8.0 if en_partida else 170.0)
 	_actualizar_tormenta(delta)
 	_actualizar_agua()
 
@@ -344,6 +344,24 @@ func a_3d(punto: Vector2, altura := 0.0) -> Vector3:
 # Escena 3D
 
 func _crear_escena() -> void:
+	_crear_luz_y_camara()
+	_crear_mar()
+	islas = Islas.new()
+	add_child(islas)
+	peligros = Peligros.new()
+	add_child(peligros)
+	fauna = Fauna.new()
+	add_child(fauna)
+	capa_barcos = Node3D.new()
+	add_child(capa_barcos)
+	_crear_mallas_efectos()
+	_crear_cielo_tormenta()
+	_crear_sonidos()
+	peligros.preparar(self)
+	fauna.preparar(self)
+
+
+func _crear_luz_y_camara() -> void:
 	entorno = Environment.new()
 	entorno.background_mode = Environment.BG_COLOR
 	entorno.background_color = Color("8fc9cc")
@@ -373,6 +391,9 @@ func _crear_escena() -> void:
 	add_child(camara)
 	camara.current = true
 
+
+# El agua sigue a la cámara; el muro es la cortina de la tormenta en el borde de la zona.
+func _crear_mar() -> void:
 	var plano := PlaneMesh.new()
 	plano.size = Vector2(LADO_AGUA, LADO_AGUA)
 	plano.subdivide_width = DIVISIONES_AGUA
@@ -401,15 +422,9 @@ func _crear_escena() -> void:
 	muro.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(muro)
 
-	islas_nodo = Node3D.new()
-	add_child(islas_nodo)
-	peligros = Peligros.new()
-	add_child(peligros)
-	fauna = Fauna.new()
-	add_child(fauna)
-	capa_barcos = Node3D.new()
-	add_child(capa_barcos)
 
+# Mallas compartidas por todos los efectos (balas, humo, gotas, espuma y astillas).
+func _crear_mallas_efectos() -> void:
 	malla_bala = SphereMesh.new()
 	malla_bala.radius = 0.15
 	malla_bala.height = 0.3
@@ -434,6 +449,9 @@ func _crear_escena() -> void:
 	malla_astilla = BoxMesh.new()
 	malla_astilla.size = Vector3(0.2, 0.06, 0.08)
 
+
+# Nubes, lluvia y rayos; empiezan apagados y los enciende la tormenta.
+func _crear_cielo_tormenta() -> void:
 	var techo := PlaneMesh.new()
 	techo.size = Vector2(240.0, 240.0)
 	material_nubes = ShaderMaterial.new()
@@ -479,10 +497,8 @@ func _crear_escena() -> void:
 	rayo = Node3D.new()
 	add_child(rayo)
 
-	_crear_sonidos()
-	peligros.preparar(self)
-	fauna.preparar(self)
 
+# Sonido
 
 func _crear_buses() -> void:
 	for nombre in ["Musica", "Efectos"]:
@@ -503,215 +519,28 @@ func _aplicar_volumen() -> void:
 
 func _crear_sonidos() -> void:
 	for _i in 2:
-		sonidos_trueno.append(_sonido_trueno())
+		sonidos_trueno.append(Sonidos.trueno())
 	for _i in 2:
-		var voz := AudioStreamPlayer.new()
-		voz.bus = "Efectos"
-		add_child(voz)
-		voces_trueno.append(voz)
-	var canon := _sonido_canon()
+		voces_trueno.append(_nueva_voz(null))
+	var canon := Sonidos.canon()
 	for _i in 6:
-		var voz := AudioStreamPlayer.new()
-		voz.stream = canon
-		voz.bus = "Efectos"
-		add_child(voz)
-		voces_canon.append(voz)
-	var hundir := _sonido_hundir()
+		voces_canon.append(_nueva_voz(canon))
+	var hundir := Sonidos.hundir()
 	for _i in 3:
-		var voz := AudioStreamPlayer.new()
-		voz.stream = hundir
-		voz.bus = "Efectos"
-		add_child(voz)
-		voces_hundir.append(voz)
-	voz_monedas = AudioStreamPlayer.new()
-	voz_monedas.stream = _sonido_monedas()
-	voz_monedas.bus = "Efectos"
-	voz_monedas.volume_db = -16.0
-	add_child(voz_monedas)
-	voz_moneda = AudioStreamPlayer.new()
-	voz_moneda.stream = _sonido_monedas([0.0])
-	voz_moneda.bus = "Efectos"
-	voz_moneda.volume_db = -22.0
+		voces_hundir.append(_nueva_voz(hundir))
+	voz_monedas = _nueva_voz(Sonidos.monedas(), -16.0)
+	voz_moneda = _nueva_voz(Sonidos.monedas([0.0]), -22.0)
 	voz_moneda.max_polyphony = 4
-	add_child(voz_moneda)
-	voz_equipar = AudioStreamPlayer.new()
-	voz_equipar.stream = _sonido_equipar()
-	voz_equipar.bus = "Efectos"
-	voz_equipar.volume_db = -13.0
-	add_child(voz_equipar)
+	voz_equipar = _nueva_voz(Sonidos.equipar(), -13.0)
 
 
-func _paso_grave(frecuencia_corte: float) -> float:
-	return 1.0 - exp(-TAU * frecuencia_corte / FRECUENCIA_AUDIO)
-
-
-func _normalizar(valores: PackedFloat32Array, pico_deseado := 1.0) -> PackedFloat32Array:
-	var pico := 0.0001
-	for valor in valores:
-		pico = maxf(pico, absf(valor))
-	for i in valores.size():
-		valores[i] = valores[i] / pico * pico_deseado
-	return valores
-
-
-func _a_wav(valores: PackedFloat32Array, bucle := false) -> AudioStreamWAV:
-	valores = _normalizar(valores, 0.8)
-	var datos := PackedByteArray()
-	datos.resize(valores.size() * 2)
-	for i in valores.size():
-		datos.encode_s16(i * 2, int(valores[i] * 32767.0))
-	var sonido := AudioStreamWAV.new()
-	sonido.format = AudioStreamWAV.FORMAT_16_BITS
-	sonido.mix_rate = FRECUENCIA_AUDIO
-	sonido.stereo = false
-	sonido.data = datos
-	if bucle:
-		sonido.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		sonido.loop_end = valores.size()
-	return sonido
-
-
-func _sonido_trueno() -> AudioStreamWAV:
-	var muestras := int(FRECUENCIA_AUDIO * 4.0)
-	var retumbo := PackedFloat32Array()
-	var chasquido := PackedFloat32Array()
-	retumbo.resize(muestras)
-	chasquido.resize(muestras)
-	var a_grave := _paso_grave(110.0)
-	var a_medio := _paso_grave(700.0)
-	var grave_1 := 0.0
-	var grave_2 := 0.0
-	var medio := 0.0
-	var golpes := [0.0, randf_range(0.5, 0.9), randf_range(1.3, 1.9), randf_range(2.1, 2.7)]
-	for i in muestras:
-		var t := float(i) / FRECUENCIA_AUDIO
-		var blanco := randf_range(-1.0, 1.0)
-		grave_1 += a_grave * (blanco - grave_1)
-		grave_2 += a_grave * (grave_1 - grave_2)
-		medio += a_medio * (blanco - medio)
-		var envolvente := 0.0
-		for k in golpes.size():
-			var desde: float = t - golpes[k]
-			if desde > 0.0:
-				envolvente += (1.0 - exp(-desde * 8.0)) * exp(-desde * 1.5) * (1.0 if k == 0 else 0.55)
-		retumbo[i] = grave_2 * envolvente * (1.0 - t / 4.0)
-		chasquido[i] = medio * exp(-t * 14.0)
-	retumbo = _normalizar(retumbo)
-	chasquido = _normalizar(chasquido)
-	for i in muestras:
-		retumbo[i] = retumbo[i] + chasquido[i] * 0.18
-	return _a_wav(retumbo)
-
-
-func _sonido_canon() -> AudioStreamWAV:
-	var muestras := int(FRECUENCIA_AUDIO * 1.3)
-	var tono := PackedFloat32Array()
-	var estruendo := PackedFloat32Array()
-	var chasquido := PackedFloat32Array()
-	tono.resize(muestras)
-	estruendo.resize(muestras)
-	chasquido.resize(muestras)
-	var a_grave := _paso_grave(450.0)
-	var a_agudo := _paso_grave(2200.0)
-	var grave := 0.0
-	var agudo := 0.0
-	var fase_tono := 0.0
-	for i in muestras:
-		var t := float(i) / FRECUENCIA_AUDIO
-		var blanco := randf_range(-1.0, 1.0)
-		grave += a_grave * (blanco - grave)
-		agudo += a_agudo * (blanco - agudo)
-		fase_tono += TAU * (42.0 + 70.0 * exp(-t * 9.0)) / FRECUENCIA_AUDIO
-		var ataque := 1.0 - exp(-t * 600.0)
-		tono[i] = sin(fase_tono) * exp(-t * 5.0) * ataque
-		estruendo[i] = grave * exp(-t * 6.0) * ataque
-		chasquido[i] = agudo * exp(-t * 40.0)
-	tono = _normalizar(tono)
-	estruendo = _normalizar(estruendo)
-	chasquido = _normalizar(chasquido)
-	for i in muestras:
-		tono[i] = tono[i] + estruendo[i] * 0.75 + chasquido[i] * 0.3
-	return _a_wav(tono)
-
-
-func _sonido_monedas(choques: Array = [0.0, 0.07, 0.15, 0.21, 0.3, 0.36, 0.47]) -> AudioStreamWAV:
-	var muestras := int(FRECUENCIA_AUDIO * (choques.back() + 0.43))
-	var valores := PackedFloat32Array()
-	valores.resize(muestras)
-	# Parciales inarmónicos de un disco metálico pequeño.
-	# Todos por debajo de la mitad de FRECUENCIA_AUDIO para que no suenen ásperos.
-	var parciales := [1.0, 2.32, 3.86]
-	for k in choques.size():
-		var inicio := int(choques[k] * FRECUENCIA_AUDIO)
-		var base := randf_range(1400.0, 1900.0)
-		var fuerza := 1.0 - k * 0.09
-		for i in range(inicio, muestras):
-			var t := float(i - inicio) / FRECUENCIA_AUDIO
-			var sonido := 0.0
-			for p in parciales.size():
-				sonido += sin(TAU * base * parciales[p] * t) * exp(-t * (16.0 + p * 18.0)) / (1.0 + p * 1.5)
-			sonido += randf_range(-1.0, 1.0) * exp(-t * 400.0) * 0.12
-			valores[i] += sonido * fuerza * (1.0 - exp(-t * 1500.0))
-	return _a_wav(valores)
-
-
-# Crujido de la madera al partirse, agua entrando y burbujas que suben.
-func _sonido_hundir() -> AudioStreamWAV:
-	var muestras := int(FRECUENCIA_AUDIO * 3.2)
-	var valores := PackedFloat32Array()
-	valores.resize(muestras)
-	var a_grave := _paso_grave(260.0)
-	var grave_1 := 0.0
-	var grave_2 := 0.0
-	var ola_1 := 0.0
-	var ola_2 := 0.0
-	var fase_queja := 0.0
-	for i in muestras:
-		var t := float(i) / FRECUENCIA_AUDIO
-		var blanco := randf_range(-1.0, 1.0)
-		# Golpe de agua: ruido filtrado cuyo corte baja de 1200 a 250 Hz.
-		var a_ola := _paso_grave(lerpf(1200.0, 250.0, minf(1.0, t / 1.2)))
-		ola_1 += a_ola * (blanco - ola_1)
-		ola_2 += a_ola * (ola_1 - ola_2)
-		var golpe := (1.0 - exp(-t * 40.0)) * exp(-t * 2.2)
-		# Agua entrando: rumor grave que crece y se apaga.
-		grave_1 += a_grave * (blanco - grave_1)
-		grave_2 += a_grave * (grave_1 - grave_2)
-		var entrada := smoothstep(0.2, 0.9, t) * exp(-maxf(0.0, t - 1.0) * 1.4)
-		# Quejido de la madera: tono grave que se dobla hacia abajo.
-		fase_queja += TAU * (lerpf(105.0, 62.0, minf(1.0, t / 1.6)) + 2.0 * sin(t * 9.0)) / FRECUENCIA_AUDIO
-		var queja := (sin(fase_queja) + 0.3 * sin(fase_queja * 2.0)) * smoothstep(0.05, 0.35, t) * exp(-maxf(0.0, t - 0.4) * 2.0)
-		valores[i] = ola_2 * golpe * 1.6 + grave_2 * entrada * 3.0 + queja * 0.22
-	for _b in 14:
-		var inicio := randf_range(0.7, 2.7)
-		var tono := randf_range(140.0, 380.0)
-		var desde := int(inicio * FRECUENCIA_AUDIO)
-		var fase_burbuja := 0.0
-		for i in range(desde, mini(muestras, desde + int(FRECUENCIA_AUDIO * 0.14))):
-			var t := float(i - desde) / FRECUENCIA_AUDIO
-			fase_burbuja += TAU * tono * (1.0 + t * 5.0) / FRECUENCIA_AUDIO
-			valores[i] += sin(fase_burbuja) * (1.0 - exp(-t * 300.0)) * exp(-t * 28.0) * 0.18 * (1.0 - inicio / 3.4)
-	return _a_wav(valores)
-
-
-func _sonido_equipar() -> AudioStreamWAV:
-	var muestras := int(FRECUENCIA_AUDIO * 0.85)
-	var valores := PackedFloat32Array()
-	valores.resize(muestras)
-	# Arpegio mayor ascendente (do-mi-sol-do) con timbre de campanilla.
-	var notas := [[523.25, 0.0], [659.25, 0.07], [783.99, 0.14], [1046.5, 0.21]]
-	for nota in notas:
-		var frecuencia: float = nota[0]
-		var inicio := int(float(nota[1]) * FRECUENCIA_AUDIO)
-		var es_ultima: bool = nota == notas.back()
-		var caida := 4.5 if es_ultima else 9.0
-		for i in range(inicio, muestras):
-			var t := float(i - inicio) / FRECUENCIA_AUDIO
-			var vibrato := 1.0 + 0.004 * sin(TAU * 6.0 * t) if es_ultima else 1.0
-			var fase := TAU * frecuencia * vibrato * t
-			var sonido := sin(fase) + 0.35 * sin(fase * 2.0) * exp(-t * 6.0) + 0.15 * sin(fase * 3.0) * exp(-t * 12.0)
-			valores[i] += sonido * exp(-t * caida) * (1.0 - exp(-t * 900.0)) * (1.2 if es_ultima else 0.8)
-	return _a_wav(valores)
+func _nueva_voz(sonido: AudioStream, volumen := 0.0) -> AudioStreamPlayer:
+	var voz := AudioStreamPlayer.new()
+	voz.stream = sonido
+	voz.bus = "Efectos"
+	voz.volume_db = volumen
+	add_child(voz)
+	return voz
 
 
 func _sonar_en_vista(voces: Array[AudioStreamPlayer], punto: Vector3, volumen_cerca: float, volumen_lejos: float, alcance: float) -> void:
@@ -725,6 +554,8 @@ func _sonar_en_vista(voces: Array[AudioStreamPlayer], punto: Vector3, volumen_ce
 			voz.play()
 			return
 
+
+# Materiales y piezas 3D
 
 func material(color: Color) -> StandardMaterial3D:
 	if not materiales.has(color):
@@ -742,349 +573,6 @@ func _malla(padre: Node3D, forma: Mesh, color: Color, pos: Vector3) -> MeshInsta
 	pieza.position = pos
 	padre.add_child(pieza)
 	return pieza
-
-
-var espera_recorte := 0.0
-
-
-# Las islas lejanas no se dibujan (con sus palmeras, animales y sombras); en puerto
-# la cámara mira al horizonte y se ven más lejos.
-func _recortar_islas(delta: float) -> void:
-	espera_recorte -= delta
-	if espera_recorte > 0.0:
-		return
-	espera_recorte = 0.2
-	var alcance := DISTANCIA_VISIBLE + 8.0 if estado == Estado.JUGANDO or estado == Estado.FIN else 170.0
-	var foco_plano := Vector2(foco.x, foco.z)
-	for nodo: Node3D in islas_nodo.get_children():
-		var borde: float = nodo.get_meta("radio", 0.0) * ALCANCE_ORILLA * 1.15
-		nodo.visible = Vector2(nodo.position.x, nodo.position.z).distance_to(foco_plano) < alcance + borde
-
-
-func _repartir_islotes(cantidad: int, radio_min: float, radio_max: float, centro := Vector2.ZERO,
-		alcance := RADIO_MUNDO * 0.85, separacion := SEPARACION_ISLAS) -> void:
-	var puestos := 0
-	for _intento in cantidad * 30:
-		if puestos >= cantidad:
-			return
-		var radio := randf_range(radio_min, radio_max)
-		var punto := centro + Vector2.from_angle(randf() * TAU) * sqrt(randf()) * alcance
-		if punto.length() < 200.0 or punto.length() > RADIO_MUNDO * 0.88:
-			continue
-		var libre := true
-		for otra in islotes:
-			if punto.distance_to(otra.pos) < otra.radio + radio + separacion:
-				libre = false
-				break
-		if libre:
-			islotes.append(Circulo.new(punto, radio))
-			puestos += 1
-
-
-# Grupos de islas pequeñas parecidas, separadas por canales estrechos.
-func _repartir_archipielagos() -> void:
-	for _a in ARCHIPIELAGOS:
-		var centro := Vector2.ZERO
-		for _intento in 40:
-			centro = Vector2.from_angle(randf() * TAU) * sqrt(randf()) * RADIO_MUNDO * 0.78
-			var libre := centro.length() > 400.0
-			for otra in islotes:
-				if centro.distance_to(otra.pos) < otra.radio + 200.0:
-					libre = false
-					break
-			if libre:
-				break
-		var tamano := randf_range(38.0, 52.0)
-		_repartir_islotes(randi_range(3, 6), tamano * 0.85, tamano * 1.15, centro, randf_range(230.0, 320.0), SEPARACION_CANAL)
-		_repartir_islotes(randi_range(1, 3), 22.0, 30.0, centro, 300.0, SEPARACION_CANAL)
-
-
-func _crear_rocas(isla: Circulo) -> Node3D:
-	var nodo := Node3D.new()
-	nodo.position = a_3d(isla.pos)
-	nodo.rotation.y = randf() * TAU
-	var r := isla.radio * ESCALA
-	var roca := SphereMesh.new()
-	roca.radius = 0.5
-	roca.height = 1.0
-	roca.radial_segments = 7
-	roca.rings = 4
-	var tonos: Array[Color] = [COLOR_ROCA, Color("6f7472"), Color("9a9d97"), Color("5d625f")]
-	var piezas := randi_range(3, 5)
-	var con_musgo := randf() < 0.6
-	for i in piezas:
-		var angulo := TAU * i / piezas + randf_range(-0.4, 0.4)
-		var lejos := r * randf_range(0.45, 0.8) if i > 0 else 0.0
-		var tamano := r * (1.5 if i == 0 else randf_range(0.7, 1.05))
-		var piedra := _malla(nodo, roca, tonos[i % tonos.size()], Vector3(cos(angulo) * lejos, tamano * 0.3, sin(angulo) * lejos))
-		piedra.scale = Vector3(tamano * randf_range(0.9, 1.2), tamano * randf_range(1.0, 1.6), tamano * randf_range(0.8, 1.1))
-		piedra.rotation = Vector3(randf_range(-0.3, 0.3), randf() * TAU, randf_range(-0.3, 0.3))
-		if con_musgo and (i == 0 or randf() < 0.35):
-			_cubrir_musgo(piedra, i == 0)
-	nodo.add_child(_orilla(r * 0.95))
-	nodo.set_meta("radio", r)
-	return nodo
-
-
-# Casquete de musgo pegado a la cima de la piedra (en su espacio local, radio 0.5) con matas encima.
-func _cubrir_musgo(piedra: MeshInstance3D, matas: bool) -> void:
-	if malla_musgo == null:
-		malla_musgo = SphereMesh.new()
-		malla_musgo.radius = 0.5
-		malla_musgo.height = 0.5
-		malla_musgo.radial_segments = 10
-		malla_musgo.rings = 4
-		malla_musgo.is_hemisphere = true
-		malla_mata = SphereMesh.new()
-		malla_mata.radius = 0.5
-		malla_mata.height = 1.0
-		malla_mata.radial_segments = 6
-		malla_mata.rings = 3
-	var verde := COLOR_HIERBA_OSCURA.lerp(COLOR_ROCA, 0.35).darkened(0.1)
-	var capa := _malla(piedra, malla_musgo, verde, Vector3(0, 0.33, 0))
-	capa.scale = Vector3(0.76, 0.36, 0.76)
-	if not matas:
-		return
-	var verdes: Array[Color] = [verde.lightened(0.12), verde.darkened(0.1), verde.lightened(0.22)]
-	for k in randi_range(3, 5):
-		var a := randf() * TAU
-		var d := randf_range(0.0, 0.22)
-		var y := 0.33 + 0.18 * sqrt(maxf(0.0, 1.0 - pow(d / 0.38, 2.0)))
-		var mata := _malla(piedra, malla_mata, verdes[k % verdes.size()], Vector3(cos(a) * d, y, sin(a) * d))
-		mata.scale = Vector3.ONE * randf_range(0.09, 0.15) * Vector3(1.0, 0.75, 1.0)
-
-
-func _orilla(radio_orilla: float, forma := PackedFloat32Array()) -> MeshInstance3D:
-	var exterior := radio_orilla * ALCANCE_ORILLA
-	var plano := PlaneMesh.new()
-	plano.size = Vector2.ONE * exterior * 2.0
-	plano.subdivide_width = 14
-	plano.subdivide_depth = 14
-	var materia := ShaderMaterial.new()
-	materia.shader = SHADER_ORILLA
-	materia.set_shader_parameter("orilla", 1.0 / ALCANCE_ORILLA)
-	if forma.is_empty():
-		forma.resize(Circulo.MUESTRAS)
-		forma.fill(1.0)
-	materia.set_shader_parameter("forma", forma)
-	materiales_orilla.append(materia)
-	var espuma := MeshInstance3D.new()
-	espuma.mesh = plano
-	espuma.material_override = materia
-	espuma.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return espuma
-
-
-func _crear_isla(isla: Circulo) -> Node3D:
-	var nodo := Node3D.new()
-	nodo.position = a_3d(isla.pos)
-	var r := isla.radio * ESCALA
-	var chica := isla.radio < 56.0 * 1.15
-	# El relieve central cabe en la parte más estrecha de la isla.
-	var r_centro := r * isla.factor_minimo()
-
-	_malla(nodo, _arena(r, isla), COLOR_ARENA, Vector3.ZERO)
-
-	# Cada forma devuelve dónde caben las palmeras: [distancia mínima, máxima, altura del suelo].
-	var sitio_palmeras: Array
-	var relieve := randf()
-	var con_laguna := false
-	if relieve < 0.35:
-		sitio_palmeras = _relieve_colinas(nodo, r_centro, chica)
-	elif relieve < 0.55:
-		sitio_palmeras = _relieve_pico(nodo, r_centro)
-	elif relieve < 0.7:
-		sitio_palmeras = _relieve_atolon(nodo, r_centro)
-		con_laguna = true
-	elif relieve < 0.85 and not chica:
-		sitio_palmeras = _relieve_meseta(nodo, r_centro)
-	else:
-		sitio_palmeras = _relieve_rocoso(nodo, r_centro)
-
-	var palmeras: Array[Node3D] = []
-	var alto_palmera := func() -> float: return randf_range(1.6, 2.2) if chica else randf_range(2.0, 2.8)
-	for i in (randi_range(1, 2) if chica else randi_range(2, 3)):
-		var angulo := randf() * TAU
-		var base := Vector3(cos(angulo), 0.0, sin(angulo)) * r_centro * randf_range(sitio_palmeras[0], sitio_palmeras[1])
-		palmeras.append(_palmera(nodo, base + Vector3(0, sitio_palmeras[2], 0), alto_palmera.call()))
-
-	var verdes: Array[Color] = [COLOR_HIERBA, COLOR_HIERBA_OSCURA, COLOR_HIERBA.lerp(COLOR_HOJA, 0.5)]
-	for k in isla.lobulos.size():
-		var lobulo := isla.lobulos[k]
-		var centro_lobulo := Vector2(lobulo.x, lobulo.y) * r
-		if centro_lobulo.length() < r * 0.22 or (con_laguna and centro_lobulo.length() < r_centro * 0.8):
-			continue
-		var loma := SphereMesh.new()
-		loma.radius = lobulo.z * r * randf_range(0.5, 0.62)
-		loma.height = loma.radius * randf_range(0.5, 0.8)
-		loma.is_hemisphere = true
-		_malla(nodo, loma, verdes[k % verdes.size()], Vector3(centro_lobulo.x, 0.43, centro_lobulo.y))
-		if randf() < 0.65:
-			var a := randf() * TAU
-			var sitio := centro_lobulo + Vector2(cos(a), sin(a)) * loma.radius * 0.45
-			palmeras.append(_palmera(nodo, Vector3(sitio.x, 0.45 + loma.height * 0.35, sitio.y), alto_palmera.call()))
-
-	var roca := SphereMesh.new()
-	roca.radius = 0.4
-	roca.height = 0.6
-	roca.radial_segments = 7
-	roca.rings = 4
-	for i in (2 if chica else 4):
-		var angulo := randf() * TAU
-		var lejos := r * isla.factor(angulo) * 1.02
-		var piedra := _malla(nodo, roca, COLOR_ROCA, Vector3(cos(angulo) * lejos, 0.25, sin(angulo) * lejos))
-		piedra.scale = Vector3.ONE * randf_range(0.6, 1.3)
-
-	nodo.add_child(_orilla(r * 1.15, isla.forma))
-	nodo.set_meta("radio", r)
-	fauna.poblar(nodo, r, chica, palmeras, isla)
-	return nodo
-
-
-# Arena que sigue la forma de la isla; la orilla baja en talud bajo el agua.
-func _arena(r: float, isla: Circulo) -> ArrayMesh:
-	var lados := Circulo.MUESTRAS
-	var arriba: Array[Vector3] = []
-	var abajo: Array[Vector3] = []
-	for i in lados:
-		var a := TAU * i / lados
-		var dir := Vector3(cos(a), 0.0, sin(a))
-		var radial := dir * r * isla.factor(a)
-		arriba.append(radial + Vector3(0, 0.45, 0))
-		abajo.append(radial + dir * r * 0.16 + Vector3(0, -0.35, 0))
-	var superficie := SurfaceTool.new()
-	superficie.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var centro := Vector3(0, 0.45, 0)
-	for i in lados:
-		var j := (i + 1) % lados
-		for punto in [centro, arriba[i], arriba[j], arriba[i], abajo[i], abajo[j], arriba[i], abajo[j], arriba[j]]:
-			superficie.add_vertex(punto)
-	superficie.generate_normals()
-	return superficie.commit()
-
-
-func _relieve_colinas(nodo: Node3D, r: float, chica: bool) -> Array:
-	var colores: Array[Color] = [COLOR_HIERBA, COLOR_HIERBA_OSCURA, COLOR_HIERBA.lerp(COLOR_HOJA, 0.5)]
-	for i in (randi_range(1, 2) if chica else randi_range(2, 3)):
-		var colina := SphereMesh.new()
-		colina.radius = r * randf_range(0.36, 0.6 if i == 0 else 0.45)
-		colina.height = colina.radius * randf_range(0.8, 1.15)
-		var lugar := Vector2.from_angle(randf() * TAU) * r * (0.0 if i == 0 else randf_range(0.2, 0.35))
-		_malla(nodo, colina, colores[i % colores.size()], Vector3(lugar.x, 0.4, lugar.y))
-	return [0.15, 0.45, 0.5]
-
-
-func _relieve_pico(nodo: Node3D, r: float) -> Array:
-	var alto := r * randf_range(0.7, 1.0)
-	var monte := CylinderMesh.new()
-	monte.top_radius = r * 0.07
-	monte.bottom_radius = r * 0.55
-	monte.height = alto
-	monte.radial_segments = 9
-	monte.rings = 1
-	var ladera := _malla(nodo, monte, COLOR_HIERBA_OSCURA, Vector3(0, 0.45 + alto / 2.0, 0))
-	ladera.rotation.y = randf() * TAU
-	var cima := CylinderMesh.new()
-	cima.top_radius = r * 0.075
-	cima.bottom_radius = r * 0.24
-	cima.height = alto * 0.32
-	cima.radial_segments = 9
-	cima.rings = 1
-	_malla(nodo, cima, COLOR_ROCA, Vector3(0, 0.45 + alto * 0.84, 0))
-	var falda := SphereMesh.new()
-	falda.radius = r * 0.35
-	falda.height = r * 0.3
-	var lado := Vector2.from_angle(randf() * TAU) * r * 0.35
-	_malla(nodo, falda, COLOR_HIERBA, Vector3(lado.x, 0.45, lado.y))
-	return [0.55, 0.68, 0.45]
-
-
-func _relieve_atolon(nodo: Node3D, r: float) -> Array:
-	var laguna := CylinderMesh.new()
-	laguna.top_radius = r * 0.5
-	laguna.bottom_radius = r * 0.5
-	laguna.height = 0.02
-	laguna.radial_segments = 24
-	_malla(nodo, laguna, Color("4cc9c0"), Vector3(0, 0.455, 0))
-	var hondo := CylinderMesh.new()
-	hondo.top_radius = r * 0.3
-	hondo.bottom_radius = r * 0.3
-	hondo.height = 0.02
-	hondo.radial_segments = 20
-	_malla(nodo, hondo, Color("2aa1ad"), Vector3(0.05 * r, 0.46, -0.04 * r))
-	var mata := SphereMesh.new()
-	mata.radius = r * 0.16
-	mata.height = r * 0.12
-	mata.is_hemisphere = true
-	for i in 4:
-		var a := TAU * i / 4.0 + randf_range(-0.4, 0.4)
-		_malla(nodo, mata, COLOR_HIERBA, Vector3(cos(a), 0.0, sin(a)) * r * 0.66 + Vector3(0, 0.45, 0))
-	return [0.6, 0.74, 0.45]
-
-
-func _relieve_meseta(nodo: Node3D, r: float) -> Array:
-	var risco := CylinderMesh.new()
-	risco.top_radius = r * 0.52
-	risco.bottom_radius = r * 0.62
-	risco.height = 0.5
-	risco.radial_segments = 9
-	risco.rings = 1
-	var pared := _malla(nodo, risco, COLOR_ROCA, Vector3(0, 0.7, 0))
-	pared.rotation.y = randf() * TAU
-	var pasto := CylinderMesh.new()
-	pasto.top_radius = r * 0.46
-	pasto.bottom_radius = r * 0.53
-	pasto.height = 0.28
-	pasto.radial_segments = 9
-	pasto.rings = 1
-	var cima := _malla(nodo, pasto, COLOR_HIERBA, Vector3(0, 1.09, 0))
-	cima.rotation.y = randf() * TAU
-	return [0.0, 0.32, 1.2]
-
-
-func _relieve_rocoso(nodo: Node3D, r: float) -> Array:
-	var colina := SphereMesh.new()
-	colina.radius = r * 0.5
-	colina.height = r * 0.45
-	_malla(nodo, colina, COLOR_HIERBA, Vector3(0, 0.4, 0))
-	var roca := SphereMesh.new()
-	roca.radius = 0.5
-	roca.height = 1.0
-	roca.radial_segments = 7
-	roca.rings = 4
-	var lado := randf() * TAU
-	var tonos: Array[Color] = [COLOR_ROCA, Color("6f7472"), Color("9a9d97")]
-	for i in 3:
-		var a := lado + randf_range(-0.5, 0.5)
-		var tam := r * randf_range(0.32, 0.5)
-		var piedra := _malla(nodo, roca, tonos[i], Vector3(cos(a), 0.0, sin(a)) * r * randf_range(0.2, 0.42) + Vector3(0, 0.45 + tam * 0.3, 0))
-		piedra.scale = Vector3(tam, tam * randf_range(1.1, 1.7), tam * randf_range(0.8, 1.1))
-		piedra.rotation = Vector3(randf_range(-0.2, 0.2), randf() * TAU, randf_range(-0.2, 0.2))
-	return [0.15, 0.4, 0.5]
-
-
-func _palmera(padre: Node3D, base: Vector3, alto: float) -> Node3D:
-	var palmera := Node3D.new()
-	palmera.set_meta("alto", alto)
-	palmera.position = base
-	palmera.rotation = Vector3(randf_range(-0.25, 0.25), randf() * TAU, randf_range(-0.25, 0.25))
-	padre.add_child(palmera)
-	var tronco := CylinderMesh.new()
-	tronco.top_radius = 0.07
-	tronco.bottom_radius = 0.12
-	tronco.height = alto
-	tronco.radial_segments = 8
-	_malla(palmera, tronco, COLOR_TRONCO, Vector3(0, alto / 2.0, 0))
-	var hoja := BoxMesh.new()
-	hoja.size = Vector3(0.26, 0.04, 1.2)
-	for i in 6:
-		var pivote := Node3D.new()
-		pivote.position.y = alto
-		pivote.rotation.y = TAU * i / 6.0
-		palmera.add_child(pivote)
-		var pieza := _malla(pivote, hoja, COLOR_HOJA, Vector3(0, -0.15, 0.55))
-		pieza.rotation.x = 0.4
-	return palmera
 
 
 func _crear_tabla() -> Node3D:
@@ -1117,6 +605,8 @@ func _crear_tabla() -> Node3D:
 	return nodo
 
 
+# Mar y tormenta
+
 func _actualizar_agua() -> void:
 	var paso := LADO_AGUA / float(DIVISIONES_AGUA + 1)
 	agua.position = Vector3(snappedf(foco.x, paso), 0.0, snappedf(foco.z, paso))
@@ -1126,10 +616,7 @@ func _actualizar_agua() -> void:
 		materia.set_shader_parameter("zona_radio", zona_radio * ESCALA)
 		materia.set_shader_parameter("relampago", relampago)
 	material_agua.set_shader_parameter("tiempo", tiempo)
-	for materia in materiales_orilla:
-		materia.set_shader_parameter("tiempo", tiempo)
-		materia.set_shader_parameter("zona_centro", zona_centro * ESCALA)
-		materia.set_shader_parameter("zona_radio", zona_radio * ESCALA)
+	islas.actualizar_orillas(tiempo, zona_centro, zona_radio)
 	material_muro.set_shader_parameter("relampago", relampago)
 	muro.position = a_3d(zona_centro, 4.0)
 	muro.scale = Vector3(zona_radio * ESCALA, 1.0, zona_radio * ESCALA)
@@ -1285,6 +772,8 @@ func _tronar(volumen: float) -> void:
 			return
 
 
+# Cámara
+
 func _mover_camara(delta: float) -> void:
 	if jugador == null:
 		return
@@ -1329,25 +818,8 @@ func _preparar_mar() -> void:
 	for efecto in efectos:
 		efecto.nodo.queue_free()
 	efectos.clear()
-	for hijo in islas_nodo.get_children():
-		hijo.queue_free()
-	islotes.clear()
-	materiales_orilla.clear()
 	fauna.limpiar()
-
-	# Cerca del centro, donde acaba la tormenta, siempre hay islas para cubrirse.
-	_repartir_islotes(ISLAS_CENTRO, 55.0, 85.0, Vector2.ZERO, 650.0)
-	_repartir_islotes(ISLAS_GRANDES, 58.0, 96.0)
-	_repartir_archipielagos()
-	_repartir_islotes(ISLOTES_CHICOS, 40.0, 54.0)
-	_repartir_islotes(GRUPOS_ROCAS, 22.0, 34.0, Vector2.ZERO, RADIO_MUNDO * 0.85, 80.0)
-	for isla in islotes:
-		if isla.radio <= RADIO_ROCAS:
-			islas_nodo.add_child(_crear_rocas(isla))
-		else:
-			isla.radio *= 1.15
-			isla.dar_forma()
-			islas_nodo.add_child(_crear_isla(isla))
+	islas.generar()
 
 	zona_centro = Vector2.ZERO
 	zona_radio = ZONA_INICIAL
@@ -1573,7 +1045,7 @@ func disparar(barco: Barco, arma: String) -> void:
 		balas.append(bala)
 		for _i in 2 if salidas.size() > 1 else 4:
 			var deriva := Vector3(randf_range(-0.5, 0.5), randf_range(0.3, 0.8), randf_range(-0.5, 0.5))
-			_efecto(malla_humo, Color(0.93, 0.92, 0.9, 0.75), a_3d(salidas[k], 1.0), deriva, randf_range(0.9, 1.3), 0.6, 1.7, 0.0, true)
+			crear_efecto(malla_humo, Color(0.93, 0.92, 0.9, 0.75), a_3d(salidas[k], 1.0), deriva, randf_range(0.9, 1.3), 0.6, 1.7, 0.0, true)
 	var salida := salidas[salidas.size() / 2]
 	if barco.es_jugador:
 		_sonar_en_vista(voces_canon, barco.position, -9.0, -9.0, 1.0)
@@ -1659,7 +1131,7 @@ func _pintar_botin() -> void:
 	texto_botin.text = tr("Botín a bordo: %d") % jugador.botin
 
 
-func _soltar_cofre(punto: Vector2, monedas: int) -> void:
+func soltar_cofre(punto: Vector2, monedas: int) -> void:
 	var cofre := Cofre.new()
 	cofre.pos = punto
 	cofre.vel = Vector2.from_angle(randf() * TAU) * 25.0
@@ -1794,7 +1266,7 @@ func al_hundirse(barco: Barco) -> void:
 		barco.botin -= cae
 		if barco == jugador:
 			botin_perdido = cae
-		_soltar_cofre(barco.pos, cae)
+		soltar_cofre(barco.pos, cae)
 	if barco.es_jugador:
 		voces_hundir[0].volume_db = -15.0
 		voces_hundir[0].pitch_scale = 1.0
@@ -1805,7 +1277,7 @@ func al_hundirse(barco: Barco) -> void:
 	_soltar_restos(barco.pos)
 	for _i in 6:
 		var deriva := Vector3(randf_range(-0.6, 0.6), randf_range(0.4, 1.0), randf_range(-0.6, 0.6))
-		_efecto(malla_humo, Color(0.35, 0.33, 0.32, 0.7), barco.position + Vector3(0, 1.2, 0), deriva, randf_range(1.5, 2.2), 0.8, 2.2, 0.0, true)
+		crear_efecto(malla_humo, Color(0.35, 0.33, 0.32, 0.7), barco.position + Vector3(0, 1.2, 0), deriva, randf_range(1.5, 2.2), 0.8, 2.2, 0.0, true)
 
 
 func _contar_vivos() -> int:
@@ -1896,7 +1368,7 @@ func _animar_premio(desglose: Array, antes: int) -> void:
 	for parte in desglose:
 		var cantidad: int = parte[1]
 		var informativa: bool = parte.size() > 2
-		var linea := _etiqueta_panel(parte[0] if informativa else "%s   +%d" % [parte[0], cantidad], 24, parte[2] if informativa else COLOR_ORO)
+		var linea := Ui.etiqueta_panel(parte[0] if informativa else "%s   +%d" % [parte[0], cantidad], 24, parte[2] if informativa else COLOR_ORO)
 		linea.modulate.a = 0.0
 		lineas_premio.add_child(linea)
 		anim_premio.tween_interval(0.15)
@@ -1947,37 +1419,9 @@ func _tocar_final(evento: InputEvent) -> void:
 		anim_premio.custom_step(60.0)
 
 
-class MonedaVoladora extends Control:
-	const GRAVEDAD := 1500.0
-	var velocidad := Vector2.ZERO
-	var vida := 1.3
-	var giro := randf() * TAU
-
-	func _init() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	func _process(delta: float) -> void:
-		velocidad.y += GRAVEDAD * delta
-		position += velocidad * delta
-		giro += delta * 9.0
-		vida -= delta
-		modulate.a = clampf(vida / 0.4, 0.0, 1.0)
-		queue_redraw()
-		if vida <= 0.0:
-			queue_free()
-
-	func _draw() -> void:
-		var ancho := absf(cos(giro))
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2(maxf(ancho, 0.12), 1.0))
-		draw_circle(Vector2.ZERO, 15.0, Color("8a6418"))
-		draw_circle(Vector2.ZERO, 12.5, Color("e2b13a"))
-		draw_circle(Vector2.ZERO, 8.0, Color("f0cd62"))
-		draw_circle(Vector2(-4.0, -4.0), 3.0, Color(1, 1, 1, 0.7))
-
-
 # Efectos
 
-func _efecto(forma: Mesh, color: Color, pos: Vector3, vel: Vector3, vida: float, escala: float, crece: float, gravedad := 0.0, sombreado := false) -> void:
+func crear_efecto(forma: Mesh, color: Color, pos: Vector3, vel: Vector3, vida: float, escala: float, crece: float, gravedad := 0.0, sombreado := false) -> void:
 	if pos.distance_to(foco) > DISTANCIA_VISIBLE:
 		return
 	var efecto := Efecto.new()
@@ -2023,7 +1467,7 @@ func _actualizar_efectos(delta: float) -> void:
 
 
 func dejar_estela(pos: Vector2, fuerza: float) -> void:
-	_efecto(malla_espuma, Color(1, 1, 1, 0.45 * fuerza), a_3d(pos, 0.17), Vector3.ZERO, 1.2, 0.7, 1.6)
+	crear_efecto(malla_espuma, Color(1, 1, 1, 0.45 * fuerza), a_3d(pos, 0.17), Vector3.ZERO, 1.2, 0.7, 1.6)
 
 
 func ola_proa(pos: Vector2, rumbo: float, fuerza: float) -> void:
@@ -2031,7 +1475,7 @@ func ola_proa(pos: Vector2, rumbo: float, fuerza: float) -> void:
 	var lado := Vector2(-adelante.y, adelante.x)
 	for s in [-1.0, 1.0]:
 		var empuje: Vector2 = lado * s * 1.5 * fuerza
-		_efecto(malla_espuma, Color(1, 1, 1, 0.5 * fuerza), a_3d(pos + lado * s * 6.0, 0.18), Vector3(empuje.x, 0.0, empuje.y), 0.9, 0.35, 1.3)
+		crear_efecto(malla_espuma, Color(1, 1, 1, 0.5 * fuerza), a_3d(pos + lado * s * 6.0, 0.18), Vector3(empuje.x, 0.0, empuje.y), 0.9, 0.35, 1.3)
 
 
 # La proa cae sobre el agua: abanico de gotas hacia delante y a los lados.
@@ -2042,29 +1486,29 @@ func rociar_proa(pos: Vector2, rumbo: float, fuerza: float) -> void:
 	for _i in int(5 + 8 * fuerza):
 		var plano := adelante * randf_range(0.4, 1.4) + lado * randf_range(-1.8, 1.8)
 		var vel := Vector3(plano.x, randf_range(2.2, 3.6) * (0.6 + 0.6 * fuerza), plano.y)
-		_efecto(malla_gota, Color(0.95, 0.98, 1.0, 0.85), centro, vel, 0.8, 0.75, 0.0, 12.0)
-	_efecto(malla_espuma, Color(1, 1, 1, 0.6), a_3d(pos, 0.17), Vector3.ZERO, 0.8, 0.6, 2.2)
+		crear_efecto(malla_gota, Color(0.95, 0.98, 1.0, 0.85), centro, vel, 0.8, 0.75, 0.0, 12.0)
+	crear_efecto(malla_espuma, Color(1, 1, 1, 0.6), a_3d(pos, 0.17), Vector3.ZERO, 0.8, 0.6, 2.2)
 
 
 func salpicar(pos: Vector2, cantidad: int) -> void:
 	var centro := a_3d(pos, 0.2)
 	for _i in cantidad:
 		var vel := Vector3(randf_range(-1.5, 1.5), randf_range(3.0, 5.5), randf_range(-1.5, 1.5))
-		_efecto(malla_gota, Color(0.95, 0.98, 1.0, 0.9), centro, vel, 1.0, 1.0, 0.0, 12.0)
-	_efecto(malla_espuma, Color(1, 1, 1, 0.7), a_3d(pos, 0.17), Vector3.ZERO, 0.9, 0.8, 2.6)
+		crear_efecto(malla_gota, Color(0.95, 0.98, 1.0, 0.9), centro, vel, 1.0, 1.0, 0.0, 12.0)
+	crear_efecto(malla_espuma, Color(1, 1, 1, 0.7), a_3d(pos, 0.17), Vector3.ZERO, 0.9, 0.8, 2.6)
 
 
 func astillas(centro: Vector3) -> void:
 	for _i in 8:
 		var vel := Vector3(randf_range(-2.0, 2.0), randf_range(2.0, 4.5), randf_range(-2.0, 2.0))
-		_efecto(malla_astilla, Color("7a5230"), centro, vel, 1.2, 1.0, 0.0, 10.0, true)
-	_efecto(malla_humo, Color(0.9, 0.88, 0.85, 0.6), centro, Vector3(0, 0.6, 0), 0.8, 0.5, 1.2, 0.0, true)
+		crear_efecto(malla_astilla, Color("7a5230"), centro, vel, 1.2, 1.0, 0.0, 10.0, true)
+	crear_efecto(malla_humo, Color(0.9, 0.88, 0.85, 0.6), centro, Vector3(0, 0.6, 0), 0.8, 0.5, 1.2, 0.0, true)
 
 
 func _brillo_reparacion(centro: Vector3) -> void:
 	for _i in 10:
 		var vel := Vector3(randf_range(-0.8, 0.8), randf_range(1.5, 3.0), randf_range(-0.8, 0.8))
-		_efecto(malla_gota, Color(1.0, 0.86, 0.4, 0.95), centro, vel, 0.9, 1.4, 0.0, 1.5)
+		crear_efecto(malla_gota, Color(1.0, 0.86, 0.4, 0.95), centro, vel, 0.9, 1.4, 0.0, 1.5)
 
 
 # Controles
@@ -2232,17 +1676,17 @@ func _crear_interfaz() -> void:
 	hud.add_theme_constant_override("separation", 0)
 	capa.add_child(hud)
 
-	texto_vivos = _etiqueta("A flote: 12", 18)
+	texto_vivos = Ui.etiqueta("A flote: 12", 18)
 	hud.add_child(texto_vivos)
-	texto_tormenta = _etiqueta("Tormenta: 24s", 18)
+	texto_tormenta = Ui.etiqueta("Tormenta: 24s", 18)
 	hud.add_child(texto_tormenta)
-	texto_botin = _etiqueta("Botín a bordo: 0", 18)
+	texto_botin = Ui.etiqueta("Botín a bordo: 0", 18)
 	texto_botin.add_theme_color_override("font_color", COLOR_ORO)
 	hud.add_child(texto_botin)
 
 	minimapa = Control.new()
 	minimapa.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_anclar(minimapa, Vector2(1, 0), Vector2(-188, 20), Vector2(168, 168))
+	Ui.anclar(minimapa, Vector2(1, 0), Vector2(-188, 20), Vector2(168, 168))
 	minimapa.draw.connect(_dibujar_minimapa)
 	capa.add_child(minimapa)
 
@@ -2289,12 +1733,14 @@ func _crear_logo() -> Control:
 	return logo
 
 
+# Menú del puerto
+
 func _crear_menu(capa: CanvasLayer) -> void:
-	var partes := _panel_lateral(capa)
+	var partes := Ui.panel_lateral(capa)
 	panel_menu = partes[0]
 	var cuerpo: VBoxContainer = partes[1]
 	cuerpo.add_child(_crear_logo())
-	var lema := _etiqueta_panel("El mar no perdona.\n¿Serás el último a flote?", 30, COLOR_TEXTO)
+	var lema := Ui.etiqueta_panel("El mar no perdona.\n¿Serás el último a flote?", 30, COLOR_TEXTO)
 	lema.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lema.add_theme_color_override("font_outline_color", Color(0.02, 0.08, 0.12))
 	lema.add_theme_constant_override("outline_size", 8)
@@ -2306,27 +1752,27 @@ func _crear_menu(capa: CanvasLayer) -> void:
 	cuerpo.add_child(_crear_boton_nivel())
 	var tesoro := HBoxContainer.new()
 	tesoro.add_theme_constant_override("separation", 10)
-	tesoro.add_child(_icono_moneda(34))
-	texto_monedas_menu = _etiqueta_panel("", 28, COLOR_ORO)
+	tesoro.add_child(Ui.icono_moneda(34))
+	texto_monedas_menu = Ui.etiqueta_panel("", 28, COLOR_ORO)
 	texto_monedas_menu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tesoro.add_child(texto_monedas_menu)
 	cuerpo.add_child(tesoro)
-	var tienda := _boton("Tienda", false)
+	var tienda := Ui.boton("Tienda", false)
 	tienda.pressed.connect(_mostrar.bind(Estado.ASTILLERO))
 	cuerpo.add_child(tienda)
-	var buscar := _boton("Buscar partida", true)
+	var buscar := Ui.boton("Buscar partida", true)
 	buscar.pressed.connect(_buscar_partida)
 	cuerpo.add_child(buscar)
 
 	boton_ajustes = _boton_engranaje()
-	_anclar(boton_ajustes, Vector2(0, 0), Vector2(28, 28), Vector2(80, 80))
+	Ui.anclar(boton_ajustes, Vector2(0, 0), Vector2(28, 28), Vector2(80, 80))
 	boton_ajustes.pressed.connect(_mostrar.bind(Estado.AJUSTES))
 	capa.add_child(boton_ajustes)
 
 	boton_idioma = BotonIdioma.new()
 	boton_idioma.idioma = personalizacion.idioma
 	boton_idioma.tooltip_text = "Idioma"
-	_anclar(boton_idioma, Vector2(0, 0), Vector2(124, 36), Vector2(92, 64))
+	Ui.anclar(boton_idioma, Vector2(0, 0), Vector2(124, 36), Vector2(92, 64))
 	boton_idioma.pressed.connect(_cambiar_idioma)
 	capa.add_child(boton_idioma)
 
@@ -2340,60 +1786,6 @@ func _cambiar_idioma() -> void:
 	boton_idioma.queue_redraw()
 	voz_equipar.play()
 	_mostrar(estado)
-
-
-# Muestra la bandera del idioma actual; al tocarla pasa al siguiente.
-class BotonIdioma extends Button:
-	var idioma := "es"
-
-	func _init() -> void:
-		focus_mode = Control.FOCUS_NONE
-		var fondo := StyleBoxFlat.new()
-		fondo.bg_color = Color(0.05, 0.16, 0.2, 0.9)
-		fondo.border_color = Color(0.95, 0.88, 0.73, 0.4)
-		fondo.set_border_width_all(2)
-		fondo.set_corner_radius_all(14)
-		var activo := fondo.duplicate() as StyleBoxFlat
-		activo.border_color = Color("e2b15a")
-		add_theme_stylebox_override("normal", fondo)
-		add_theme_stylebox_override("hover", activo)
-		add_theme_stylebox_override("pressed", activo)
-
-	func _draw() -> void:
-		var marco := Rect2(Vector2(10, 10), size - Vector2(20, 20))
-		if idioma == "es":
-			_espana(marco)
-		else:
-			_reino_unido(marco)
-		draw_rect(marco, Color(0, 0, 0, 0.35), false, 1.5)
-
-	func _espana(r: Rect2) -> void:
-		draw_rect(r, Color("c60b1e"))
-		draw_rect(Rect2(r.position + Vector2(0, r.size.y * 0.25), Vector2(r.size.x, r.size.y * 0.5)), Color("ffc400"))
-
-	func _reino_unido(r: Rect2) -> void:
-		var azul := Color("012169")
-		var rojo := Color("c8102e")
-		draw_rect(r, azul)
-		_aspa(r, r.size.y * 0.2, Color.WHITE)
-		_aspa(r, r.size.y * 0.07, rojo)
-		var centro := r.get_center()
-		var blanca := r.size.y * 0.34
-		var roja := r.size.y * 0.2
-		draw_rect(Rect2(r.position.x, centro.y - blanca / 2.0, r.size.x, blanca), Color.WHITE)
-		draw_rect(Rect2(centro.x - blanca / 2.0, r.position.y, blanca, r.size.y), Color.WHITE)
-		draw_rect(Rect2(r.position.x, centro.y - roja / 2.0, r.size.x, roja), rojo)
-		draw_rect(Rect2(centro.x - roja / 2.0, r.position.y, roja, r.size.y), rojo)
-
-	# Las dos diagonales recortadas al rectángulo, con media anchura "grosor".
-	func _aspa(r: Rect2, grosor: float, color: Color) -> void:
-		var w := r.size.x
-		var h := r.size.y
-		var dy := grosor * sqrt(1.0 + pow(h / w, 2.0))
-		var dx := dy * w / h
-		var o := r.position
-		draw_colored_polygon(PackedVector2Array([o, o + Vector2(dx, 0), o + Vector2(w, h - dy), o + Vector2(w, h), o + Vector2(w - dx, h), o + Vector2(0, dy)]), color)
-		draw_colored_polygon(PackedVector2Array([o + Vector2(w, 0), o + Vector2(w, dy), o + Vector2(dx, h), o + Vector2(0, h), o + Vector2(0, h - dy), o + Vector2(w - dx, 0)]), color)
 
 
 func _boton_engranaje() -> Button:
@@ -2419,7 +1811,7 @@ func _boton_engranaje() -> Button:
 # Engranaje durante la partida: volumen y salir. La partida no se detiene.
 func _crear_opciones_partida(capa: CanvasLayer) -> void:
 	boton_partida = _boton_engranaje()
-	_anclar(boton_partida, Vector2(1, 0), Vector2(-188 - 18 - 72, 28), Vector2(72, 72))
+	Ui.anclar(boton_partida, Vector2(1, 0), Vector2(-188 - 18 - 72, 28), Vector2(72, 72))
 	boton_partida.pressed.connect(_abrir_opciones_partida)
 	capa.add_child(boton_partida)
 
@@ -2429,21 +1821,21 @@ func _crear_opciones_partida(capa: CanvasLayer) -> void:
 	capa.add_child(centro)
 	panel_partida = centro
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _estilo_panel())
+	panel.add_theme_stylebox_override("panel", Ui.estilo_panel())
 	panel.custom_minimum_size = Vector2(520, 0)
 	centro.add_child(panel)
 	var cuerpo := VBoxContainer.new()
 	cuerpo.add_theme_constant_override("separation", 14)
 	panel.add_child(cuerpo)
-	cuerpo.add_child(_etiqueta_panel("Opciones", 40, COLOR_TEXTO))
+	cuerpo.add_child(Ui.etiqueta_panel("Opciones", 40, COLOR_TEXTO))
 	_deslizador_volumen(cuerpo, "Música", personalizacion.volumen_musica, func(valor: float) -> void:
 		personalizacion.volumen_musica = valor)
 	_deslizador_volumen(cuerpo, "Efectos", personalizacion.volumen_efectos, func(valor: float) -> void:
 		personalizacion.volumen_efectos = valor)
-	var seguir := _boton("Seguir jugando", true)
+	var seguir := Ui.boton("Seguir jugando", true)
 	seguir.pressed.connect(_cerrar_opciones_partida)
 	cuerpo.add_child(seguir)
-	boton_salir = _boton("Salir de la partida", false)
+	boton_salir = Ui.boton("Salir de la partida", false)
 	boton_salir.pressed.connect(_salir_de_partida)
 	cuerpo.add_child(boton_salir)
 
@@ -2482,13 +1874,13 @@ func _salir_de_partida() -> void:
 
 
 func _crear_ajustes(capa: CanvasLayer) -> void:
-	var partes := _panel_lateral(capa)
+	var partes := Ui.panel_lateral(capa)
 	panel_ajustes = partes[0]
 	var cuerpo: VBoxContainer = partes[1]
-	var titulo := _etiqueta_panel("Configuración", 40, COLOR_TEXTO)
+	var titulo := Ui.etiqueta_panel("Configuración", 40, COLOR_TEXTO)
 	cuerpo.add_child(titulo)
 
-	cuerpo.add_child(_etiqueta_panel("Nombre del barco", 22, COLOR_ORO))
+	cuerpo.add_child(Ui.etiqueta_panel("Nombre del barco", 22, COLOR_ORO))
 	campo_nombre = LineEdit.new()
 	campo_nombre.max_length = Personalizacion.LARGO_NOMBRE
 	campo_nombre.placeholder_text = Personalizacion.NOMBRE_INICIAL
@@ -2519,17 +1911,17 @@ func _crear_ajustes(capa: CanvasLayer) -> void:
 	var espacio := Control.new()
 	espacio.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	cuerpo.add_child(espacio)
-	var listo := _boton("Listo", true)
+	var listo := Ui.boton("Listo", true)
 	listo.pressed.connect(_cerrar_ajustes)
 	cuerpo.add_child(listo)
 
 
 func _deslizador_volumen(cuerpo: VBoxContainer, titulo: String, valor: float, guardar: Callable) -> HSlider:
 	var fila := HBoxContainer.new()
-	var nombre := _etiqueta_panel(titulo, 22, COLOR_ORO)
+	var nombre := Ui.etiqueta_panel(titulo, 22, COLOR_ORO)
 	nombre.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fila.add_child(nombre)
-	var porcentaje := _etiqueta_panel("%d%%" % roundi(valor * 100.0), 22, COLOR_TEXTO)
+	var porcentaje := Ui.etiqueta_panel("%d%%" % roundi(valor * 100.0), 22, COLOR_TEXTO)
 	porcentaje.autowrap_mode = TextServer.AUTOWRAP_OFF
 	fila.add_child(porcentaje)
 	cuerpo.add_child(fila)
@@ -2551,7 +1943,7 @@ func _deslizador_volumen(cuerpo: VBoxContainer, titulo: String, valor: float, gu
 	deslizador.add_theme_stylebox_override("slider", riel)
 	deslizador.add_theme_stylebox_override("grabber_area", lleno)
 	deslizador.add_theme_stylebox_override("grabber_area_highlight", lleno)
-	var tirador := _textura_circulo(40, COLOR_TEXTO)
+	var tirador := Ui.textura_circulo(40, COLOR_TEXTO)
 	deslizador.add_theme_icon_override("grabber", tirador)
 	deslizador.add_theme_icon_override("grabber_highlight", tirador)
 	deslizador.value_changed.connect(func(nuevo: float) -> void:
@@ -2565,18 +1957,6 @@ func _deslizador_volumen(cuerpo: VBoxContainer, titulo: String, valor: float, gu
 	deslizadores_volumen.append(deslizador)
 	cuerpo.add_child(deslizador)
 	return deslizador
-
-
-func _textura_circulo(lado: int, color: Color) -> ImageTexture:
-	var imagen := Image.create(lado, lado, false, Image.FORMAT_RGBA8)
-	var centro := Vector2(lado, lado) / 2.0
-	for y in lado:
-		for x in lado:
-			var d := Vector2(x + 0.5, y + 0.5).distance_to(centro)
-			var borde := clampf(lado / 2.0 - d, 0.0, 1.0)
-			var tono := color if d < lado / 2.0 - 4.0 else Color("08161c")
-			imagen.set_pixel(x, y, Color(tono, borde))
-	return ImageTexture.create_from_image(imagen)
 
 
 func _cerrar_ajustes() -> void:
@@ -2620,38 +2000,16 @@ func _crear_boton_nivel() -> Button:
 	textos.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	textos.add_theme_constant_override("separation", 4)
 	fila.add_child(textos)
-	texto_nivel_menu = _etiqueta_panel("", 24, COLOR_ORO)
+	texto_nivel_menu = Ui.etiqueta_panel("", 24, COLOR_ORO)
 	textos.add_child(texto_nivel_menu)
-	barra_nivel_menu = _barra_progreso()
+	barra_nivel_menu = Ui.barra_progreso()
 	textos.add_child(barra_nivel_menu)
-	texto_xp_menu = _etiqueta_panel("", 17, COLOR_TEXTO)
+	texto_xp_menu = Ui.etiqueta_panel("", 17, COLOR_TEXTO)
 	textos.add_child(texto_xp_menu)
-	var flecha := _etiqueta_panel("›", 44, Color(COLOR_TEXTO, 0.7))
+	var flecha := Ui.etiqueta_panel("›", 44, Color(COLOR_TEXTO, 0.7))
 	flecha.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	fila.add_child(flecha)
 	return boton
-
-
-func _barra_progreso() -> Control:
-	var barra := Control.new()
-	barra.custom_minimum_size = Vector2(0, 12)
-	barra.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	barra.set_meta("avance", 0.0)
-	barra.draw.connect(_dibujar_barra.bind(barra))
-	return barra
-
-
-func _dibujar_barra(barra: Control) -> void:
-	var fondo := StyleBoxFlat.new()
-	fondo.bg_color = Color(0, 0, 0, 0.4)
-	fondo.set_corner_radius_all(6)
-	barra.draw_style_box(fondo, Rect2(Vector2.ZERO, barra.size))
-	var avance: float = barra.get_meta("avance", 0.0)
-	if avance <= 0.0:
-		return
-	var lleno := fondo.duplicate() as StyleBoxFlat
-	lleno.bg_color = COLOR_ORO
-	barra.draw_style_box(lleno, Rect2(Vector2.ZERO, Vector2(maxf(barra.size.x * avance, 12.0), barra.size.y)))
 
 
 func _avance_nivel(nivel: int) -> float:
@@ -2679,11 +2037,11 @@ func _pintar_nivel_menu() -> void:
 
 
 func _crear_niveles(capa: CanvasLayer) -> void:
-	var partes := _panel_lateral(capa)
+	var partes := Ui.panel_lateral(capa)
 	panel_niveles = partes[0]
 	var cuerpo: VBoxContainer = partes[1]
-	cuerpo.add_child(_etiqueta_panel("Niveles", 40, COLOR_TEXTO))
-	cuerpo.add_child(_etiqueta_panel(
+	cuerpo.add_child(Ui.etiqueta_panel("Niveles", 40, COLOR_TEXTO))
+	cuerpo.add_child(Ui.etiqueta_panel(
 		"Ganas experiencia (XP) según tu puesto (ganar da +30) y +3 por cada barco que hundes. Si quedas del puesto 31 en adelante pierdes 8 XP, y retirarte resta 12: puedes bajar de nivel. Al subir tienes 3 partidas de protección. El premio de monedas se cobra solo la primera vez.",
 		17, Color(COLOR_TEXTO, 0.85)))
 	desliz_niveles = ScrollContainer.new()
@@ -2694,7 +2052,7 @@ func _crear_niveles(capa: CanvasLayer) -> void:
 	lista_niveles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lista_niveles.add_theme_constant_override("separation", 10)
 	desliz_niveles.add_child(lista_niveles)
-	var listo := _boton("Listo", true)
+	var listo := Ui.boton("Listo", true)
 	listo.pressed.connect(_mostrar.bind(Estado.MENU))
 	cuerpo.add_child(listo)
 
@@ -2732,25 +2090,25 @@ func _llenar_niveles() -> void:
 		textos.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		textos.add_theme_constant_override("separation", 2)
 		fila.add_child(textos)
-		textos.add_child(_etiqueta_panel(tr("Nivel %d · %s") % [nivel + 1, tr(datos[0])], 24, COLOR_ORO if nivel == actual else COLOR_TEXTO))
+		textos.add_child(Ui.etiqueta_panel(tr("Nivel %d · %s") % [nivel + 1, tr(datos[0])], 24, COLOR_ORO if nivel == actual else COLOR_TEXTO))
 		var detalle := tr("Desde %d XP") % datos[1]
 		if datos[2] > 0:
 			detalle += "  ·  " + tr("Premio: +%d monedas") % datos[2]
-		textos.add_child(_etiqueta_panel(detalle, 16, Color(COLOR_TEXTO, 0.75)))
+		textos.add_child(Ui.etiqueta_panel(detalle, 16, Color(COLOR_TEXTO, 0.75)))
 		if nivel < actual:
-			textos.add_child(_etiqueta_panel(tr("Superado"), 16, Color("7dffb2")))
+			textos.add_child(Ui.etiqueta_panel(tr("Superado"), 16, Color("7dffb2")))
 		elif nivel == actual:
-			var barra := _barra_progreso()
+			var barra := Ui.barra_progreso()
 			barra.set_meta("avance", _avance_nivel(nivel))
 			textos.add_child(barra)
-			textos.add_child(_etiqueta_panel(tr("Estás aquí") + " · " + _texto_progreso(nivel), 16, COLOR_TEXTO))
+			textos.add_child(Ui.etiqueta_panel(tr("Estás aquí") + " · " + _texto_progreso(nivel), 16, COLOR_TEXTO))
 			if personalizacion.proteccion > 0 and nivel > 0:
-				textos.add_child(_etiqueta_panel(tr("Protegido de bajar: %d partidas") % personalizacion.proteccion, 16, Color("7dffb2")))
+				textos.add_child(Ui.etiqueta_panel(tr("Protegido de bajar: %d partidas") % personalizacion.proteccion, 16, Color("7dffb2")))
 			fila_actual = caja
 		else:
 			escudo.modulate = Color(0.45, 0.45, 0.5)
 			caja.modulate.a = 0.75
-			textos.add_child(_etiqueta_panel(tr("Te faltan %d XP") % (int(datos[1]) - personalizacion.experiencia), 16, Color(COLOR_TEXTO, 0.6)))
+			textos.add_child(Ui.etiqueta_panel(tr("Te faltan %d XP") % (int(datos[1]) - personalizacion.experiencia), 16, Color(COLOR_TEXTO, 0.6)))
 	if fila_actual != null:
 		get_tree().create_timer(0.05).timeout.connect(func() -> void: desliz_niveles.ensure_control_visible(fila_actual))
 
@@ -2761,6 +2119,8 @@ func _cambiar_nombre(texto: String) -> void:
 		jugador.nombre = personalizacion.nombre_visible()
 
 
+# Búsqueda de partida
+
 func _crear_busqueda(capa: CanvasLayer) -> void:
 	var centro := CenterContainer.new()
 	centro.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -2768,18 +2128,18 @@ func _crear_busqueda(capa: CanvasLayer) -> void:
 	capa.add_child(centro)
 	panel_busqueda = centro
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _estilo_panel())
+	panel.add_theme_stylebox_override("panel", Ui.estilo_panel())
 	panel.custom_minimum_size = Vector2(520, 0)
 	centro.add_child(panel)
 	var cuerpo := VBoxContainer.new()
 	cuerpo.add_theme_constant_override("separation", 16)
 	panel.add_child(cuerpo)
-	cuerpo.add_child(_etiqueta_panel("TODOS CONTRA TODOS", 20, COLOR_ORO))
-	texto_busqueda = _etiqueta_panel("Buscando partida", 40, COLOR_TEXTO)
+	cuerpo.add_child(Ui.etiqueta_panel("TODOS CONTRA TODOS", 20, COLOR_ORO))
+	texto_busqueda = Ui.etiqueta_panel("Buscando partida", 40, COLOR_TEXTO)
 	cuerpo.add_child(texto_busqueda)
-	texto_jugadores = _etiqueta_panel("", 24, COLOR_TEXTO)
+	texto_jugadores = Ui.etiqueta_panel("", 24, COLOR_TEXTO)
 	cuerpo.add_child(texto_jugadores)
-	var cancelar := _boton("Cancelar", false)
+	var cancelar := Ui.boton("Cancelar", false)
 	cancelar.pressed.connect(_mostrar.bind(Estado.MENU))
 	cuerpo.add_child(cancelar)
 
@@ -2804,8 +2164,10 @@ func _avanzar_busqueda(delta: float) -> void:
 		_zarpar()
 
 
+# Tienda
+
 func _crear_astillero(capa: CanvasLayer) -> void:
-	aviso_giro = _etiqueta_panel("Arrastra para girar el barco", 22, Color(COLOR_TEXTO, 0.75))
+	aviso_giro = Ui.etiqueta_panel("Arrastra para girar el barco", 22, Color(COLOR_TEXTO, 0.75))
 	aviso_giro.autowrap_mode = TextServer.AUTOWRAP_OFF
 	aviso_giro.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.5))
 	aviso_giro.add_theme_constant_override("shadow_offset_y", 2)
@@ -2816,19 +2178,19 @@ func _crear_astillero(capa: CanvasLayer) -> void:
 	aviso_giro.offset_top = -64.0
 	aviso_giro.offset_bottom = -28.0
 	capa.add_child(aviso_giro)
-	var partes := _panel_lateral(capa)
+	var partes := Ui.panel_lateral(capa)
 	panel_astillero = partes[0]
 	var cuerpo: VBoxContainer = partes[1]
 	cuerpo.add_theme_constant_override("separation", 10)
 
 	var cabecera := HBoxContainer.new()
-	var titulo := _etiqueta_panel("Tienda", 40, COLOR_TEXTO)
+	var titulo := Ui.etiqueta_panel("Tienda", 40, COLOR_TEXTO)
 	titulo.autowrap_mode = TextServer.AUTOWRAP_OFF
 	titulo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cabecera.add_child(titulo)
 	cabecera.add_theme_constant_override("separation", 10)
-	cabecera.add_child(_icono_moneda(28))
-	texto_monedas_tienda = _etiqueta_panel("", 26, COLOR_ORO)
+	cabecera.add_child(Ui.icono_moneda(28))
+	texto_monedas_tienda = Ui.etiqueta_panel("", 26, COLOR_ORO)
 	texto_monedas_tienda.autowrap_mode = TextServer.AUTOWRAP_OFF
 	cabecera.add_child(texto_monedas_tienda)
 	cuerpo.add_child(cabecera)
@@ -2838,7 +2200,7 @@ func _crear_astillero(capa: CanvasLayer) -> void:
 	pestanas.add_theme_constant_override("h_separation", 8)
 	pestanas.add_theme_constant_override("v_separation", 8)
 	for cat in Catalogo.CATEGORIAS:
-		var boton := _boton(Catalogo.TITULOS[cat], false)
+		var boton := Ui.boton(Catalogo.TITULOS[cat], false)
 		boton.custom_minimum_size = Vector2(0, 38)
 		boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		boton.add_theme_font_size_override("font_size", 16)
@@ -2858,19 +2220,19 @@ func _crear_astillero(capa: CanvasLayer) -> void:
 	rejilla_piezas.add_theme_constant_override("v_separation", 6)
 	desplazable.add_child(rejilla_piezas)
 
-	texto_pieza = _etiqueta_panel("", 15, Color(COLOR_TEXTO, 0.85))
+	texto_pieza = Ui.etiqueta_panel("", 15, Color(COLOR_TEXTO, 0.85))
 	cuerpo.add_child(texto_pieza)
 
 	var fila := HBoxContainer.new()
 	fila.add_theme_constant_override("separation", 12)
 	cuerpo.add_child(fila)
-	var listo := _boton("Listo", false)
+	var listo := Ui.boton("Listo", false)
 	listo.custom_minimum_size = Vector2(0, 54)
 	listo.add_theme_font_size_override("font_size", 22)
 	listo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	listo.pressed.connect(_cerrar_tienda)
 	fila.add_child(listo)
-	boton_accion = _boton("Comprar", true)
+	boton_accion = Ui.boton("Comprar", true)
 	boton_accion.custom_minimum_size = Vector2(0, 54)
 	boton_accion.add_theme_font_size_override("font_size", 22)
 	boton_accion.add_theme_constant_override("icon_max_width", 24)
@@ -2879,81 +2241,6 @@ func _crear_astillero(capa: CanvasLayer) -> void:
 	boton_accion.size_flags_stretch_ratio = 1.6
 	boton_accion.pressed.connect(_usar_pieza)
 	fila.add_child(boton_accion)
-
-
-func _crear_final(capa: CanvasLayer) -> void:
-	var centro := CenterContainer.new()
-	centro.set_anchors_preset(Control.PRESET_FULL_RECT)
-	centro.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	capa.add_child(centro)
-	panel_final = centro
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _estilo_panel())
-	panel.custom_minimum_size = Vector2(560, 0)
-	panel.gui_input.connect(_tocar_final)
-	centro.add_child(panel)
-	caja_final = panel
-	var cuerpo := VBoxContainer.new()
-	cuerpo.add_theme_constant_override("separation", 14)
-	panel.add_child(cuerpo)
-	cuerpo.add_child(_etiqueta_panel("MAREA CERRADA", 20, COLOR_ORO))
-	titulo_final = _etiqueta_panel("Victoria", 60, COLOR_TEXTO)
-	cuerpo.add_child(titulo_final)
-	texto_final = _etiqueta_panel("Tu barco quedó solo en el mar.", 26, COLOR_TEXTO)
-	cuerpo.add_child(texto_final)
-	texto_premio = _etiqueta_panel("+0 monedas", 44, COLOR_ORO)
-	texto_premio.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cuerpo.add_child(texto_premio)
-	lineas_premio = VBoxContainer.new()
-	lineas_premio.add_theme_constant_override("separation", 4)
-	cuerpo.add_child(lineas_premio)
-	texto_tesoro = _etiqueta_panel("", 22, COLOR_TEXTO)
-	texto_tesoro.modulate.a = 0.8
-	cuerpo.add_child(texto_tesoro)
-	var fila := HBoxContainer.new()
-	fila.add_theme_constant_override("separation", 12)
-	cuerpo.add_child(fila)
-	fila_final = fila
-	capa_monedas = Control.new()
-	capa_monedas.set_anchors_preset(Control.PRESET_FULL_RECT)
-	capa_monedas.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	capa.add_child(capa_monedas)
-	var puerto := _boton("Al puerto", false)
-	puerto.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	puerto.pressed.connect(_al_puerto)
-	fila.add_child(puerto)
-	var otra := _boton("Otra partida", true)
-	otra.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	otra.pressed.connect(_buscar_partida)
-	fila.add_child(otra)
-
-
-func _panel_lateral(capa: CanvasLayer) -> Array:
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _estilo_panel())
-	panel.anchor_left = 1.0
-	panel.anchor_right = 1.0
-	panel.anchor_top = 0.0
-	panel.anchor_bottom = 1.0
-	panel.offset_left = -ANCHO_PANEL - 28.0
-	panel.offset_right = -28.0
-	panel.offset_top = 28.0
-	panel.offset_bottom = -28.0
-	capa.add_child(panel)
-	var cuerpo := VBoxContainer.new()
-	cuerpo.add_theme_constant_override("separation", 14)
-	panel.add_child(cuerpo)
-	return [panel, cuerpo]
-
-
-func _estilo_panel() -> StyleBoxFlat:
-	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.05, 0.16, 0.2, 0.9)
-	estilo.border_color = Color(0.95, 0.88, 0.73, 0.3)
-	estilo.set_border_width_all(2)
-	estilo.set_corner_radius_all(26)
-	estilo.set_content_margin_all(30)
-	return estilo
 
 
 func _abrir_categoria(nueva: String) -> void:
@@ -3007,7 +2294,7 @@ func _cerrar_tienda() -> void:
 func _refrescar_astillero() -> void:
 	texto_monedas_tienda.text = tr("%d monedas") % personalizacion.monedas
 	for i in botones_categoria.size():
-		_estilo_boton(botones_categoria[i], Catalogo.CATEGORIAS[i] == categoria)
+		Ui.estilo_boton(botones_categoria[i], Catalogo.CATEGORIAS[i] == categoria)
 
 	var propias := 0
 	for pieza in Catalogo.lista(categoria):
@@ -3019,23 +2306,23 @@ func _refrescar_astillero() -> void:
 	var propia := personalizacion.tiene(categoria, seleccion)
 	var info := tr(elegida.get("info", ""))
 	texto_pieza.text = "%s%s" % [tr(elegida["nombre"]), "  ·  " + info if info != "" else ""] + tr("\nTienes %d de %d") % [propias, Catalogo.lista(categoria).size()]
-	boton_accion.icon = null if propia else _textura_moneda()
+	boton_accion.icon = null if propia else Ui.textura_moneda()
 	if personalizacion.elegidos[categoria] == seleccion:
 		boton_accion.text = "Equipado"
 		boton_accion.disabled = true
-		_estilo_boton(boton_accion, false)
+		Ui.estilo_boton(boton_accion, false)
 	elif propia:
 		boton_accion.text = "Equipar"
 		boton_accion.disabled = false
-		_estilo_boton(boton_accion, true)
+		Ui.estilo_boton(boton_accion, true)
 	elif personalizacion.monedas >= elegida["precio"]:
 		boton_accion.text = tr("Comprar · %d monedas") % elegida["precio"]
 		boton_accion.disabled = false
-		_estilo_boton(boton_accion, true)
+		Ui.estilo_boton(boton_accion, true)
 	else:
 		boton_accion.text = tr("Te faltan %d monedas") % (elegida["precio"] - personalizacion.monedas)
 		boton_accion.disabled = true
-		_estilo_boton(boton_accion, false)
+		Ui.estilo_boton(boton_accion, false)
 
 
 func _boton_pieza(pieza: Dictionary) -> Button:
@@ -3088,8 +2375,8 @@ func _pintar_boton_pieza(boton: Button, pieza: Dictionary) -> void:
 		precio.anchor_bottom = 1.0
 		precio.offset_top = -27.0
 		precio.offset_bottom = -7.0
-		precio.add_child(_icono_moneda(16))
-		var cifra := _etiqueta("", 14)
+		precio.add_child(Ui.icono_moneda(16))
+		var cifra := Ui.etiqueta("", 14)
 		cifra.name = "Cifra"
 		cifra.add_theme_color_override("font_color", COLOR_ORO)
 		cifra.add_theme_constant_override("outline_size", 4)
@@ -3116,66 +2403,56 @@ func _pintar_boton_pieza(boton: Button, pieza: Dictionary) -> void:
 	boton.add_theme_constant_override("outline_size", 0 if claro else 4)
 
 
-func _etiqueta(texto: String, tam: int) -> Label:
-	var etiqueta := Label.new()
-	etiqueta.text = texto
-	etiqueta.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	etiqueta.add_theme_font_size_override("font_size", tam)
-	etiqueta.add_theme_color_override("font_color", COLOR_TEXTO)
-	etiqueta.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.5))
-	etiqueta.add_theme_constant_override("outline_size", 6)
-	return etiqueta
+# Pantalla final
+
+func _crear_final(capa: CanvasLayer) -> void:
+	var centro := CenterContainer.new()
+	centro.set_anchors_preset(Control.PRESET_FULL_RECT)
+	centro.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	capa.add_child(centro)
+	panel_final = centro
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", Ui.estilo_panel())
+	panel.custom_minimum_size = Vector2(560, 0)
+	panel.gui_input.connect(_tocar_final)
+	centro.add_child(panel)
+	caja_final = panel
+	var cuerpo := VBoxContainer.new()
+	cuerpo.add_theme_constant_override("separation", 14)
+	panel.add_child(cuerpo)
+	cuerpo.add_child(Ui.etiqueta_panel("MAREA CERRADA", 20, COLOR_ORO))
+	titulo_final = Ui.etiqueta_panel("Victoria", 60, COLOR_TEXTO)
+	cuerpo.add_child(titulo_final)
+	texto_final = Ui.etiqueta_panel("Tu barco quedó solo en el mar.", 26, COLOR_TEXTO)
+	cuerpo.add_child(texto_final)
+	texto_premio = Ui.etiqueta_panel("+0 monedas", 44, COLOR_ORO)
+	texto_premio.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cuerpo.add_child(texto_premio)
+	lineas_premio = VBoxContainer.new()
+	lineas_premio.add_theme_constant_override("separation", 4)
+	cuerpo.add_child(lineas_premio)
+	texto_tesoro = Ui.etiqueta_panel("", 22, COLOR_TEXTO)
+	texto_tesoro.modulate.a = 0.8
+	cuerpo.add_child(texto_tesoro)
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 12)
+	cuerpo.add_child(fila)
+	fila_final = fila
+	capa_monedas = Control.new()
+	capa_monedas.set_anchors_preset(Control.PRESET_FULL_RECT)
+	capa_monedas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	capa.add_child(capa_monedas)
+	var puerto := Ui.boton("Al puerto", false)
+	puerto.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	puerto.pressed.connect(_al_puerto)
+	fila.add_child(puerto)
+	var otra := Ui.boton("Otra partida", true)
+	otra.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	otra.pressed.connect(_buscar_partida)
+	fila.add_child(otra)
 
 
-func _etiqueta_panel(texto: String, tam: int, color: Color) -> Label:
-	var etiqueta := _etiqueta(texto, tam)
-	etiqueta.add_theme_color_override("font_color", color)
-	etiqueta.add_theme_constant_override("outline_size", 0)
-	etiqueta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	return etiqueta
-
-
-func _boton(texto: String, primario: bool) -> Button:
-	var boton := Button.new()
-	boton.text = texto
-	boton.custom_minimum_size = Vector2(0, 76)
-	boton.focus_mode = Control.FOCUS_NONE
-	boton.add_theme_font_size_override("font_size", 30)
-	_estilo_boton(boton, primario)
-	return boton
-
-
-func _estilo_boton(boton: Button, activo: bool) -> void:
-	var normal := StyleBoxFlat.new()
-	normal.set_corner_radius_all(18)
-	normal.set_content_margin_all(10)
-	if activo:
-		normal.bg_color = Color("e0a15a")
-	else:
-		normal.bg_color = Color(1, 1, 1, 0.08)
-		normal.border_color = Color(1, 1, 1, 0.3)
-		normal.set_border_width_all(2)
-	var presionado := normal.duplicate() as StyleBoxFlat
-	presionado.bg_color = normal.bg_color.darkened(0.15)
-	boton.add_theme_stylebox_override("normal", normal)
-	boton.add_theme_stylebox_override("hover", normal)
-	boton.add_theme_stylebox_override("pressed", presionado)
-	boton.add_theme_stylebox_override("disabled", normal)
-	var texto := Color("2a1c10") if activo else COLOR_TEXTO
-	for nombre in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
-		boton.add_theme_color_override(nombre, texto)
-
-
-func _anclar(control: Control, ancla: Vector2, desde: Vector2, tam: Vector2) -> void:
-	control.anchor_left = ancla.x
-	control.anchor_right = ancla.x
-	control.anchor_top = ancla.y
-	control.anchor_bottom = ancla.y
-	control.offset_left = desde.x
-	control.offset_top = desde.y
-	control.offset_right = desde.x + tam.x
-	control.offset_bottom = desde.y + tam.y
-
+# Cambio de pantalla y HUD
 
 func _mostrar(nuevo: Estado) -> void:
 	estado = nuevo
@@ -3243,6 +2520,8 @@ func _pintar_hud() -> void:
 		texto_tormenta.text = tr("Tormenta: %ds") % ceili(restante)
 
 
+# Dibujo sobre la pantalla: marcadores, minimapa y controles
+
 func _dibujar_marcadores() -> void:
 	for barco in barcos:
 		if not barco.viva or not barco.visible:
@@ -3290,47 +2569,6 @@ func _dibujar_marcadores() -> void:
 		marcadores.draw_string(fuente_cofre, lugar, aviso.texto, HORIZONTAL_ALIGNMENT_CENTER, 120, 30, tinta_aviso)
 
 
-var _moneda: ImageTexture
-
-
-# Moneda de oro para la interfaz: canto oscuro, cara dorada, relieve y brillo.
-func _textura_moneda() -> ImageTexture:
-	if _moneda != null:
-		return _moneda
-	var lado := 64
-	var imagen := Image.create_empty(lado, lado, false, Image.FORMAT_RGBA8)
-	var centro := Vector2(lado, lado) / 2.0
-	var r := lado / 2.0 - 1.0
-	for y in lado:
-		for x in lado:
-			var p := Vector2(x + 0.5, y + 0.5) - centro
-			var d := p.length() / r
-			if d > 1.0:
-				continue
-			var color := Color("8a6418")
-			if d < 0.84:
-				color = Color("e2b13a").lerp(Color("f6d978"), clampf(-(p.x + p.y) / (r * 1.4), 0.0, 1.0))
-			if d > 0.56 and d < 0.64:
-				color = Color("c08a22")
-			if d < 0.56:
-				color = Color("f0cd62").lerp(Color("fff1b0"), clampf(-(p.x + p.y) / r, 0.0, 1.0) * 0.6)
-			color.a = clampf((1.0 - d) * r, 0.0, 1.0)
-			imagen.set_pixel(x, y, color)
-	_moneda = ImageTexture.create_from_image(imagen)
-	return _moneda
-
-
-func _icono_moneda(tam: float) -> TextureRect:
-	var icono := TextureRect.new()
-	icono.texture = _textura_moneda()
-	icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icono.custom_minimum_size = Vector2(tam, tam)
-	icono.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	icono.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return icono
-
-
 func _dibujar_moneda(centro: Vector2, radio: float) -> void:
 	marcadores.draw_circle(centro, radio, Color("8a6418"))
 	marcadores.draw_circle(centro, radio * 0.82, Color("e2b13a"))
@@ -3345,7 +2583,7 @@ func _dibujar_minimapa() -> void:
 	minimapa.draw_circle(centro + zona_centro * escala, maxf(3.0, zona_radio * escala), Color("1f7f86"))
 	minimapa.draw_arc(centro + zona_centro * escala, maxf(3.0, zona_radio * escala), 0.0, TAU, 64, Color(1.0, 0.96, 0.84), 2.0, true)
 	for isla in islotes:
-		var tono := COLOR_ROCA if isla.radio <= RADIO_ROCAS else COLOR_ARENA
+		var tono := Islas.COLOR_ROCA if isla.radio <= Islas.RADIO_ROCAS else Islas.COLOR_ARENA
 		if isla.lobulos.is_empty():
 			minimapa.draw_circle(centro + isla.pos * escala, maxf(1.5, isla.radio * escala), tono)
 			continue

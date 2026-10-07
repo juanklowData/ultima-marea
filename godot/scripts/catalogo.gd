@@ -219,114 +219,149 @@ static func _preparar() -> void:
 
 
 static func _generar(categoria: String) -> Array:
-	var nuevas: Array = []
 	match categoria:
 		"tipo":
-			for base in ["balandro", "bergantin", "galeon"]:
-				var datos: Dictionary = _basica("tipo", base)
-				var combinaciones := _combinaciones(base)
-				for k in APODOS.size():
-					var apodo := APODOS[k]
-					var azar := _azar(base + apodo)
-					var combo: Array = combinaciones[k]
-					var perfil: String = combo[1]
-					var mastiles: int = combo[2]
-					var castillo := perfil != "media_luna" and azar.randf() < 0.45
-					var forma := {
-						"aparejo": combo[0], "perfil": perfil, "mastiles": mastiles,
-						"castillo": castillo, "cofa": azar.randf() < 0.5,
-						"foques": 0 if combo[0] == "junco" else azar.randi_range(0, 2),
-						"baupres": azar.randf_range(0.6, 1.4), "inclinacion": azar.randf_range(0.0, 0.18),
-						"largo": azar.randf_range(0.9, 1.12), "ancho": azar.randf_range(0.88, 1.12) * (1.12 if perfil == "panzudo" else 1.0),
-						"alto": azar.randf_range(0.9, 1.2), "mastil": azar.randf_range(0.85, 1.15),
-						"vela": azar.randf_range(0.85, 1.15),
-					}
-					var detalles := "%d %s con %s y %s" % [mastiles, "mástil" if mastiles == 1 else "mástiles", APAREJOS[combo[0]], PERFILES[perfil]]
-					if castillo:
-						detalles += " y castillo de proa"
-					nuevas.append({
-						"id": "%s_%s" % [base, _sin_tildes(apodo)],
-						"nombre": "%s %s" % [datos["nombre"], apodo],
-						"precio": 1,
-						"base": base,
-						"forma": forma,
-						"info": "%s: %s. %s" % [datos["nombre"], detalles, datos["info"]],
-					})
+			return _generar_barcos()
 		"casco":
-			for i in PALETA.size():
-				var color := _color(i)
-				nuevas.append(_pieza_color("g_" + PALETA[i][0], PALETA[i][1], color, 4, 20))
-				var oro := _indice_color("oro") if i != _indice_color("oro") else _indice_color("sombra")
-				var contraste := _contraste(i, i * 7 + 5)
-				for otra in [oro, contraste]:
-					var pieza := _pieza_color("g_%s_%s" % [PALETA[i][0], PALETA[otra][0]], "%s y %s" % [PALETA[i][1], PALETA[otra][1].to_lower()], color, 14, 45)
-					pieza["franja"] = _color(otra)
-					pieza["info"] = "Casco de %s con franja de %s." % [PALETA[i][1].to_lower(), PALETA[otra][1].to_lower()]
-					nuevas.append(pieza)
+			return _generar_cascos()
 		"canones":
-			var estilos: Array = ESTILOS_CANON.keys()
-			for i in PALETA.size():
-				for t in TONOS.size():
-					var tono: Array = TONOS[t]
-					var color := _color(i)
-					color = color.lightened(tono[2]) if tono[2] > 0.0 else color.darkened(-tono[2])
-					var estilo: String = estilos[(i * 3 + t * 5) % estilos.size()]
-					var nombre := "%s %s" % [ESTILOS_CANON[estilo][0], (PALETA[i][1] + tono[1]).to_lower()]
-					var pieza := _pieza_color("g_" + PALETA[i][0] + tono[0], nombre, color, 5, 35)
-					pieza["estilo"] = estilo
-					pieza["info"] = ESTILOS_CANON[estilo][1]
-					nuevas.append(pieza)
+			return _generar_con_estilo(ESTILOS_CANON, 3, 5)
 		"adorno":
-			var estilos: Array = ESTILOS_ADORNO.keys()
-			for i in PALETA.size():
-				for t in TONOS.size():
-					var tono: Array = TONOS[t]
-					var color := _color(i)
-					color = color.lightened(tono[2]) if tono[2] > 0.0 else color.darkened(-tono[2])
-					var estilo: String = estilos[(i * 5 + t * 3) % estilos.size()]
-					var nombre := "%s %s" % [ESTILOS_ADORNO[estilo][0], (PALETA[i][1] + tono[1]).to_lower()]
-					var pieza := _pieza_color("g_" + PALETA[i][0] + tono[0], nombre, color, 5, 35)
-					pieza["estilo"] = estilo
-					pieza["info"] = ESTILOS_ADORNO[estilo][1]
-					nuevas.append(pieza)
-		"velas", "bandera":
-			var desfase := 0 if categoria == "velas" else 17
-			var disenos: Array = DISENOS.keys()
-			for d in disenos.size():
-				var diseno: String = disenos[d]
-				var cuantos := PALETA.size() if diseno == "lisa" else 6
-				for k in cuantos:
-					var fondo := (d * 5 + k * 5 + desfase) % PALETA.size() if diseno != "lisa" else k
-					var figura := _contraste(fondo, d * 3 + k * 7 + 13 + desfase)
-					var nombre := "%s %s" % [DISENOS[diseno], PALETA[fondo][1].to_lower()]
-					if diseno == "lisa":
-						nombre = PALETA[fondo][1]
-					var pieza := _pieza_color("g_%s_%s_%s" % [diseno, PALETA[fondo][0], PALETA[figura][0]], nombre, _color(fondo), 4 if diseno == "lisa" else 10, 18 if diseno == "lisa" else 50)
-					pieza["diseno"] = diseno
-					if diseno != "lisa":
-						pieza["color2"] = _color(figura)
-						pieza["info"] = "%s de %s sobre %s." % [DISENOS[diseno], PALETA[figura][1].to_lower(), PALETA[fondo][1].to_lower()]
-					nuevas.append(pieza)
+			return _generar_con_estilo(ESTILOS_ADORNO, 5, 3)
+		"velas":
+			return _generar_dibujos(0)
+		"bandera":
+			return _generar_dibujos(17)
 		"proa":
-			var estilos: Array = MASCARONES.keys()
-			for s in estilos.size():
-				var estilo: String = estilos[s]
-				for k in 5:
-					var i := _indice_color(ACABADOS_MASCARON[(s * 5 + k) % ACABADOS_MASCARON.size()])
-					var pieza := _pieza_color("%s_%s" % [estilo, PALETA[i][0]], "%s de %s" % [MASCARONES[estilo], PALETA[i][1].to_lower()], _color(i), 15, 60)
-					pieza["estilo"] = estilo
-					pieza["info"] = "Mascarón de %s tallado en %s." % [MASCARONES[estilo].to_lower(), PALETA[i][1].to_lower()]
-					nuevas.append(pieza)
+			return _generar_mascarones()
 		"popa":
-			for estilo in POPAS:
-				var numero := POPAS.keys().find(estilo)
-				for i in (COLORES_POPA_CLASICA if numero < 4 else COLORES_POPA_NUEVA):
-					var c := (i * 7 + numero * 9) % PALETA.size()
-					var pieza := _pieza_color("%s_%s" % [estilo, PALETA[c][0]], "%s de %s" % [POPAS[estilo][0], PALETA[c][1].to_lower()], _color(c), 10, 55)
-					pieza["estilo"] = estilo
-					pieza["info"] = POPAS[estilo][1]
-					pieza["luz"] = Color(LUCES[(i + c) % LUCES.size()])
-					nuevas.append(pieza)
+			return _generar_popas()
+	return []
+
+
+# Cada barco básico tiene una variante por apodo, con aparejo, casco y medidas propios.
+static func _generar_barcos() -> Array:
+	var nuevas: Array = []
+	for base in ["balandro", "bergantin", "galeon"]:
+		var combinaciones := _combinaciones(base)
+		for k in APODOS.size():
+			nuevas.append(_variante_barco(base, APODOS[k], combinaciones[k]))
+	return nuevas
+
+
+static func _variante_barco(base: String, apodo: String, combo: Array) -> Dictionary:
+	var datos: Dictionary = _basica("tipo", base)
+	var azar := _azar(base + apodo)
+	var perfil: String = combo[1]
+	var mastiles: int = combo[2]
+	var castillo := perfil != "media_luna" and azar.randf() < 0.45
+	var forma := {
+		"aparejo": combo[0], "perfil": perfil, "mastiles": mastiles,
+		"castillo": castillo, "cofa": azar.randf() < 0.5,
+		"foques": 0 if combo[0] == "junco" else azar.randi_range(0, 2),
+		"baupres": azar.randf_range(0.6, 1.4), "inclinacion": azar.randf_range(0.0, 0.18),
+		"largo": azar.randf_range(0.9, 1.12), "ancho": azar.randf_range(0.88, 1.12) * (1.12 if perfil == "panzudo" else 1.0),
+		"alto": azar.randf_range(0.9, 1.2), "mastil": azar.randf_range(0.85, 1.15),
+		"vela": azar.randf_range(0.85, 1.15),
+	}
+	var detalles := "%d %s con %s y %s" % [mastiles, "mástil" if mastiles == 1 else "mástiles", APAREJOS[combo[0]], PERFILES[perfil]]
+	if castillo:
+		detalles += " y castillo de proa"
+	return {
+		"id": "%s_%s" % [base, _sin_tildes(apodo)],
+		"nombre": "%s %s" % [datos["nombre"], apodo],
+		"precio": 1,
+		"base": base,
+		"forma": forma,
+		"info": "%s: %s. %s" % [datos["nombre"], detalles, datos["info"]],
+	}
+
+
+# Un casco liso por color y dos con franja: una dorada y otra que contrasta.
+static func _generar_cascos() -> Array:
+	var nuevas: Array = []
+	for i in PALETA.size():
+		var color := _color(i)
+		nuevas.append(_pieza_color("g_" + PALETA[i][0], PALETA[i][1], color, 4, 20))
+		var oro := _indice_color("oro") if i != _indice_color("oro") else _indice_color("sombra")
+		var contraste := _contraste(i, i * 7 + 5)
+		for otra in [oro, contraste]:
+			var pieza := _pieza_color("g_%s_%s" % [PALETA[i][0], PALETA[otra][0]], "%s y %s" % [PALETA[i][1], PALETA[otra][1].to_lower()], color, 14, 45)
+			pieza["franja"] = _color(otra)
+			pieza["info"] = "Casco de %s con franja de %s." % [PALETA[i][1].to_lower(), PALETA[otra][1].to_lower()]
+			nuevas.append(pieza)
+	return nuevas
+
+
+# Cañones y adornos: cada color en tres tonos, con un estilo repartido según
+# paso_color y paso_tono para que los vecinos no se repitan.
+static func _generar_con_estilo(estilos_info: Dictionary, paso_color: int, paso_tono: int) -> Array:
+	var nuevas: Array = []
+	var estilos: Array = estilos_info.keys()
+	for i in PALETA.size():
+		for t in TONOS.size():
+			var tono: Array = TONOS[t]
+			var color := _color(i)
+			color = color.lightened(tono[2]) if tono[2] > 0.0 else color.darkened(-tono[2])
+			var estilo: String = estilos[(i * paso_color + t * paso_tono) % estilos.size()]
+			var nombre := "%s %s" % [estilos_info[estilo][0], (PALETA[i][1] + tono[1]).to_lower()]
+			var pieza := _pieza_color("g_" + PALETA[i][0] + tono[0], nombre, color, 5, 35)
+			pieza["estilo"] = estilo
+			pieza["info"] = estilos_info[estilo][1]
+			nuevas.append(pieza)
+	return nuevas
+
+
+# Velas y banderas: lisas de cada color y seis de cada diseño; el desfase hace
+# que velas y banderas no salgan con los mismos colores.
+static func _generar_dibujos(desfase: int) -> Array:
+	var nuevas: Array = []
+	var disenos: Array = DISENOS.keys()
+	for d in disenos.size():
+		var diseno: String = disenos[d]
+		var cuantos := PALETA.size() if diseno == "lisa" else 6
+		for k in cuantos:
+			var fondo := (d * 5 + k * 5 + desfase) % PALETA.size() if diseno != "lisa" else k
+			var figura := _contraste(fondo, d * 3 + k * 7 + 13 + desfase)
+			var nombre := "%s %s" % [DISENOS[diseno], PALETA[fondo][1].to_lower()]
+			if diseno == "lisa":
+				nombre = PALETA[fondo][1]
+			var pieza := _pieza_color("g_%s_%s_%s" % [diseno, PALETA[fondo][0], PALETA[figura][0]], nombre, _color(fondo), 4 if diseno == "lisa" else 10, 18 if diseno == "lisa" else 50)
+			pieza["diseno"] = diseno
+			if diseno != "lisa":
+				pieza["color2"] = _color(figura)
+				pieza["info"] = "%s de %s sobre %s." % [DISENOS[diseno], PALETA[figura][1].to_lower(), PALETA[fondo][1].to_lower()]
+			nuevas.append(pieza)
+	return nuevas
+
+
+# Cinco acabados por figura de proa.
+static func _generar_mascarones() -> Array:
+	var nuevas: Array = []
+	var estilos: Array = MASCARONES.keys()
+	for s in estilos.size():
+		var estilo: String = estilos[s]
+		for k in 5:
+			var i := _indice_color(ACABADOS_MASCARON[(s * 5 + k) % ACABADOS_MASCARON.size()])
+			var pieza := _pieza_color("%s_%s" % [estilo, PALETA[i][0]], "%s de %s" % [MASCARONES[estilo], PALETA[i][1].to_lower()], _color(i), 15, 60)
+			pieza["estilo"] = estilo
+			pieza["info"] = "Mascarón de %s tallado en %s." % [MASCARONES[estilo].to_lower(), PALETA[i][1].to_lower()]
+			nuevas.append(pieza)
+	return nuevas
+
+
+# Las cuatro popas clásicas salen en más colores que las nuevas.
+static func _generar_popas() -> Array:
+	var nuevas: Array = []
+	for estilo in POPAS:
+		var numero := POPAS.keys().find(estilo)
+		for i in (COLORES_POPA_CLASICA if numero < 4 else COLORES_POPA_NUEVA):
+			var c := (i * 7 + numero * 9) % PALETA.size()
+			var pieza := _pieza_color("%s_%s" % [estilo, PALETA[c][0]], "%s de %s" % [POPAS[estilo][0], PALETA[c][1].to_lower()], _color(c), 10, 55)
+			pieza["estilo"] = estilo
+			pieza["info"] = POPAS[estilo][1]
+			pieza["luz"] = Color(LUCES[(i + c) % LUCES.size()])
+			nuevas.append(pieza)
 	return nuevas
 
 
