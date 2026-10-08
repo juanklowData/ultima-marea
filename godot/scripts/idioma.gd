@@ -501,6 +501,7 @@ const INGLES := {
 	"Ya no quedan krakens: misión anulada": "No krakens left: mission cancelled",
 	"Misiones completadas": "Missions complete",
 	"Puerto flotante": "Floating port",
+	"Puerto": "Port",
 	"+1 gema": "+1 gem",
 	"¡Encontraste una gema!": "You found a gem!",
 	"Misiones cumplidas: %d": "Missions completed: %d",

@@ -16,8 +16,9 @@ const TITULOS := {
 	"tiburon": "Vence a un tiburón",
 }
 const PUERTOS := 4
-const RADIO_PUERTO := 68.0
-const ALCANCE_PUERTO := 150.0
+const ESCALA_PUERTO := 0.45
+const RADIO_PUERTO := 68.0 * ESCALA_PUERTO
+const ALCANCE_PUERTO := 90.0
 const ALTURA_PUERTO := 0.25
 const ALCANCE_ENTREGA := 35.0
 const COFRES_GEMAS := 6
@@ -337,6 +338,7 @@ func _crear_puerto(pos: Vector2) -> Fondeadero:
 	puerto.aro.scale = Vector3(1.0, 0.2, 1.0)
 	puerto.aro.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	nodo.add_child(puerto.aro)
+	nodo.scale = Vector3.ONE * ESCALA_PUERTO
 	puertos.append(puerto)
 	return puerto
 
@@ -453,7 +455,8 @@ func actualizar(delta: float) -> void:
 				espera_aceptar = 2.0
 				break
 	if actual == "":
-		if espera_aceptar > 0.0:
+		# Fuera del mar libre los puertos son solo puertos: no dan encargos.
+		if espera_aceptar > 0.0 or mundo.modo != "libre":
 			return
 		for puerto in puertos:
 			if jugador.pos.distance_to(puerto.pos) < ALCANCE_PUERTO:
@@ -846,7 +849,7 @@ func animar(delta: float) -> void:
 		var latido := 1.0 + 0.08 * sin(t * 4.0)
 		marca.scale = Vector3(latido, 1.0, latido)
 	var foco_plano := Vector2(mundo.foco.x, mundo.foco.z)
-	var hay_encargo := actual == "" and (completadas < ORDEN.size() or mundo.modo == "libre")
+	var hay_encargo := actual == "" and mundo.modo == "libre"
 	for puerto in puertos:
 		var centro: Vector2 = puerto.pos * Principal.ESCALA
 		puerto.nodo.visible = centro.distance_to(foco_plano) < Principal.DISTANCIA_VISIBLE + 10.0
@@ -878,11 +881,11 @@ func dibujar(lienzo: Control, camara: Camera3D) -> void:
 	for puerto in puertos:
 		if not puerto.nodo.visible:
 			continue
-		var arriba: Vector3 = puerto.nodo.position + Vector3(0, 4.6, 0)
+		var arriba: Vector3 = puerto.nodo.position + Vector3(0, 4.6 * ESCALA_PUERTO + 0.8, 0)
 		if camara.is_position_behind(arriba):
 			continue
 		var punto := camara.unproject_position(arriba)
-		var nombre := tr("Puerto flotante")
+		var nombre := tr("Puerto")
 		lienzo.draw_string_outline(fuente, punto + Vector2(-110, 0), nombre, HORIZONTAL_ALIGNMENT_CENTER, 220, 20, 5, Color(0, 0, 0, 0.75))
 		lienzo.draw_string(fuente, punto + Vector2(-110, 0), nombre, HORIZONTAL_ALIGNMENT_CENTER, 220, 20, Principal.COLOR_ORO)
 	var jugador := mundo.jugador
