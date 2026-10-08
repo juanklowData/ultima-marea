@@ -1276,6 +1276,9 @@ func _blanco_torre(torre: Torre) -> Array:
 				mejor = [bote.pos, Vector2.UP.rotated(bote.rumbo) * VEL_BOTE]
 	if not mejor.is_empty():
 		return mejor
+	var bestia := monstruos.aliado_rival_cerca(torre.pos, alcance, torre.equipo)
+	if bestia != null:
+		return [bestia.pos, Vector2.ZERO]
 	for heroe in heroes:
 		var barco := heroe.barco
 		if barco.viva and heroe.equipo != torre.equipo and heroe.oculto <= 0.0:
@@ -1696,7 +1699,7 @@ func _tragar(zona: Zona, delta: float) -> void:
 			bote.destello = 0.5
 			if bote.vida <= 0.0:
 				_hundir_bote(i, dueno)
-	for monstruo in monstruos.vivos_cerca(zona.pos, radio):
+	for monstruo in monstruos.vivos_cerca(zona.pos, radio, zona.heroe.equipo):
 		monstruos.danar(monstruo, DANIO_REMOLINO * 1.5 * dueno.factor_danio * delta, dueno)
 	if randf() < delta * 12.0:
 		var a := randf() * TAU
@@ -1748,7 +1751,7 @@ func _vigilar_mina(zona: Zona) -> bool:
 	for bote in botes:
 		if bote.equipo != zona.heroe.equipo and bote.pos.distance_to(zona.pos) < TOQUE_MINA:
 			toca = true
-	if not monstruos.vivos_cerca(zona.pos, TOQUE_MINA).is_empty():
+	if not monstruos.vivos_cerca(zona.pos, TOQUE_MINA, zona.heroe.equipo).is_empty():
 		toca = true
 	if not toca:
 		return true
@@ -1782,7 +1785,7 @@ func _tormenta(heroe: Heroe) -> void:
 	for bote in cercanos:
 		if blancos.size() < RAYOS:
 			blancos.append(bote)
-	var bestias := monstruos.vivos_cerca(barco.pos, ALCANCE_RAYOS)
+	var bestias := monstruos.vivos_cerca(barco.pos, ALCANCE_RAYOS, heroe.equipo)
 	bestias.sort_custom(func(a: MonstruosMarinos.Monstruo, b: MonstruosMarinos.Monstruo) -> bool: return a.pos.distance_to(barco.pos) < b.pos.distance_to(barco.pos))
 	for bestia in bestias:
 		if blancos.size() < RAYOS:
