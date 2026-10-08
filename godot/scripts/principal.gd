@@ -60,7 +60,7 @@ const GIRO_VITRINA := 0.12
 # Segundos sin girar solo después de que el jugador mueva la cámara a mano.
 const PAUSA_GIRO_MANUAL := 300.0
 const LADO_AGUA := 190.0
-const DIVISIONES_AGUA := 32
+const DIVISIONES_AGUA := 48
 const ANCHO_PANEL := 540.0
 const MONEDAS_VICTORIA := 15
 const MONEDAS_POR_HUNDIDO := 1
@@ -450,7 +450,7 @@ const EFECTOS_VISUALES := {
 
 
 const CALIDADES_MAR: Array[String] = ["Plano", "Suave", "Con olas", "Detallado"]
-const DIVISIONES_MAR: Array[int] = [16, 24, DIVISIONES_AGUA, 48]
+const DIVISIONES_MAR: Array[int] = [32, 40, DIVISIONES_AGUA, 64]
 var botones_mar: Array[Button] = []
 
 
@@ -1164,13 +1164,13 @@ func altura_mar(x: float, z: float) -> float:
 	var p := Vector2(x, z)
 	var radio := zona_radio * ESCALA
 	var fuera := smoothstep(radio, radio + 8.0, p.distance_to(zona_centro * ESCALA))
-	var h := _ola(p, Vector2(1.0, 0.3), 18.0, 0.07) + _ola(p, Vector2(-0.4, 1.0), 11.0, 0.04)
-	return peligros.ajustar_mar(x, z, h * (1.0 + fuera * 1.5) + _ola(p, Vector2(0.2, 1.0), 21.0, 0.25) * fuera)
+	var h := _ola(p, Vector2(1.0, 0.3), 22.0, 0.11) + _ola(p, Vector2(-0.4, 1.0), 13.0, 0.06)
+	return peligros.ajustar_mar(x, z, h * (1.0 + fuera * 1.5) + _ola(p, Vector2(0.2, 1.0), 21.0, 0.3) * fuera)
 
 
 func _ola(p: Vector2, direccion: Vector2, largo: float, amplitud: float) -> float:
 	var k := TAU / largo
-	return amplitud * sin(direccion.normalized().dot(p) * k - sqrt(9.8 * k) * tiempo * 0.6)
+	return amplitud * sin(direccion.normalized().dot(p) * k - sqrt(9.8 * k) * tiempo * 0.75)
 
 
 func fuerza_tormenta(punto: Vector2) -> float:
