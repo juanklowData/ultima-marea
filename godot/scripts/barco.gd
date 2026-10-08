@@ -39,6 +39,8 @@ var espera_roca := 0.0
 var espera_choque := 0.0
 var viva := true
 var hundimiento := 0.0
+# MOBA: de 0 a 1 mientras se sumerge recto para volver a la base (y al revés al salir).
+var sumergido := 0.0
 var deriva := 0.0
 # Tiempo aún sin calcular de un bot lejano, que se pone al día cada pocos cuadros.
 var pendiente := 0.0
@@ -255,7 +257,7 @@ func colocar(delta: float) -> void:
 		mundo.rociar_proa(pos + proa() * radio * 1.05, rumbo, marcha)
 	var cabeceo := cabeceo_ola - marcha * 0.02 + vaiven * (0.01 + 0.045 * marcha) + sin(t * 1.2 + fase_oleaje) * 0.01
 	var escora := escora_ola + vel_giro * 0.18 * marcha
-	position = Vector3(centro.x, flotacion + vaiven * 0.06 * marcha - hundimiento * 2.6, centro.y)
+	position = Vector3(centro.x, flotacion + vaiven * 0.06 * marcha - hundimiento * 2.6 - sumergido * sumergido * 4.5, centro.y)
 	rotation = Vector3(cabeceo + hundimiento * 0.35, -rumbo, escora + hundimiento * 0.8)
 	desgaste.actualizar(delta, 1.0 - vida / vida_max, hundimiento)
 	if aro != null:

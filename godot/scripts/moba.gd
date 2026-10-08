@@ -50,6 +50,8 @@ const RECARGA_BOTE := 1.7
 const DANIO_BOTE := 4.0
 # Contra los barcos de los capitanes los botes pegan menos que contra otros botes y fuertes.
 const DANIO_BOTE_A_BARCO := 0.5
+# Las balas de los capitanes destrozan los botes: dos cañonazos de proa hunden uno.
+const DANIO_CAPITAN_A_BOTE := 2.5
 # Artilleros torpes: solo adelantan parte del movimiento del blanco, así que navegando se esquivan.
 const PUNTERIA_BOTE := 0.6
 const DESVIO_BOTE := 0.1
@@ -68,6 +70,10 @@ const RADIO_CANONES := 48.0
 # (solo en la base) encima, separada para no pulsarla sin querer.
 const BOTON_HABILIDAD := Vector2(-212.0, -192.0)
 const BOTON_TIENDA := Vector2(-92.0, -262.0)
+# Volver a la base: el barco se sumerge unos segundos y sale a flote junto al nexo.
+const BOTON_REGRESO := Vector2(-300.0, -100.0)
+const DURACION_REGRESO := 4.0
+const DURACION_EMERGER := 0.8
 const ALCANCE_CANON := Principal.VEL_BALA * Principal.VIDA_BALA
 const ANGULO_PROA := PI / 4.0
 const RADIO_AUTO := 20.0
@@ -346,6 +352,12 @@ var tiempo_canon := 0.0
 # Piloto automático del jugador: su barco navega y dispara como un bot.
 var auto := false
 var dedo_auto := -1
+var boton_regreso: Button
+# Segundos que faltan para llegar a la base (0 = no está volviendo) y para salir a flote.
+var regreso := 0.0
+var vida_regreso := 0.0
+var emerger := 0.0
+var espera_burbujas := 0.0
 var boton_tienda: Button
 var panel_tienda: PanelContainer
 var lista_tienda: VBoxContainer
@@ -498,6 +510,10 @@ func vaciar() -> void:
 	dedo_canon = -1
 	tecla_canon = false
 	apunte_canon = Vector2.ZERO
+	regreso = 0.0
+	emerger = 0.0
+	if mundo.jugador != null:
+		mundo.jugador.sumergido = 0.0
 	cerrar_tienda()
 
 
@@ -933,6 +949,7 @@ func vulnerable(torre: Torre) -> bool:
 func actualizar(delta: float) -> void:
 	_seguir_apunte(delta)
 	_seguir_canones(delta)
+	_seguir_regreso(delta)
 	_animar_lanzados(delta)
 	_actualizar_zonas(delta)
 	anuncio_vida = maxf(0.0, anuncio_vida - delta)
@@ -1256,7 +1273,7 @@ func recibir_bala(bala: Principal.Bala) -> bool:
 		var bote := botes[i]
 		if bote.equipo == bala.equipo or bote.pos.distance_to(bala.pos) > RADIO_BOTE + 4.0:
 			continue
-		bote.vida -= mundo._danio_bala(bala)
+		bote.vida -= mundo._danio_bala(bala) * (DANIO_CAPITAN_A_BOTE if bala.dueno != null else 1.0)
 		bote.destello = 1.0
 		mundo.salpicar(bala.pos, 4)
 		if bote.vida <= 0.0:
@@ -2413,7 +2430,7 @@ func _anunciar(texto: String, color: Color) -> void:
 
 
 # Teclado: Espacio apunta los cañones con el ratón (al soltar, disparan), R usa la habilidad,
-# T activa el piloto automático y B abre la tienda en la base.
+# T activa el piloto automático y B abre la tienda en la base (fuera de ella, vuelve a la base).
 func tecla(evento: InputEvent) -> bool:
 	var pulsada := evento as InputEventKey
 	if pulsada == null or pulsada.echo:
@@ -2451,6 +2468,8 @@ func tecla(evento: InputEvent) -> bool:
 		KEY_B:
 			if boton_tienda.visible:
 				abrir_tienda()
+			elif boton_regreso.visible:
+				empezar_regreso()
 		_:
 			return false
 	return true
@@ -2466,6 +2485,8 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 	var lado := (RADIO_CANONES + 8.0) * 2.0
 	Ui.anclar(boton_canones, Vector2(1, 1), BOTON_CANONES - Vector2.ONE * lado / 2.0, Vector2.ONE * lado)
 	capa.add_child(boton_canones)
+	boton_regreso = comercio._boton_redondo(BOTON_REGRESO, _dibujar_boton_base, empezar_regreso)
+	capa.add_child(boton_regreso)
 	boton_tienda = comercio.boton_lugar(func() -> void:
 		comercio.dibujar_boton_lugar(boton_tienda, Objetos.icono_mejora("canones"), tr("Tienda")), abrir_tienda)
 	var lado_tienda := (Comercio.RADIO_BOTON + 10.0) * 2.0
@@ -3105,6 +3126,77 @@ func cambiar_auto() -> void:
 	_anunciar(tr("Piloto automático") if auto else tr("Piloto manual"), COLOR_NOMBRE_ALIADO)
 
 
+func empezar_regreso() -> void:
+	var heroe := heroe_jugador()
+	if heroe == null or not heroe.barco.viva or en_fuente(heroe.barco) or regreso > 0.0 or ensayo:
+		return
+	auto = false
+	regreso = DURACION_REGRESO
+	vida_regreso = heroe.barco.vida
+	_anunciar(tr("Volviendo a la base"), COLOR_NOMBRE_ALIADO)
+
+
+func _cancelar_regreso() -> void:
+	regreso = 0.0
+	emerger = DURACION_EMERGER * mundo.jugador.sumergido
+	_anunciar(tr("Regreso cancelado"), Principal.COLOR_PELIGRO)
+
+
+# Mientras vuelve, el barco se hunde recto entre burbujas; moverse o recibir daño lo anula.
+# Al terminar aparece junto al nexo y sale a flote.
+func _seguir_regreso(delta: float) -> void:
+	var barco := mundo.jugador
+	if barco == null:
+		return
+	if emerger > 0.0:
+		emerger = maxf(0.0, emerger - delta)
+		barco.sumergido = emerger / DURACION_EMERGER
+	if regreso <= 0.0:
+		return
+	var heroe := heroe_jugador()
+	if heroe == null or not barco.viva:
+		regreso = 0.0
+		barco.sumergido = 0.0
+		return
+	if mundo.direccion_jugador() != Vector2.ZERO or barco.vida < vida_regreso - 0.01 or auto:
+		_cancelar_regreso()
+		return
+	regreso -= delta
+	barco.sumergido = clampf(1.0 - regreso / DURACION_REGRESO, 0.0, 1.0)
+	espera_burbujas -= delta
+	if espera_burbujas <= 0.0:
+		espera_burbujas = 0.12
+		mundo.salpicar(barco.pos + Vector2.from_angle(randf() * TAU) * randf() * barco.radio * 0.8, 3)
+	if regreso <= 0.0:
+		regreso = 0.0
+		barco.pos = _salida(heroe.equipo, 0)
+		barco.rumbo = _rumbo_hacia(barco.pos, Vector2.ZERO)
+		barco.velocidad = 0.0
+		emerger = DURACION_EMERGER
+		mundo.salpicar(barco.pos, 14)
+		mundo.foco = mundo.a_3d(barco.pos)
+		mundo.camara.position = mundo.foco + mundo._desfase_camara()
+
+
+# Ancla con el nombre debajo; mientras vuelve, un aro verde se va llenando.
+func _dibujar_boton_base() -> void:
+	var c := mundo.comercio._fondo_boton(boton_regreso, true)
+	var trazo := Color("fff3dc")
+	var ancla := c + Vector2(0, -6)
+	boton_regreso.draw_arc(ancla + Vector2(0, -11), 3.5, 0.0, TAU, 12, trazo, 2.0, true)
+	boton_regreso.draw_line(ancla + Vector2(0, -7), ancla + Vector2(0, 8), trazo, 3.0, true)
+	boton_regreso.draw_line(ancla + Vector2(-6, -3), ancla + Vector2(6, -3), trazo, 2.5, true)
+	boton_regreso.draw_arc(ancla + Vector2(0, -1), 9.0, 0.35, PI - 0.35, 16, trazo, 3.0, true)
+	if regreso > 0.0:
+		var parte := 1.0 - regreso / DURACION_REGRESO
+		boton_regreso.draw_arc(c, Comercio.RADIO_BOTON - 3.0, -PI / 2.0, -PI / 2.0 + TAU * parte, 32, Color("7dffb2"), 6.0, true)
+	var texto := "%.1f" % regreso if regreso > 0.0 else tr("Base")
+	var fuente := ThemeDB.fallback_font
+	var ancho := fuente.get_string_size(texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+	boton_regreso.draw_string_outline(fuente, c + Vector2(-ancho / 2.0, 22), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.8))
+	boton_regreso.draw_string(fuente, c + Vector2(-ancho / 2.0, 22), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, trazo)
+
+
 # Botón pequeño «Auto» arriba a la derecha de la palanca de mover el barco.
 func _boton_auto() -> Array:
 	var escala := mundo.escala_controles
@@ -3208,6 +3300,8 @@ func _actualizar_interfaz() -> void:
 	boton_habilidad.visible = jugando
 	boton_canones.visible = jugando
 	boton_canones.queue_redraw()
+	boton_regreso.visible = jugando and not ensayo and not en_fuente(heroe.barco)
+	boton_regreso.queue_redraw()
 	if mundo.estado != Principal.Estado.JUGANDO or ensayo:
 		auto = false
 	boton_terminar.visible = ensayo and mundo.estado == Principal.Estado.JUGANDO and not mundo.panel_partida.visible
