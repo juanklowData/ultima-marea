@@ -42,6 +42,7 @@ const COLOR_MEGALODON := Color("3d4950")
 
 class Tiburon:
 	var pos := Vector2.ZERO
+	var pendiente := 0.0
 	var rumbo := 0.0
 	var hogar := Vector2.ZERO
 	var vida := VIDA
@@ -209,8 +210,12 @@ func _pieza(padre: Node3D, malla: Mesh, materia: Material, pos: Vector3, escala:
 	return pieza
 
 
-func actualizar(delta: float) -> void:
-	for tiburon in tiburones:
+func actualizar(delta_cuadro: float) -> void:
+	for i in tiburones.size():
+		var tiburon := tiburones[i]
+		var delta := mundo.paso_lejano(tiburon, i, delta_cuadro)
+		if delta <= 0.0:
+			continue
 		if tiburon.muerte >= 0.0:
 			tiburon.muerte += delta
 			if tiburon.muerte >= DURACION_MUERTE:
@@ -278,7 +283,7 @@ func _mover(tiburon: Tiburon, delta: float) -> void:
 			tiburon.rumbo_a = _punto_patrulla(tiburon)
 		tiburon.deriva += randf_range(-1.0, 1.0) * delta
 		deseado = (tiburon.rumbo_a - tiburon.pos).normalized().rotated(sin(tiburon.deriva) * 0.3)
-	for isla in mundo.islotes:
+	for isla in mundo.islas.cerca(tiburon.pos, 90.0):
 		var sep: Vector2 = tiburon.pos - isla.pos
 		var limite: float = isla.radio + 90.0
 		if sep.length() < limite and sep != Vector2.ZERO:
@@ -289,7 +294,7 @@ func _mover(tiburon: Tiburon, delta: float) -> void:
 		tiburon.rumbo = wrapf(tiburon.rumbo + clampf(diferencia, -GIRO * delta, GIRO * delta), -PI, PI)
 	tiburon.pos += Vector2.UP.rotated(tiburon.rumbo) * velocidad * delta
 	tiburon.pos = tiburon.hogar + (tiburon.pos - tiburon.hogar).limit_length(zona + 60.0)
-	for isla in mundo.islotes:
+	for isla in mundo.islas.cerca(tiburon.pos, 20.0):
 		var sep: Vector2 = tiburon.pos - isla.pos
 		var minimo: float = isla.borde(tiburon.pos) + 20.0
 		if sep.length() < minimo and sep != Vector2.ZERO:

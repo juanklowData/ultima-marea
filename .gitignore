@@ -5,6 +5,7 @@ godot/android/
 *.aab
 web/
 android_builds/
+ios_builds/
 *.keystore
 *.jks
 

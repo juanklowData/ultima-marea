@@ -207,6 +207,10 @@ class Torre:
 	var nodo: Node3D
 	var estructura: Node3D
 	var ruinas: Node3D
+	# Círculo sobre el agua hasta donde llegan sus cañones: contorno y un sombreado suave.
+	var limite: Node3D
+	var contorno: StandardMaterial3D
+	var sombreado: StandardMaterial3D
 	# Soportes giratorios de los cañones (miran a -Z) y su sitio en el plano.
 	var canones: Array[Node3D] = []
 	var sitios: Array[Vector2] = []
@@ -216,6 +220,7 @@ class Torre:
 
 class Bote:
 	var pos := Vector2.ZERO
+	var pendiente := 0.0
 	var rumbo := 0.0
 	var equipo := 0
 	var carril := ""
@@ -230,6 +235,7 @@ class Bote:
 	var nodo: Node3D
 	var canon: Node3D
 	var aparejo: Node3D
+	var marinero: FiguraCapitan
 
 
 class Heroe:
@@ -275,6 +281,7 @@ class Zona:
 
 
 var mundo: Principal
+var monstruos := MonstruosMarinos.new()
 var torres: Array[Torre] = []
 var zonas: Array[Zona] = []
 var cuerdas := {}
@@ -298,12 +305,15 @@ var cilindro := CylinderMesh.new()
 var cono := CylinderMesh.new()
 var esfera := SphereMesh.new()
 var toro := TorusMesh.new()
+var toro_limite := TorusMesh.new()
+var disco_limite := CylinderMesh.new()
 var boton_habilidad: Button
 # Habilidades que se apuntan: un toque tira recto por la proa; si se mantiene, se apunta
 # arrastrando el dedo (o con el ratón mientras se aguanta la R) y se tira al soltar.
 var dedo_apunte := -1
 var tecla_apunte := false
 var centro_apunte := Vector2.ZERO
+var dedo_sitio := Vector2.ZERO
 var apunte := Vector2.ZERO
 var apunte_largo := 1.0
 var tiempo_apunte := 0.0
@@ -323,6 +333,8 @@ var texto_detalle: Label
 
 func preparar(nuevo_mundo: Principal) -> void:
 	mundo = nuevo_mundo
+	add_child(monstruos)
+	monstruos.preparar(self)
 	cono.top_radius = 0.0
 	cono.bottom_radius = 0.5
 	cono.height = 1.0
@@ -335,6 +347,15 @@ func preparar(nuevo_mundo: Principal) -> void:
 	toro.outer_radius = 1.0
 	toro.rings = 40
 	toro.ring_segments = 4
+	toro_limite.inner_radius = 0.985
+	toro_limite.outer_radius = 1.0
+	toro_limite.rings = 96
+	toro_limite.ring_segments = 4
+	disco_limite.top_radius = 0.985
+	disco_limite.bottom_radius = 0.985
+	disco_limite.height = 0.001
+	disco_limite.radial_segments = 64
+	disco_limite.rings = 1
 
 
 # Carriles
@@ -404,6 +425,7 @@ func empezar() -> void:
 	mundo.zona_radio = 99999.0
 	mundo.islas._vaciar()
 	_crear_islas()
+	monstruos.empezar()
 	for equipo in 2:
 		_crear_torre(BASES[equipo], equipo, "", 2)
 		for carril in CARRILES:
@@ -420,6 +442,7 @@ func empezar() -> void:
 
 
 func vaciar() -> void:
+	monstruos.vaciar()
 	for bote in botes:
 		bote.nodo.queue_free()
 	botes.clear()
@@ -436,6 +459,8 @@ func vaciar() -> void:
 		_mostrar_casco(heroe, 0.0)
 	heroes.clear()
 	de_barco.clear()
+	for torre in torres:
+		torre.limite.queue_free()
 	torres.clear()
 	ganador = -1
 	anuncio_vida = 0.0
@@ -522,8 +547,7 @@ func empezar_ensayo() -> void:
 func terminar_ensayo() -> void:
 	ensayo = false
 	boton_terminar.visible = false
-	mundo._preparar_puerto()
-	abrir_seleccion()
+	mundo._al_puerto(true)
 
 
 func _poner_dianas() -> void:
@@ -667,28 +691,14 @@ func _crear_torre(punto: Vector2, equipo: int, carril: String, orden: int) -> vo
 				var b := TAU * m / 6.0
 				_pieza(torre.estructura, caja, piedra, esquina + Vector3(cos(b), 0, sin(b)) * 0.62 + Vector3(0, 2.15, 0), Vector3(0.2, 0.28, 0.2))
 			_montar_canon(torre, esquina + Vector3(0, 2.02, 0), madera, 2.4)
-		_pieza(torre.estructura, cilindro, piedra, Vector3(0, 2.0, 0), Vector3(1.8, 4.0, 1.8))
 		for k in 4:
 			var a := TAU * k / 4.0
 			var junto := Vector3(cos(a), 0, sin(a)) * (lado + 0.22)
 			var pendon := _pieza(torre.estructura, caja, color, junto + Vector3(0, 0.7, 0), Vector3(0.03, 0.75, 0.5))
 			pendon.rotation.y = -a
-			var alto_keep := _pieza(torre.estructura, caja, color, Vector3(cos(a), 0, sin(a)) * 0.92 + Vector3(0, 2.6, 0), Vector3(0.03, 1.2, 0.45))
-			alto_keep.rotation.y = -a
-		_pieza(torre.estructura, cono, color, Vector3(0, 4.7, 0), Vector3(2.2, 1.4, 2.2))
-		var faro := StandardMaterial3D.new()
-		faro.albedo_color = COLORES[equipo]
-		faro.emission_enabled = true
-		faro.emission = COLORES[equipo]
-		faro.emission_energy_multiplier = 2.5
-		var cristal := MeshInstance3D.new()
-		cristal.mesh = esfera
-		cristal.material_override = faro
-		cristal.position = Vector3(0, 5.8, 0)
-		cristal.scale = Vector3.ONE * 0.9
-		torre.estructura.add_child(cristal)
+		_castillo(torre.estructura, piedra, oscura, color, madera, COLORES[equipo])
 		var asta := Node3D.new()
-		asta.position = Vector3(0, 6.1, 0)
+		asta.position = Vector3(0, 5.85, 0)
 		torre.estructura.add_child(asta)
 		ModeloBarco._izar_bandera(asta, 0.0, 1.4, Principal.COLOR_ORO, bandera)
 	else:
@@ -725,10 +735,96 @@ func _crear_torre(punto: Vector2, equipo: int, carril: String, orden: int) -> vo
 		var a := randf() * TAU
 		var trozo := _pieza(torre.ruinas, caja, piedra if k % 2 == 0 else oscura, Vector3(cos(a), 0, sin(a)) * randf_range(0.2, r * 0.5) + Vector3(0, 0.3, 0), Vector3.ONE * randf_range(0.4, 0.9))
 		trozo.rotation = Vector3(randf(), randf() * TAU, randf())
+	_crear_limite(torre)
 	torre.nodo = nodo
 	islas.add_child(nodo)
 	islas.islotes.append(torre.isla)
 	torres.append(torre)
+
+
+# Castillo del centro de la ciudadela: torre del homenaje cuadrada y almenada con un portón
+# en cada cara, cuatro torrecillas con tejado del color del equipo y una torre alta cuyas
+# ventanas brillan con ese color.
+func _castillo(padre: Node3D, piedra: Material, oscura: Material, color: Material, madera: Material, tono: Color) -> void:
+	var luz := StandardMaterial3D.new()
+	luz.albedo_color = tono
+	luz.emission_enabled = true
+	luz.emission = tono
+	luz.emission_energy_multiplier = 2.0
+	_pieza(padre, caja, oscura, Vector3(0, 0.12, 0), Vector3(2.5, 0.25, 2.5))
+	_pieza(padre, caja, piedra, Vector3(0, 1.2, 0), Vector3(2.2, 2.4, 2.2))
+	_pieza(padre, caja, oscura, Vector3(0, 2.45, 0), Vector3(2.4, 0.14, 2.4))
+	for k in 4:
+		var a := TAU * k / 4.0
+		var fuera := Vector3(sin(a), 0, cos(a))
+		var lado := fuera.cross(Vector3.UP)
+		for m in 4:
+			_pieza(padre, caja, piedra, fuera * 1.08 + lado * lerpf(-0.6, 0.6, m / 3.0) + Vector3(0, 2.66, 0), Vector3(0.24, 0.28, 0.24))
+		var porton := _pieza(padre, caja, madera, fuera * 1.11 + Vector3(0, 0.5, 0), Vector3(0.6, 1.0, 0.04))
+		porton.rotation.y = a
+		var arco := _pieza(padre, cilindro, madera, fuera * 1.11 + Vector3(0, 1.0, 0), Vector3(0.6, 0.04, 0.6))
+		arco.rotation = Vector3(PI / 2.0, a, 0)
+		for s: float in [-1.0, 1.0]:
+			var estandarte := _pieza(padre, caja, color, fuera * 1.115 + lado * s * 0.68 + Vector3(0, 1.45, 0), Vector3(0.34, 0.9, 0.03))
+			estandarte.rotation.y = a
+		var ventana := _pieza(padre, caja, luz, fuera * 0.66 + Vector3(0, 3.55, 0), Vector3(0.18, 0.36, 0.04))
+		ventana.rotation.y = a
+	for k in 4:
+		var esquina := Vector3(1 if k % 2 == 0 else -1, 0, 1 if k < 2 else -1) * 1.1
+		_pieza(padre, cilindro, piedra, esquina + Vector3(0, 1.7, 0), Vector3(0.75, 3.4, 0.75))
+		_pieza(padre, cilindro, oscura, esquina + Vector3(0, 3.42, 0), Vector3(0.88, 0.1, 0.88))
+		_pieza(padre, cono, color, esquina + Vector3(0, 3.95, 0), Vector3(0.95, 1.0, 0.95))
+	_pieza(padre, cilindro, piedra, Vector3(0, 3.4, 0), Vector3(1.3, 2.0, 1.3))
+	_pieza(padre, cilindro, oscura, Vector3(0, 4.42, 0), Vector3(1.45, 0.12, 1.45))
+	_pieza(padre, cono, color, Vector3(0, 5.15, 0), Vector3(1.65, 1.45, 1.65))
+
+
+func alcance_torre(torre: Torre) -> float:
+	return ALCANCE_TORRE + torre.isla.radio * 0.5
+
+
+func _crear_limite(torre: Torre) -> void:
+	torre.limite = Node3D.new()
+	torre.limite.position = mundo.a_3d(torre.pos) + Vector3(0, 0.14, 0)
+	var r := alcance_torre(torre) * Principal.ESCALA
+	torre.limite.scale = Vector3(r, 1.0, r)
+	add_child(torre.limite)
+	torre.contorno = _material_limite()
+	torre.sombreado = _material_limite()
+	for pieza: Array in [[toro_limite, torre.contorno], [disco_limite, torre.sombreado]]:
+		var malla := MeshInstance3D.new()
+		malla.mesh = pieza[0]
+		malla.material_override = pieza[1]
+		malla.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		torre.limite.add_child(malla)
+
+
+func _material_limite() -> StandardMaterial3D:
+	var materia := StandardMaterial3D.new()
+	materia.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	materia.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	materia.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return materia
+
+
+# El límite de las torres enemigas se pone rojo y late mientras el jugador está a tiro.
+func _pintar_limites() -> void:
+	var jugador := mundo.jugador
+	var mio := heroe_jugador()
+	for torre in torres:
+		var cerca := torre.pos.distance_to(Vector2(mundo.foco.x, mundo.foco.z) / Principal.ESCALA) < alcance_torre(torre) + mundo.alcance_vista() / Principal.ESCALA
+		torre.limite.visible = torre.viva and cerca
+		if not torre.limite.visible:
+			continue
+		var enemiga := mio != null and torre.equipo != mio.equipo
+		var a_tiro := enemiga and jugador != null and jugador.viva and jugador.pos.distance_to(torre.pos) < alcance_torre(torre)
+		if a_tiro:
+			var latido := 0.5 + 0.5 * sin(mundo.tiempo * 6.0)
+			torre.contorno.albedo_color = Color(Principal.COLOR_PELIGRO, lerpf(0.55, 0.9, latido))
+			torre.sombreado.albedo_color = Color(Principal.COLOR_PELIGRO, lerpf(0.08, 0.16, latido))
+		else:
+			torre.contorno.albedo_color = Color(COLORES[torre.equipo], 0.5 if enemiga else 0.3)
+			torre.sombreado.albedo_color = Color(COLORES[torre.equipo], 0.06 if enemiga else 0.03)
 
 
 # Lienzo de muralla entre dos puntos, con almenas encima.
@@ -812,11 +908,14 @@ func actualizar(delta: float) -> void:
 		espera_oleada = ESPERA_OLEADA
 		_soltar_oleada()
 	for i in range(botes.size() - 1, -1, -1):
-		_mover_bote(botes[i], delta)
+		var paso := mundo.paso_lejano(botes[i], i, delta)
+		if paso > 0.0:
+			_mover_bote(botes[i], paso)
 	for torre in torres:
 		if torre.viva:
 			_defender(torre, delta)
 		torre.destello = maxf(0.0, torre.destello - delta * 3.0)
+	monstruos.actualizar(delta)
 	for heroe in heroes:
 		_atender(heroe, delta)
 	_actualizar_interfaz()
@@ -1000,7 +1099,8 @@ func _crear_bote(bote: Bote) -> void:
 	palo.add_child(tope)
 	ModeloBarco._izar_bandera(tope, 0.0, 0.6, COLORES[equipo], {"color": COLORES[equipo], "diseno": "lisa"})
 	var marinero := crear_figura({"piel": "e8b892", "abrigo": COLORES[equipo].darkened(0.3).to_html(false), "sombrero": "2e2b2b",
-		"pelo": "", "pluma": "", "barba": "", "parche": false})
+		"pelo": "", "pluma": "", "barba": "", "parche": false, "saludo": "marinero"})
+	bote.marinero = marinero
 	marinero.scale = Vector3.ONE * 0.4
 	marinero.position = Vector3(0, ModeloBarco.altura_cubierta(0.15, ALTO_BOTE) - 0.06, LARGO_BOTE * 0.33)
 	marinero.rotation.y = PI
@@ -1030,6 +1130,8 @@ func _mover_bote(bote: Bote, delta: float) -> void:
 				var previsto: Vector2 = punto + blanco[1] * bote.pos.distance_to(punto) / Principal.VEL_BALA * adelanto
 				var direccion := (previsto - bote.pos).normalized().rotated(randf_range(-DESVIO_BOTE, DESVIO_BOTE))
 				mundo.disparar_desde(bote.pos + direccion * (RADIO_BOTE + 4.0), direccion, null, null, bote.equipo, bote.danio)
+				if bote.nodo.visible:
+					bote.marinero.vitorear()
 		else:
 			bote.rumbo = lerp_angle(bote.rumbo, _rumbo_hacia(bote.pos, punto), minf(1.0, delta * 2.0))
 	else:
@@ -1039,7 +1141,7 @@ func _mover_bote(bote: Bote, delta: float) -> void:
 		bote.rumbo = lerp_angle(bote.rumbo, _rumbo_hacia(bote.pos, puntos[bote.paso]), minf(1.0, delta * 2.0))
 	if not parado:
 		var avance := Vector2.UP.rotated(bote.rumbo)
-		for isla in mundo.islotes:
+		for isla in mundo.islas.cerca(bote.pos, RADIO_BOTE + 50.0):
 			var sep: Vector2 = bote.pos - isla.pos
 			var limite: float = isla.radio + RADIO_BOTE + 50.0
 			var d := sep.length()
@@ -1050,7 +1152,7 @@ func _mover_bote(bote: Bote, delta: float) -> void:
 		if otro != bote and otro.pos.distance_to(bote.pos) < RADIO_BOTE * 2.0:
 			var sep := bote.pos - otro.pos
 			bote.pos += (sep.normalized() if sep != Vector2.ZERO else Vector2.RIGHT) * 20.0 * delta
-	for isla in mundo.islotes:
+	for isla in mundo.islas.cerca(bote.pos, RADIO_BOTE):
 		var sep: Vector2 = bote.pos - isla.pos
 		var minimo: float = isla.borde(bote.pos) + RADIO_BOTE
 		if sep.length() < minimo and sep != Vector2.ZERO:
@@ -1100,7 +1202,7 @@ func recibir_bala(bala: Principal.Bala) -> bool:
 		if bote.vida <= 0.0:
 			_hundir_bote(i, bala.dueno)
 		return true
-	return false
+	return monstruos.recibir_bala(bala)
 
 
 func _hundir_bote(i: int, verdugo: Barco) -> void:
@@ -1154,7 +1256,7 @@ func _defender(torre: Torre, delta: float) -> void:
 # Como en los MOBA: la torre dispara a los botes, salvo que un barco rival ataque a uno aliado
 # bajo su protección.
 func _blanco_torre(torre: Torre) -> Array:
-	var alcance := ALCANCE_TORRE + torre.isla.radio * 0.5
+	var alcance := alcance_torre(torre)
 	var ahora := Time.get_ticks_msec()
 	for heroe in heroes:
 		var aliado := heroe.barco
@@ -1194,7 +1296,7 @@ func torre_de(isla: Circulo) -> Torre:
 # Una bala choca con el islote de una torre rival.
 func golpear_isla(isla: Circulo, bala: Principal.Bala) -> void:
 	var torre := torre_de(isla)
-	if torre == null or not torre.viva or bala.equipo < 0 or bala.equipo == torre.equipo:
+	if torre == null or not torre.viva or bala.equipo < 0 or bala.equipo == torre.equipo or bala.equipo == MonstruosMarinos.EQUIPO:
 		return
 	if not vulnerable(torre):
 		if bala.dueno == mundo.jugador and espera_protegida <= 0.0:
@@ -1708,6 +1810,8 @@ func _rivales_cerca(heroe: Heroe, alcance: float) -> Array[Barco]:
 
 # Daña a los botes rivales en un radio; con "hacia" distinto de cero, solo a los de delante.
 func _danar_botes(heroe: Heroe, centro: Vector2, alcance: float, cantidad: float, hacia: Vector2) -> void:
+	if hacia == Vector2.ZERO:
+		monstruos.danar_zona(centro, alcance, cantidad, heroe.barco)
 	for i in range(botes.size() - 1, -1, -1):
 		var bote := botes[i]
 		if bote.equipo == heroe.equipo or bote.pos.distance_to(centro) > alcance:
@@ -2212,7 +2316,7 @@ func texto_estado() -> String:
 func texto_aviso() -> String:
 	var heroe := heroe_jugador()
 	if heroe != null and not heroe.barco.viva:
-		return tr("Vuelves en %d s") % ceili(heroe.reaparece)
+		return ""
 	if ensayo:
 		if apuntable():
 			return tr("Ensayo: toca la habilidad para tirar recto o mantenla para apuntar")
@@ -2220,11 +2324,11 @@ func texto_aviso() -> String:
 	return tr("Fuertes: %d contra %d") % [torres_en_pie(0), torres_en_pie(1)]
 
 
-func texto_marcador() -> String:
+func marcador() -> Vector2i:
 	var heroe := heroe_jugador()
 	if heroe == null:
-		return ""
-	return tr("Hundidos: %d  ·  Veces hundido: %d") % [heroe.hundidos, heroe.hundido]
+		return Vector2i(-1, -1)
+	return Vector2i(heroe.hundidos, heroe.hundido)
 
 
 func _anunciar(texto: String, color: Color) -> void:
@@ -2243,8 +2347,11 @@ func tecla(evento: InputEvent) -> bool:
 			_empezar_apunte()
 			tecla_apunte = true
 		elif not pulsada.pressed and tecla_apunte:
-			tecla_apunte = false
-			_soltar_apunte()
+			if sobre_cancelar(mundo.get_viewport().get_mouse_position()):
+				cancelar_apunte()
+			else:
+				tecla_apunte = false
+				_soltar_apunte()
 		return true
 	if not pulsada.pressed:
 		return false
@@ -2671,14 +2778,21 @@ func toque_habilidad(evento: InputEvent) -> bool:
 				_empezar_apunte()
 				dedo_apunte = toque.index
 				centro_apunte = boton_habilidad.get_global_rect().get_center()
+				dedo_sitio = toque.position
 				return true
 		elif toque.index == dedo_apunte:
-			dedo_apunte = -1
-			_soltar_apunte()
+			if sobre_cancelar(toque.position):
+				cancelar_apunte()
+			else:
+				dedo_apunte = -1
+				_soltar_apunte()
 			return true
 		return false
 	var arrastre := evento as InputEventScreenDrag
 	if arrastre and arrastre.index == dedo_apunte:
+		dedo_sitio = arrastre.position
+		if sobre_cancelar(dedo_sitio):
+			return true
 		var tiron := arrastre.position - centro_apunte
 		if tiron.length() > ZONA_APUNTE:
 			apunte = _direccion_en_mar(tiron)
@@ -2717,6 +2831,41 @@ func cancelar_apunte() -> void:
 
 func mostrando_apunte() -> bool:
 	return (dedo_apunte != -1 or tecla_apunte) and (tiempo_apunte >= ESPERA_APUNTE or apunte != Vector2.ZERO)
+
+
+# Botón pequeño encima del de la habilidad: soltar el dedo (o la tecla con el ratón) ahí
+# anula el tiro.
+func _boton_cancelar() -> Array:
+	var rect := boton_habilidad.get_global_rect()
+	var radio := rect.size.x * 0.3
+	return [rect.get_center() - Vector2(0.0, rect.size.y / 2.0 + radio + 18.0), radio]
+
+
+func sobre_cancelar(sitio: Vector2) -> bool:
+	if not mostrando_apunte():
+		return false
+	var boton := _boton_cancelar()
+	return sitio.distance_to(boton[0]) <= boton[1] + 12.0
+
+
+func _dibujar_cancelar(lienzo: Control) -> void:
+	var boton := _boton_cancelar()
+	var c: Vector2 = boton[0]
+	var r: float = boton[1]
+	var sitio := dedo_sitio if dedo_apunte != -1 else mundo.get_viewport().get_mouse_position()
+	var encima := sobre_cancelar(sitio)
+	lienzo.draw_circle(c, r, Principal.COLOR_PELIGRO if encima else Color(0.05, 0.16, 0.2, 0.9))
+	lienzo.draw_arc(c, r, 0.0, TAU, 32, Color.WHITE if encima else Color(Principal.COLOR_PELIGRO, 0.9), 2.5, true)
+	var brazo := r * 0.38
+	var trazo := Color.WHITE if encima else Color("fff3dc")
+	lienzo.draw_line(c + Vector2(-brazo, -brazo), c + Vector2(brazo, brazo), trazo, 4.0, true)
+	lienzo.draw_line(c + Vector2(brazo, -brazo), c + Vector2(-brazo, brazo), trazo, 4.0, true)
+	var texto := tr("Cancelar")
+	var fuente := ThemeDB.fallback_font
+	var ancho := fuente.get_string_size(texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+	var base := c + Vector2(-ancho / 2.0, r + 15.0)
+	lienzo.draw_string_outline(fuente, base, texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.8))
+	lienzo.draw_string(fuente, base, texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, trazo)
 
 
 # Punto del mar bajo un punto de la pantalla.
@@ -2782,6 +2931,7 @@ func _actualizar_interfaz() -> void:
 	boton_terminar.visible = ensayo and mundo.estado == Principal.Estado.JUGANDO and not mundo.panel_partida.visible
 	boton_habilidad.queue_redraw()
 	boton_tienda.queue_redraw()
+	_pintar_limites()
 	boton_tienda.visible = jugando and en_fuente(heroe.barco)
 	if panel_tienda.visible:
 		if not boton_tienda.visible:
@@ -2885,6 +3035,7 @@ func _dibujar_habilidad() -> void:
 func dibujar(lienzo: Control, camara: Camera3D) -> void:
 	if mostrando_apunte():
 		_dibujar_apunte(lienzo, camara)
+		_dibujar_cancelar(lienzo)
 	var fuente := ThemeDB.fallback_font
 	for torre in torres:
 		if not torre.viva:
@@ -2900,7 +3051,7 @@ func dibujar(lienzo: Control, camara: Camera3D) -> void:
 			lienzo.draw_rect(Rect2(candado + Vector2(-6, -3), Vector2(12, 9)), Color("c9d1d3"))
 			lienzo.draw_arc(candado + Vector2(0, -3), 4.0, PI, TAU, 10, Color("c9d1d3"), 2.0, true)
 	for bote in botes:
-		bote.nodo.visible = mundo.a_3d(bote.pos).distance_to(Vector3(mundo.foco.x, 0.0, mundo.foco.z)) < Principal.DISTANCIA_VISIBLE
+		bote.nodo.visible = mundo.a_3d(bote.pos).distance_to(Vector3(mundo.foco.x, 0.0, mundo.foco.z)) < mundo.alcance_vista()
 		if not bote.nodo.visible:
 			continue
 		var sitio := mundo.a_3d(bote.pos)
@@ -2933,13 +3084,37 @@ func dibujar(lienzo: Control, camara: Camera3D) -> void:
 		if heroe.escudo > 0.0:
 			var centro := camara.unproject_position(barco.position + Vector3(0, 0.8, 0))
 			lienzo.draw_arc(centro, 46.0, 0.0, TAU, 40, Color(Principal.COLOR_ORO, 0.8), 4.0, true)
+	monstruos.dibujar(lienzo, camara)
+	var propio := heroe_jugador()
+	if propio != null and not propio.barco.viva:
+		_dibujar_regreso(lienzo, fuente, ceili(propio.reaparece))
 	if anuncio_vida > 0.0:
 		var alfa := clampf(anuncio_vida / 0.5, 0.0, 1.0)
 		var tam := 30
 		var ancho := fuente.get_string_size(anuncio, HORIZONTAL_ALIGNMENT_LEFT, -1, tam).x
-		var sitio := Vector2(lienzo.size.x / 2.0 - ancho / 2.0, 190.0)
+		var sitio := Vector2(lienzo.size.x / 2.0 - ancho / 2.0, 230.0 if propio != null and not propio.barco.viva else 190.0)
 		lienzo.draw_string_outline(fuente, sitio, anuncio, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, 8, Color(0, 0, 0, 0.7 * alfa))
 		lienzo.draw_string(fuente, sitio, anuncio, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, Color(anuncio_color, alfa))
+
+
+func _dibujar_regreso(lienzo: Control, fuente: Font, segundos: int) -> void:
+	var titulo := tr("Vuelves en")
+	var cifra := "%d s" % segundos
+	var ancho_titulo := fuente.get_string_size(titulo, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
+	var ancho_cifra := fuente.get_string_size(cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 52).x
+	var ancho := maxf(ancho_titulo, ancho_cifra) + 56.0
+	var mitad := lienzo.size.x / 2.0
+	var caja := Rect2(mitad - ancho / 2.0, 92.0, ancho, 96.0)
+	var fondo := StyleBoxFlat.new()
+	fondo.bg_color = Color(0.03, 0.09, 0.12, 0.78)
+	fondo.border_color = Principal.COLOR_PELIGRO
+	fondo.set_border_width_all(2)
+	fondo.set_corner_radius_all(14)
+	lienzo.draw_style_box(fondo, caja)
+	lienzo.draw_string(fuente, Vector2(mitad - ancho_titulo / 2.0, caja.position.y + 30.0), titulo, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Principal.COLOR_TEXTO)
+	var sitio := Vector2(mitad - ancho_cifra / 2.0, caja.position.y + 82.0)
+	lienzo.draw_string_outline(fuente, sitio, cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 52, 8, Color(0, 0, 0, 0.6))
+	lienzo.draw_string(fuente, sitio, cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 52, Principal.COLOR_ORO)
 
 
 func _barra(lienzo: Control, centro: Vector2, ancho: float, parte: float, color: Color, destello: float) -> void:
@@ -2978,6 +3153,7 @@ func dibujar_minimapa(lienzo: Control, centro: Vector2, escala: float) -> void:
 		var color := COLORES[torre.equipo] if torre.viva else Color(0.35, 0.35, 0.35)
 		lienzo.draw_rect(Rect2(punto - Vector2.ONE * (lado / 2.0 + 1.5), Vector2.ONE * (lado + 3.0)), Color("08161c"))
 		lienzo.draw_rect(Rect2(punto - Vector2.ONE * lado / 2.0, Vector2.ONE * lado), color)
+	monstruos.dibujar_minimapa(lienzo, centro, escala)
 	var propio := mundo.jugador.equipo if mundo.jugador != null else 0
 	for bote in botes:
 		if bote.equipo == propio or a_la_vista(bote.pos, propio):

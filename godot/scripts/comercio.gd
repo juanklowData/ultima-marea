@@ -922,6 +922,7 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 		var sitio := BOTON_MUNICION + Vector2.from_angle(_angulo_selector(k)) * (RADIO_BOTON + 20.0)
 		Ui.anclar(selector, Vector2(1, 1), sitio - Vector2.ONE * lado / 2.0, Vector2.ONE * lado)
 		selector.pressed.connect(elegir_municion.bind(ORDEN_MUNICION[k]))
+		selector.add_to_group("control_tactil")
 		boton_municion.visibility_changed.connect(func() -> void: selector.visible = boton_municion.visible)
 		selector.visible = false
 		capa.add_child(selector)
@@ -1025,6 +1026,7 @@ func _boton_redondo(desde: Vector2, dibujo: Callable, accion: Callable) -> Butto
 	boton.draw.connect(dibujo)
 	boton.pressed.connect(accion)
 	boton.visible = false
+	boton.add_to_group("control_tactil")
 	return boton
 
 

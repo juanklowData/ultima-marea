@@ -60,8 +60,37 @@ func _ready() -> void:
 	mundo = get_parent()
 
 
-# Borra el mar anterior y reparte uno nuevo.
-func generar() -> void:
+# Cuadrícula para no revisar las 200 islas en cada choque: cerca() da las islas que
+# pueden estar a menos de ALCANCE_CERCA de la orilla de un punto (sirve para márgenes menores).
+const CELDA := 100.0
+const ALCANCE_CERCA := 150.0
+var celdas := {}
+var clave_celdas := ""
+var ninguna: Array[Circulo] = []
+
+
+func cerca(punto: Vector2, margen := 0.0) -> Array[Circulo]:
+	if margen > ALCANCE_CERCA:
+		return islotes
+	var clave := "%d|%d|%d" % [islotes.size(), islotes[0].get_instance_id() if not islotes.is_empty() else 0, islotes[-1].get_instance_id() if not islotes.is_empty() else 0]
+	if clave != clave_celdas:
+		clave_celdas = clave
+		celdas.clear()
+		for isla in islotes:
+			var alcance := isla.radio + ALCANCE_CERCA
+			for cx in range(floori((isla.pos.x - alcance) / CELDA), floori((isla.pos.x + alcance) / CELDA) + 1):
+				for cy in range(floori((isla.pos.y - alcance) / CELDA), floori((isla.pos.y + alcance) / CELDA) + 1):
+					var celda := Vector2i(cx, cy)
+					if not celdas.has(celda):
+						var lista: Array[Circulo] = []
+						celdas[celda] = lista
+					celdas[celda].append(isla)
+	return celdas.get(Vector2i(floori(punto.x / CELDA), floori(punto.y / CELDA)), ninguna)
+
+
+# Borra el mar anterior y reparte uno nuevo. Construir todas las islas tarda varios segundos en
+# un móvil: cada décima de segundo cede un cuadro y avisa a avance (de 0 a 1) para la barra de carga.
+func generar(avance := Callable()) -> void:
 	_vaciar()
 	# Cerca del centro, donde acaba la tormenta, siempre hay islas para cubrirse.
 	_repartir_islotes(ISLAS_CENTRO, 55.0, 85.0, Vector2.ZERO, 650.0)
@@ -69,13 +98,19 @@ func generar() -> void:
 	_repartir_archipielagos()
 	_repartir_islotes(ISLOTES_CHICOS, 40.0, 54.0)
 	_repartir_islotes(GRUPOS_ROCAS, 22.0, 34.0, Vector2.ZERO, Principal.RADIO_MUNDO * 0.85, 80.0)
-	for isla in islotes:
+	var desde := Time.get_ticks_msec()
+	for k in islotes.size():
+		var isla := islotes[k]
 		if isla.radio <= RADIO_ROCAS:
 			add_child(_crear_rocas(isla))
 		else:
 			isla.radio *= 1.15
 			isla.dar_forma()
 			add_child(_crear_isla(isla))
+		if avance.is_valid() and Time.get_ticks_msec() - desde > 100:
+			avance.call(float(k + 1) / islotes.size())
+			await get_tree().process_frame
+			desde = Time.get_ticks_msec()
 
 
 # El puerto del menú: una sola isla con su muelle, que sale de su orilla oeste, su
@@ -98,6 +133,17 @@ func generar_puerto() -> void:
 	var decorado := Puerto.new()
 	nodo.add_child(decorado)
 	decorado.construir(mundo, self, isla, isla.radio * Principal.ESCALA)
+
+
+# Como _vaciar, pero las islas se esconden y se entregan para borrarlas por tandas.
+func soltar_todo() -> Array[Node]:
+	var hijos := get_children()
+	for hijo: Node3D in hijos:
+		hijo.visible = false
+	islotes.clear()
+	materiales_orilla.clear()
+	muelle = null
+	return hijos
 
 
 func _vaciar() -> void:
@@ -217,6 +263,7 @@ func _crear_rocas(isla: Circulo) -> Node3D:
 	nodo.add_child(_orilla(r * 0.95))
 	_fondo(nodo, r * 0.8, isla, randi_range(5, 9))
 	nodo.set_meta("radio", r)
+	preparar_aparicion(nodo)
 	return nodo
 
 
@@ -288,11 +335,25 @@ func _crear_isla(isla: Circulo) -> Node3D:
 	_fondo(nodo, r, isla, int(10 + r * 2.5))
 	nodo.set_meta("radio", r)
 	mundo.fauna.poblar(nodo, r, chica, palmeras, isla, angulo_muelle)
+	preparar_aparicion(nodo)
 	return nodo
 
 
 func _alto_palmera(chica: bool) -> float:
 	return randf_range(1.6, 2.2) if chica else randf_range(2.0, 2.8)
+
+
+# Cada pieza guarda su tamaño en el mundo y aparece antes o después según él y los gráficos.
+func preparar_aparicion(nodo: Node3D, tipo := "GeometryInstance3D") -> void:
+	for pieza: GeometryInstance3D in nodo.find_children("*", tipo, true, false):
+		var escala := Vector3.ONE
+		var padre: Node = pieza
+		while padre != nodo and padre is Node3D:
+			escala *= padre.scale
+			padre = padre.get_parent()
+		pieza.set_meta("tamano", (pieza.get_aabb().size * escala.abs()).length())
+		pieza.add_to_group("aparicion")
+		mundo.ajustar_distancia(pieza)
 
 
 # Una loma verde en cada lóbulo alejado del centro, a veces con su palmera.

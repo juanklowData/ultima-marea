@@ -2,7 +2,7 @@ class_name Emotes
 extends Node
 
 # Emotes: caritas con una frase que salen en un bocadillo sobre el barco. El jugador las elige
-# con el botón de arriba a la izquierda; los rivales a veces contestan o reaccionan al hundirse.
+# con el botón de debajo del minimapa; los rivales a veces contestan o reaccionan al hundirse.
 
 const DURACION := 3.0
 const ESPERA_JUGADOR := 1.5
@@ -30,7 +30,7 @@ const COLOR_ENFADO := Color("ff8a5c")
 const COLOR_TRAZO := Color("3a2414")
 const COLOR_LAGRIMA := Color("5cc8ff")
 const COLOR_BOCADILLO := Color("fdf3df")
-const LADO_BOTON := 50.0
+const LADO_BOTON := 58.0
 
 var mundo: Principal
 # Barco -> [emote, segundos que lleva en pantalla].
@@ -53,7 +53,8 @@ func preparar(nuevo_mundo: Principal) -> void:
 
 func crear_interfaz(capa: CanvasLayer) -> void:
 	boton = _boton_redondo()
-	Ui.anclar(boton, Vector2(0, 0), Vector2(16, 98), Vector2(LADO_BOTON, LADO_BOTON))
+	var bajo_mapa := Vector2(-114.0 - LADO_BOTON / 2.0, 226.0)
+	Ui.anclar(boton, Vector2(1, 0), bajo_mapa, Vector2(LADO_BOTON, LADO_BOTON))
 	boton.draw.connect(func() -> void:
 		dibujar_cara(boton, boton.size / 2.0, 16.0, "risa")
 		var punta := boton.size / 2.0 + Vector2(14, 14)
@@ -65,7 +66,9 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 	capa.add_child(boton)
 	menu = HBoxContainer.new()
 	menu.add_theme_constant_override("separation", 8)
-	Ui.anclar(menu, Vector2(0, 0), Vector2(16 + LADO_BOTON + 12, 98), Vector2((LADO_BOTON + 8) * ORDEN.size(), LADO_BOTON))
+	menu.alignment = BoxContainer.ALIGNMENT_END
+	var ancho_menu := (LADO_BOTON + 8) * ORDEN.size()
+	Ui.anclar(menu, Vector2(1, 0), bajo_mapa - Vector2(12 + ancho_menu, 0), Vector2(ancho_menu, LADO_BOTON))
 	menu.visible = false
 	capa.add_child(menu)
 	for tipo in ORDEN:

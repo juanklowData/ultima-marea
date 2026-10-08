@@ -32,7 +32,8 @@ static func a_wav(valores: PackedFloat32Array, bucle := false) -> AudioStreamWAV
 	sonido.data = datos
 	if bucle:
 		sonido.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		sonido.loop_end = valores.size()
+		# Godot lee la muestra de loop_end; si es igual al tamaño se sale de los datos y Android cierra el juego.
+		sonido.loop_end = valores.size() - 1
 	return sonido
 
 

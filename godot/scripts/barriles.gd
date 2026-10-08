@@ -25,6 +25,7 @@ const COLOR_LUZ := Color("ff3b2a")
 
 class Barril:
 	var pos := Vector2.ZERO
+	var pendiente := 0.0
 	var rumbo := 0.0
 	var fase := 0.0
 	# -1 mientras flota; si no, segundos que faltan para que aparezca otro.
@@ -143,9 +144,12 @@ func lanzar(punto: Vector2, dueno: Barco) -> void:
 	barriles.append(barril)
 
 
-func actualizar(delta: float) -> void:
+func actualizar(delta_cuadro: float) -> void:
 	for i in range(barriles.size() - 1, -1, -1):
 		var barril := barriles[i]
+		var delta := mundo.paso_lejano(barril, i, delta_cuadro)
+		if delta <= 0.0:
+			continue
 		if barril.lanzado:
 			barril.gracia -= delta
 			barril.vida -= delta
@@ -170,6 +174,10 @@ func actualizar(delta: float) -> void:
 		for barco in mundo.barcos:
 			if barril.lanzado and barco == barril.dueno and barril.gracia > 0.0:
 				continue
+			# Fuera de este radio el casco no puede tocar el barril (medio eje 0,83 + media manga 0,5).
+			var cerca := barco.radio * 1.4 + RADIO
+			if barco.pos.distance_squared_to(barril.pos) > cerca * cerca:
+				continue
 			if barco.viva and _distancia_casco(barco, barril.pos) < barco.radio * Principal.MEDIA_MANGA_CASCO + RADIO:
 				if not barril.lanzado:
 					barril.dueno = null
@@ -184,15 +192,17 @@ func _derivar(barril: Barril, delta: float) -> void:
 	var empuje := Vector2.from_angle(barril.rumbo)
 	if barril.pos.distance_to(mundo.zona_centro) > mundo.zona_radio * 0.85:
 		empuje += (mundo.zona_centro - barril.pos).normalized() * 2.0
-	for isla in mundo.islotes:
+	for isla in mundo.islas.cerca(barril.pos, 60.0):
 		var sep: Vector2 = barril.pos - isla.pos
+		if sep.length() >= isla.radio + 60.0:
+			continue
 		var limite: float = isla.borde(barril.pos) + 60.0
 		if sep.length() < limite and sep != Vector2.ZERO:
 			empuje += sep.normalized() * 2.0
 	barril.rumbo = lerp_angle(barril.rumbo, empuje.angle(), minf(1.0, delta * 0.5))
 	barril.pos += Vector2.from_angle(barril.rumbo) * VEL * delta
 	barril.pos += mundo.peligros.arrastre(barril.pos) * delta
-	for isla in mundo.islotes:
+	for isla in mundo.islas.cerca(barril.pos, RADIO):
 		var sep: Vector2 = barril.pos - isla.pos
 		var minimo: float = isla.borde(barril.pos) + RADIO
 		if sep.length() < minimo and sep != Vector2.ZERO:

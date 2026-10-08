@@ -89,6 +89,13 @@ static func anclar(control: Control, ancla: Vector2, desde: Vector2, tam: Vector
 	control.offset_bottom = desde.y + tam.y
 
 
+# Agranda un control anclado desde su punto de anclaje: crece y se aparta de la esquina
+# en la misma proporción, así los botones de una esquina mantienen su reparto.
+static func escalar_desde_ancla(control: Control, factor: float) -> void:
+	control.pivot_offset = Vector2(-control.offset_left, -control.offset_top)
+	control.scale = Vector2.ONE * factor
+
+
 static func estilo_panel() -> StyleBoxFlat:
 	var estilo := StyleBoxFlat.new()
 	estilo.bg_color = Paleta.PANEL

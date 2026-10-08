@@ -11,6 +11,8 @@ uniform vec2 zona_centro = vec2(0.0);
 uniform float zona_radio = 80.0;
 uniform float relampago = 0.0;
 uniform float tiempo = 0.0;
+// Sin detalle el agua sigue ondulando, pero sin rizos ni crestas: más ligera para móviles justos.
+uniform bool detalle = true;
 // Remolinos cercanos: x, z, radio y profundidad del embudo (metros). Radio 0 = vacío.
 uniform vec4 remolinos[6];
 // Bajíos de las islas cercanas (Islas.BAJIOS): x, z, radio donde el agua es más clara
@@ -94,9 +96,18 @@ void fragment() {
 	float fuera = fuera_de_zona(p);
 
 	float e = 0.06;
-	float h0 = superficie(p, t, fuera);
-	float hx = superficie(p + vec2(e, 0.0), t, fuera);
-	float hz = superficie(p + vec2(0.0, e), t, fuera);
+	float h0;
+	float hx;
+	float hz;
+	if (detalle) {
+		h0 = superficie(p, t, fuera);
+		hx = superficie(p + vec2(e, 0.0), t, fuera);
+		hz = superficie(p + vec2(0.0, e), t, fuera);
+	} else {
+		h0 = altura_mar(p, t, fuera);
+		hx = altura_mar(p + vec2(e, 0.0), t, fuera);
+		hz = altura_mar(p + vec2(0.0, e), t, fuera);
+	}
 	vec3 n = normalize(vec3(-(hx - h0) / e, 1.0, -(hz - h0) / e));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
 

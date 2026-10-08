@@ -70,6 +70,11 @@ func _crear_estudio() -> Estudio:
 	return estudio
 
 
+func calidad(nivel: int) -> void:
+	for estudio: Estudio in estudios:
+		estudio.vista.msaa_3d = Viewport.MSAA_4X if nivel == 3 else Viewport.MSAA_2X if nivel == 2 else Viewport.MSAA_DISABLED
+
+
 func pedir(categoria: String, pieza: Dictionary, base: Personalizacion, destino: Button) -> void:
 	var clave := _clave(categoria, pieza, base)
 	if cache.has(clave):

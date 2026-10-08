@@ -39,7 +39,7 @@ func _nueva_voz(sonido: AudioStream) -> AudioStreamPlayer:
 
 
 func _process(delta: float) -> void:
-	var jugador := mundo.jugador
+	var jugador: Barco = mundo.jugador if is_instance_valid(mundo.jugador) else null
 	var navegando := jugador != null and not mundo.en_puerto()
 	presencia = move_toward(presencia, 1.0 if jugador != null else 0.0, delta / ENTRADA)
 	en_mar = move_toward(en_mar, 1.0 if navegando else 0.0, delta / ENTRADA)

@@ -12,6 +12,7 @@ const DURA_SALUDO := 3.6
 const FUNDIDO := 0.45
 
 var saludo := ""
+var vitoreo := 0.0
 var tiempo := randf() * 10.0
 var descanso := randf_range(3.5, 6.0)
 var cadera: Node3D
@@ -133,7 +134,13 @@ func _armar(datos: Dictionary) -> void:
 
 func _process(delta: float) -> void:
 	tiempo += delta
+	if not is_visible_in_tree():
+		return
 	_reposo()
+	if saludo == "marinero":
+		vitoreo = maxf(0.0, vitoreo - delta)
+		_faena()
+		return
 	var ciclo := fmod(tiempo, DURA_SALUDO + descanso)
 	if ciclo >= DURA_SALUDO:
 		return
@@ -289,6 +296,27 @@ func _reposo() -> void:
 			_brazo(k, 0.1, 0.89 + giro * (0.75 if k == 1 else -0.75), 0.0)
 		torso.rotation.z = -giro * 0.08
 		cabeza.rotation.y *= 0.4
+
+
+# Marinero de los botes: rema sin parar mirando a popa y, cuando su bote dispara, alza los
+# brazos un momento.
+func vitorear() -> void:
+	vitoreo = 0.9
+
+
+func _faena() -> void:
+	if vitoreo > 0.0:
+		var salto := absf(sin(tiempo * 12.0))
+		for k in 2:
+			_brazo(k, 2.5 + salto * 0.3, 0.2, 0.3 + salto * 0.4)
+		cadera.position.y = ALTURA_CADERA + salto * 0.05
+		cabeza.rotation = Vector3(-0.25, 0, 0)
+		return
+	var bogada := sin(tiempo * 3.2)
+	for k in 2:
+		_brazo(k, 0.3, 1.15 - bogada * 0.45, 0.5 + bogada * 0.5)
+	torso.rotation.x = bogada * 0.18
+	cabeza.rotation = Vector3(-bogada * 0.1, sin(tiempo * 0.5) * 0.5, 0)
 
 
 func _brazo(k: int, abrir: float, adelantar: float, doblar: float) -> void:

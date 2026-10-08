@@ -85,6 +85,7 @@ const VEL_RACHA := 9.0
 
 class Remolino:
 	var pos := Vector2.ZERO
+	var pendiente := 0.0
 	var radio := 55.0
 	var giro := 1.0
 	var rumbo := 0.0
@@ -99,6 +100,7 @@ class Remolino:
 
 class Tornado:
 	var pos := Vector2.ZERO
+	var pendiente := 0.0
 	var radio := RADIO_TORNADO
 	var giro := 1.0
 	var rumbo := 0.0
@@ -111,6 +113,7 @@ class Tornado:
 
 class Kraken:
 	var pos := Vector2.ZERO
+	var pendiente := 0.0
 	var hogar := Vector2.ZERO
 	var rumbo_a := Vector2.ZERO
 	var radio := RADIO_KRAKEN
@@ -164,6 +167,7 @@ class Kraken:
 
 class Ventisca:
 	var pos := Vector2.ZERO
+	var pendiente := 0.0
 	var radio := 110.0
 	var rumbo := 0.0
 	var fase := 0.0
@@ -589,7 +593,12 @@ func _crear_aviso_golpe(kraken: Kraken) -> void:
 
 func actualizar(delta: float) -> void:
 	activos = mundo.zona_radio > ZONA_RETIRADA
-	for remolino in remolinos:
+	var delta_cuadro := delta
+	for k in remolinos.size():
+		var remolino: Remolino = remolinos[k]
+		delta = mundo.paso_lejano(remolino, k, delta_cuadro)
+		if delta <= 0.0:
+			continue
 		if remolino.fundido > 0.0:
 			remolino.fundido -= delta
 			remolino.fuerza = move_toward(remolino.fuerza, 0.0, delta * 0.8)
@@ -602,15 +611,23 @@ func actualizar(delta: float) -> void:
 		_derivar(remolino, VEL_REMOLINO, remolino.radio, delta, _remolino_cercano(remolino))
 		_arrastrar_barcos(remolino, delta)
 	_juntar_remolinos()
-	for tornado in tornados:
-		_actualizar_tornado(tornado, delta)
+	for k in tornados.size():
+		var paso := mundo.paso_lejano(tornados[k], k, delta_cuadro)
+		if paso > 0.0:
+			_actualizar_tornado(tornados[k], paso)
 	for i in range(tornados.size() - 1, -1, -1):
 		if tornados[i].vida <= 0.0 and tornados[i].fuerza <= 0.0:
 			tornados[i].nodo.queue_free()
 			tornados.remove_at(i)
-	for kraken in krakens:
-		_actualizar_kraken(kraken, delta)
-	for ventisca in ventiscas:
+	for k in krakens.size():
+		var paso := mundo.paso_lejano(krakens[k], k, delta_cuadro)
+		if paso > 0.0:
+			_actualizar_kraken(krakens[k], paso)
+	for k in ventiscas.size():
+		var ventisca: Ventisca = ventiscas[k]
+		delta = mundo.paso_lejano(ventisca, k, delta_cuadro)
+		if delta <= 0.0:
+			continue
 		ventisca.fuerza = move_toward(ventisca.fuerza, 1.0 if activos else 0.0, delta * 0.25)
 		if ventisca.fuerza <= 0.0:
 			continue
@@ -758,8 +775,10 @@ func _derivar(cosa, velocidad: float, margen: float, delta: float, destino: Vect
 		empuje += (destino - pos).normalized() * 2.0
 	if pos.distance_to(mundo.zona_centro) > mundo.zona_radio * 0.8:
 		empuje += (mundo.zona_centro - pos).normalized() * 2.0
-	for isla in mundo.islotes:
+	for isla in mundo.islas.cerca(pos, margen + 80.0):
 		var sep: Vector2 = pos - isla.pos
+		if sep.length() >= isla.radio + margen + 80.0:
+			continue
 		var limite: float = isla.borde(pos) + margen + 80.0
 		if sep.length() < limite:
 			empuje += sep.normalized() * 3.0 * (1.2 - sep.length() / limite)
@@ -771,7 +790,7 @@ func _derivar(cosa, velocidad: float, margen: float, delta: float, destino: Vect
 			empuje += sep.normalized() * (1.0 - sep.length() / 600.0) * 2.0
 	cosa.rumbo = lerp_angle(cosa.rumbo, empuje.angle(), minf(1.0, delta * 0.5))
 	pos += Vector2.from_angle(cosa.rumbo) * velocidad * delta
-	for isla in mundo.islotes:
+	for isla in mundo.islas.cerca(pos, margen):
 		var sep: Vector2 = pos - isla.pos
 		var minimo: float = isla.borde(pos) + margen
 		if sep.length() < minimo and sep != Vector2.ZERO:

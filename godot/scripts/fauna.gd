@@ -945,7 +945,7 @@ func animar(delta: float) -> void:
 	var reloj := mundo.tiempo
 	for isla in islas:
 		var centro := isla.nodo.position
-		if Vector2(centro.x - foco.x, centro.z - foco.z).length() > DISTANCIA_ANIMAR:
+		if not isla.nodo.visible or Vector2(centro.x - foco.x, centro.z - foco.z).length() > DISTANCIA_ANIMAR:
 			continue
 		contorno = isla.contorno
 		_espantar(isla, delta)

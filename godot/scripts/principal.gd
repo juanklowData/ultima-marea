@@ -30,6 +30,9 @@ const VIDA_RESTOS := 25.0
 const ZONA_INICIAL := 3500.0
 # Más allá de esta distancia a la cámara (metros 3D) los barcos y efectos no se dibujan.
 const DISTANCIA_VISIBLE := 60.0
+# Más allá (metros 3D desde el foco) los bots se calculan uno de cada CADA_LEJOS cuadros.
+const DISTANCIA_CALCULO := 75.0
+const CADA_LEJOS := 3
 const RADIO_PALANCA := 60.0
 const ALTO_HUD := 150.0
 const ANCHO_BRUJULA := 20.0
@@ -233,7 +236,10 @@ var malla_astilla: BoxMesh
 # Cielo de tormenta: nubes, lluvia, rayos y el destello en pantalla
 var nubes: MeshInstance3D
 var material_nubes: ShaderMaterial
-var lluvia: GPUParticles3D
+var lluvia: CPUParticles3D
+var material_lluvia: StandardMaterial3D
+var fuerza_lluvia := 0.0
+var botones_graficos: Array[Button] = []
 var luz_rayo: OmniLight3D
 var rayo: Node3D
 var rayo_vida := 0.0
@@ -261,6 +267,9 @@ var texto_vivos: Label
 var texto_tormenta: Label
 var texto_botin: Label
 var texto_mision: Label
+var marcador_moba: HBoxContainer
+var cifra_hundidos: Label
+var cifra_veces_hundido: Label
 var minimapa: Control
 var aviso_giro: Label
 var boton_partida: Button
@@ -324,18 +333,326 @@ func _ready() -> void:
 	personalizacion.cargar()
 	Idioma.instalar()
 	Idioma.usar(personalizacion.idioma)
+	_revisar_arranque()
+	var carga := PantallaCarga.new()
+	add_child(carga)
+	carga.paso(tr("Detectando tu dispositivo..."), 0.1, _texto_dispositivo())
+	await get_tree().process_frame
+	await get_tree().process_frame
+	nivel_graficos = nivel_efectivo()
+	_ajustar_pantalla(nivel_graficos)
+	carga.paso(tr("Ajustando los gráficos..."), 0.25)
+	await get_tree().process_frame
 	_crear_buses()
 	musica = Musica.new()
 	add_child(musica)
 	miniaturas = Miniaturas.new()
 	add_child(miniaturas)
+	carga.paso(tr("Preparando el mar..."), 0.45)
+	await get_tree().process_frame
 	_crear_escena()
+	carga.paso(tr("Preparando la interfaz..."), 0.7)
+	await get_tree().process_frame
 	_crear_interfaz()
+	aplicar_graficos()
+	aplicar_tamano_controles()
+	get_viewport().size_changed.connect(aplicar_tamano_controles)
+	get_viewport().size_changed.connect(aplicar_graficos)
+	carga.paso(tr("Abriendo el puerto..."), 0.9)
+	await get_tree().process_frame
 	_preparar_puerto()
 	_mostrar(Estado.MENU)
+	listo = true
+	carga.paso(tr("¡Listo!"), 1.0)
+	carga.cerrar()
+
+
+# Si la partida anterior se cerró de golpe (sin pasar por segundo plano ni salir), el móvil no
+# aguantó: se bajan los gráficos un nivel más cada vez hasta que vaya bien.
+const RUTA_ARRANQUE := "user://arranque.cfg"
+
+var listo := false
+var rebaja := 0
+var se_cerro := false
+
+
+func _revisar_arranque() -> void:
+	var archivo := ConfigFile.new()
+	archivo.load(RUTA_ARRANQUE)
+	rebaja = int(archivo.get_value("arranque", "rebaja", 0))
+	if archivo.get_value("arranque", "abierto", false):
+		se_cerro = true
+		rebaja = mini(rebaja + 1, 3)
+	_marcar_abierto(true)
+
+
+func _marcar_abierto(abierto: bool) -> void:
+	var archivo := ConfigFile.new()
+	archivo.set_value("arranque", "abierto", abierto)
+	archivo.set_value("arranque", "rebaja", rebaja)
+	archivo.save(RUTA_ARRANQUE)
+
+
+func _notification(que: int) -> void:
+	if que in [NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_PREDELETE]:
+		_marcar_abierto(false)
+	elif que in [NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN] and listo:
+		_marcar_abierto(true)
+
+
+func nivel_efectivo() -> int:
+	var base := personalizacion.graficos if personalizacion.graficos >= 0 else detectar_graficos()
+	return maxi(0, base - rebaja)
+
+
+func _texto_dispositivo() -> String:
+	var texto := tr("Gráficos: %s") % tr(NIVELES_GRAFICOS[nivel_efectivo()])
+	if se_cerro:
+		texto += "\n" + tr("La última vez el juego se cerró: bajamos los gráficos para que vaya fluido")
+	return texto
+
+
+# Niveles: 0 súper bajo, 1 bajo, 2 medio, 3 alto. Los bajos apagan sombras, brillo y
+# antialias, bajan la resolución 3D y acortan la vista; súper bajo además va a 30 cuadros,
+# quita la lluvia y pone un mar plano. Con "automático" (-1) se elige según el dispositivo.
+const NIVELES_GRAFICOS: Array[String] = ["Súper bajo", "Bajo", "Medio", "Alto"]
+
+var nivel_graficos := 1
+var agua_sencilla: StandardMaterial3D
+var botones_efectos: Array[Button] = []
+# Metros hasta el punto del mar más lejano que entra en pantalla: x desde la cámara, y desde el foco.
+var cobertura := Vector2(40.0, 30.0)
+
+# Cada efecto se puede encender o apagar a mano; si no, va encendido desde ese nivel de gráficos.
+const EFECTOS_VISUALES := {
+	"lluvia": ["Lluvia", 1],
+	"fps60": ["60 FPS", 1],
+	"sombras": ["Sombras", 2],
+	"colores": ["Colores vivos", 2],
+	"resolucion": ["Alta resolución", 2],
+	"suavizado": ["Bordes suaves", 3],
+	"brillo": ["Brillo", 3],
+	"lejos": ["Vista lejana", 3],
+}
+
+
+const CALIDADES_MAR: Array[String] = ["Plano", "Suave", "Con olas", "Detallado"]
+const DIVISIONES_MAR: Array[int] = [40, 60, 100, DIVISIONES_AGUA]
+var botones_mar: Array[Button] = []
+
+
+func calidad_mar() -> int:
+	return personalizacion.calidad_mar if personalizacion.calidad_mar >= 0 else [0, 2, 2, 3][nivel_graficos]
+
+
+func efecto_visual(clave: String) -> bool:
+	return personalizacion.efectos.get(clave, nivel_graficos >= EFECTOS_VISUALES[clave][1])
+
+
+func aplicar_graficos() -> void:
+	var nivel := nivel_efectivo()
+	nivel_graficos = nivel
+	cobertura = _cobertura_pantalla()
+	_ajustar_pantalla(nivel)
+	sol.shadow_enabled = efecto_visual("sombras")
+	sol.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL if nivel <= 2 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sol.directional_shadow_max_distance = 60.0 if nivel <= 2 else 90.0
+	entorno.glow_enabled = efecto_visual("brillo")
+	entorno.adjustment_enabled = efecto_visual("colores")
+	camara.far = 400.0 if efecto_visual("lejos") else [140.0, 180.0, 260.0, 400.0][nivel]
+	var mar := calidad_mar()
+	agua.material_override = material_agua if mar > 0 else _agua_sencilla()
+	material_agua.set_shader_parameter("detalle", mar >= 2)
+	var plano := agua.mesh as PlaneMesh
+	plano.subdivide_width = DIVISIONES_MAR[mar]
+	plano.subdivide_depth = plano.subdivide_width
+	lluvia.amount = [150, 150, 300, 600][nivel] if efecto_visual("lluvia") else 1
+	miniaturas.calidad(nivel)
+	for pieza in get_tree().get_nodes_in_group("aparicion"):
+		ajustar_distancia(pieza)
+	for k in botones_graficos.size():
+		var boton: Button = botones_graficos[k]
+		var opcion: int = boton.get_meta("nivel")
+		Ui.estilo_boton(boton, opcion == personalizacion.graficos and personalizacion.efectos.is_empty() and personalizacion.calidad_mar < 0)
+		if opcion < 0:
+			boton.text = tr("Automático") + " (" + tr(NIVELES_GRAFICOS[maxi(0, detectar_graficos() - rebaja)]) + ")"
+	for boton in botones_mar:
+		Ui.estilo_boton(boton, boton.get_meta("mar") == mar)
+	for boton in botones_efectos:
+		var clave: String = boton.get_meta("efecto")
+		var encendido := efecto_visual(clave)
+		Ui.estilo_boton(boton, encendido)
+		boton.text = tr(EFECTOS_VISUALES[clave][0]) + ": " + tr("Sí" if encendido else "No")
+
+
+# Con la cámara de partida, hasta dónde se ve el mar en las esquinas de arriba de la pantalla
+# (las más lejanas). Nada que esté dentro de ese alcance se debe esconder.
+func _cobertura_pantalla() -> Vector2:
+	var tam := get_viewport().get_visible_rect().size
+	var aspecto := tam.x / maxf(tam.y, 1.0)
+	var medio := deg_to_rad(camara.fov) * 0.5
+	var borde := atan2(CAMARA_JUEGO.y, CAMARA_JUEGO.z) - medio
+	var largo := CAMARA_JUEGO.y / sin(borde)
+	var lado := largo * cos(medio) * tan(medio) * aspecto
+	var delante := CAMARA_JUEGO.y / tan(borde) - CAMARA_JUEGO.z
+	return Vector2(Vector2(largo, lado).length(), Vector2(delante, lado).length())
+
+
+# Metros desde el foco hasta donde se dibujan barcos e islas en partida.
+func alcance_vista() -> float:
+	if efecto_visual("lejos"):
+		return DISTANCIA_VISIBLE
+	return maxf([38.0, 46.0, 56.0, DISTANCIA_VISIBLE][nivel_graficos], cobertura.y + 10.0)
+
+
+# Lo pequeño se dibuja solo cuando el barco se acerca y lo mediano un poco antes; lo
+# grande, siempre. Metros desde la cámara por nivel de gráficos (0 = sin límite), nunca
+# menos de lo que abarca la pantalla.
+const APARICION_CHICO: Array[float] = [26.0, 32.0, 45.0, 0.0]
+const APARICION_MEDIANO: Array[float] = [40.0, 50.0, 70.0, 0.0]
+
+
+func ajustar_distancia(pieza: GeometryInstance3D) -> void:
+	var tamano: float = pieza.get_meta("tamano", 99.0)
+	var lejos := efecto_visual("lejos")
+	if tamano < 0.7:
+		pieza.visibility_range_end = 0.0 if lejos else maxf(APARICION_CHICO[nivel_graficos], cobertura.x + 4.0)
+	elif tamano < 2.5:
+		pieza.visibility_range_end = 0.0 if lejos else maxf(APARICION_MEDIANO[nivel_graficos], cobertura.x + 8.0)
+
+
+# Las chispas, humo y salpicaduras que caerían fuera de la pantalla no se crean.
+func _alcance_efectos() -> float:
+	if efecto_visual("lejos"):
+		return DISTANCIA_VISIBLE
+	return maxf([26.0, 34.0, 50.0, DISTANCIA_VISIBLE][nivel_graficos], cobertura.y + 4.0)
+
+
+func _ajustar_pantalla(nivel: int) -> void:
+	var vista := get_viewport()
+	vista.scaling_3d_scale = 1.0 if efecto_visual("resolucion") else [0.8, 0.9, 1.0, 1.0][nivel]
+	vista.msaa_3d = Viewport.MSAA_2X if efecto_visual("suavizado") else Viewport.MSAA_DISABLED
+	Engine.max_fps = 60 if efecto_visual("fps60") else 30
+
+
+# Mar plano de un color, sin el shader de olas, para los móviles más justos.
+func _agua_sencilla() -> StandardMaterial3D:
+	if agua_sencilla == null:
+		agua_sencilla = StandardMaterial3D.new()
+		agua_sencilla.albedo_color = Paleta.MAR_CLARO.lerp(Paleta.MAR_HONDO, 0.35)
+		agua_sencilla.roughness = 0.35
+		agua_sencilla.metallic_specular = 0.6
+	return agua_sencilla
+
+
+# Calcula el nivel según la memoria, los núcleos y la tarjeta gráfica. En el ordenador, alto;
+# en el móvil va a lo seguro: como mucho bajo, y medio solo en los equipos potentes de verdad.
+static func detectar_graficos() -> int:
+	if not OS.has_feature("mobile"):
+		return 1 if OS.has_feature("web") else 3
+	var memoria: float = OS.get_memory_info().get("physical", 0) / 1073741824.0
+	var nivel := 1
+	if memoria > 0.0:
+		nivel = 0 if memoria < 3.0 else 1 if memoria < 4.5 else 2 if memoria < 7.0 else 3
+	if OS.get_processor_count() <= 4:
+		nivel = 0
+	var tarjeta := RenderingServer.get_video_adapter_name().to_lower()
+	for debil in ["mali-4", "mali-t", "powervr", "adreno (tm) 3", "adreno (tm) 4", "adreno (tm) 50", "adreno (tm) 51", "adreno (tm) 52"]:
+		if debil in tarjeta:
+			nivel = 0
+	for media in ["mali-g3", "mali-g5", "adreno (tm) 53", "adreno (tm) 54", "adreno (tm) 60", "adreno (tm) 61"]:
+		if media in tarjeta:
+			nivel = mini(nivel, 1)
+	var potente := false
+	for fuerte in ["adreno (tm) 7", "adreno (tm) 8", "mali-g7", "mali-g6", "immortalis", "xclipse", "apple"]:
+		if fuerte in tarjeta:
+			potente = true
+	return mini(nivel, 2 if potente else 1)
+
+
+func _selector_graficos(cuerpo: VBoxContainer) -> void:
+	var cabecera := HBoxContainer.new()
+	cabecera.add_theme_constant_override("separation", 10)
+	cuerpo.add_child(cabecera)
+	var titulo := Ui.etiqueta_panel("Gráficos", 22, COLOR_ORO)
+	titulo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cabecera.add_child(titulo)
+	var automatico := Ui.boton("Automático", false)
+	automatico.custom_minimum_size = Vector2(240, 44)
+	automatico.add_theme_font_size_override("font_size", 17)
+	_preparar_boton_graficos(automatico, -1)
+	cabecera.add_child(automatico)
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 8)
+	cuerpo.add_child(fila)
+	for k in NIVELES_GRAFICOS.size():
+		var boton := Ui.boton(NIVELES_GRAFICOS[k], false)
+		boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		boton.custom_minimum_size = Vector2(0, 44)
+		boton.add_theme_font_size_override("font_size", 16)
+		boton.clip_text = true
+		_preparar_boton_graficos(boton, k)
+		fila.add_child(boton)
+
+	cuerpo.add_child(Ui.etiqueta_panel("Calidad del mar", 22, COLOR_ORO))
+	var fila_mar := HBoxContainer.new()
+	fila_mar.add_theme_constant_override("separation", 8)
+	cuerpo.add_child(fila_mar)
+	for k in CALIDADES_MAR.size():
+		var boton := Ui.boton(CALIDADES_MAR[k], false)
+		boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		boton.custom_minimum_size = Vector2(0, 44)
+		boton.add_theme_font_size_override("font_size", 16)
+		boton.clip_text = true
+		boton.set_meta("mar", k)
+		boton.mouse_filter = Control.MOUSE_FILTER_PASS
+		boton.pressed.connect(func() -> void:
+			personalizacion.calidad_mar = k
+			personalizacion.guardar()
+			aplicar_graficos())
+		fila_mar.add_child(boton)
+		botones_mar.append(boton)
+
+	cuerpo.add_child(Ui.etiqueta_panel("Efectos visuales", 22, COLOR_ORO))
+	var rejilla := GridContainer.new()
+	rejilla.columns = 2
+	rejilla.add_theme_constant_override("h_separation", 8)
+	rejilla.add_theme_constant_override("v_separation", 8)
+	cuerpo.add_child(rejilla)
+	for clave: String in EFECTOS_VISUALES:
+		var boton := Ui.boton(EFECTOS_VISUALES[clave][0], false)
+		boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		boton.custom_minimum_size = Vector2(0, 44)
+		boton.add_theme_font_size_override("font_size", 16)
+		boton.clip_text = true
+		boton.set_meta("efecto", clave)
+		boton.mouse_filter = Control.MOUSE_FILTER_PASS
+		boton.pressed.connect(func() -> void:
+			personalizacion.efectos[clave] = not efecto_visual(clave)
+			personalizacion.guardar()
+			aplicar_graficos())
+		rejilla.add_child(boton)
+		botones_efectos.append(boton)
+
+
+func _preparar_boton_graficos(boton: Button, nivel: int) -> void:
+	boton.set_meta("nivel", nivel)
+	boton.mouse_filter = Control.MOUSE_FILTER_PASS
+	boton.pressed.connect(func() -> void:
+		personalizacion.graficos = nivel
+		personalizacion.efectos.clear()
+		personalizacion.calidad_mar = -1
+		personalizacion.guardar()
+		rebaja = 0
+		se_cerro = false
+		_marcar_abierto(true)
+		aplicar_graficos())
+	botones_graficos.append(boton)
 
 
 func _process(delta: float) -> void:
+	if not listo or cargando:
+		return
 	delta = minf(delta, 0.05)
 	tiempo += delta
 	if estado == Estado.JUGANDO:
@@ -347,8 +664,9 @@ func _process(delta: float) -> void:
 	if en_puerto() and jugador != null:
 		_amarrar()
 
+	var vista := alcance_vista()
 	for barco in barcos:
-		var cerca := a_3d(barco.pos).distance_to(Vector3(foco.x, 0.0, foco.z)) < DISTANCIA_VISIBLE
+		var cerca := a_3d(barco.pos).distance_to(Vector3(foco.x, 0.0, foco.z)) < vista
 		if cerca or barco == jugador:
 			barco.colocar(delta)
 		barco.visible = (cerca or barco == jugador) and barco.hundimiento < 1.0 \
@@ -370,7 +688,7 @@ func _process(delta: float) -> void:
 	emotes.actualizar(delta)
 	# En puerto la cámara mira al horizonte y las islas se ven más lejos.
 	var en_partida := estado == Estado.JUGANDO or estado == Estado.FIN
-	islas.recortar(delta, foco, DISTANCIA_VISIBLE + 8.0 if en_partida else 170.0)
+	islas.recortar(delta, foco, vista + 8.0 if en_partida else 170.0)
 	_actualizar_tormenta(delta)
 	_actualizar_agua()
 
@@ -387,8 +705,14 @@ func _actualizar(delta: float) -> void:
 		moba.actualizar(delta)
 	else:
 		_mover_zona(delta)
-	for barco in barcos:
-		barco.actualizar(delta)
+	for i in barcos.size():
+		var barco := barcos[i]
+		if barco.mando != Barco.Mando.BOT:
+			barco.actualizar(delta)
+			continue
+		var paso := paso_lejano(barco, i, delta)
+		if paso > 0.0:
+			barco.actualizar(paso)
 	if modo != "moba":
 		peligros.actualizar(delta)
 		tiburones.actualizar(delta)
@@ -407,6 +731,18 @@ func _actualizar(delta: float) -> void:
 	if modo != "libre":
 		_revisar_fin(delta)
 	_pintar_hud()
+
+
+# Lo que está lejos del foco se calcula uno de cada CADA_LEJOS cuadros con el tiempo
+# acumulado en "pendiente". Devuelve el tiempo a calcular ahora, o 0 si toca esperar.
+func paso_lejano(cosa, indice: int, delta: float) -> float:
+	cosa.pendiente += delta
+	if (Engine.get_process_frames() + indice) % CADA_LEJOS != 0 \
+			and a_3d(cosa.pos).distance_to(Vector3(foco.x, 0.0, foco.z)) > DISTANCIA_CALCULO:
+		return 0.0
+	var paso: float = cosa.pendiente
+	cosa.pendiente = 0.0
+	return paso
 
 
 func a_3d(punto: Vector2, altura := 0.0) -> Vector3:
@@ -630,24 +966,23 @@ func _crear_cielo_tormenta() -> void:
 	material_gota.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material_gota.albedo_color = Color(0.8, 0.86, 1.0, 0.45)
 	gota.material = material_gota
-	var caida := ParticleProcessMaterial.new()
-	caida.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	caida.emission_box_extents = Vector3(30.0, 0.5, 22.0)
-	caida.direction = Vector3(0.18, -1.0, 0.06)
-	caida.spread = 3.0
-	caida.initial_velocity_min = 24.0
-	caida.initial_velocity_max = 30.0
-	caida.gravity = Vector3(0.0, -12.0, 0.0)
-	caida.particle_flag_align_y = true
-	lluvia = GPUParticles3D.new()
-	lluvia.draw_pass_1 = gota
-	lluvia.process_material = caida
-	lluvia.amount = 900
+	material_lluvia = material_gota
+	# Partículas por CPU: las de GPU cuelgan algunos móviles con el renderizador de compatibilidad.
+	lluvia = CPUParticles3D.new()
+	lluvia.mesh = gota
+	lluvia.amount = 600
 	lluvia.lifetime = 0.75
-	lluvia.preprocess = 0.75
 	lluvia.local_coords = false
-	lluvia.visibility_aabb = AABB(Vector3(-40, -20, -30), Vector3(80, 25, 60))
-	lluvia.amount_ratio = 0.0
+	lluvia.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	lluvia.emission_box_extents = Vector3(30.0, 0.5, 22.0)
+	lluvia.direction = Vector3(0.18, -1.0, 0.06)
+	lluvia.spread = 3.0
+	lluvia.initial_velocity_min = 24.0
+	lluvia.initial_velocity_max = 30.0
+	lluvia.gravity = Vector3(0.0, -12.0, 0.0)
+	lluvia.particle_flag_align_y = true
+	lluvia.emitting = false
+	lluvia.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(lluvia)
 
 	luz_rayo = OmniLight3D.new()
@@ -783,7 +1118,7 @@ func _crear_tabla() -> Node3D:
 # Mar y tormenta
 
 func _actualizar_agua() -> void:
-	var paso := LADO_AGUA / float(DIVISIONES_AGUA + 1)
+	var paso := LADO_AGUA / float((agua.mesh as PlaneMesh).subdivide_width + 1)
 	agua.position = Vector3(snappedf(foco.x, paso), 0.0, snappedf(foco.z, paso))
 	nubes.position = Vector3(agua.position.x, 7.5, agua.position.z)
 	for materia in [material_agua, material_nubes]:
@@ -837,7 +1172,9 @@ func _actualizar_tormenta(delta: float) -> void:
 	var al_borde := zona_radio - foco_plano.distance_to(zona_centro)
 	var intensidad := clampf(1.0 - al_borde / 500.0, 0.0, 1.0) if activa else 0.0
 	lluvia.position = foco + Vector3(0.0, 14.0, 0.0)
-	lluvia.amount_ratio = lerpf(lluvia.amount_ratio, intensidad, minf(1.0, delta * 2.0))
+	fuerza_lluvia = lerpf(fuerza_lluvia, intensidad, minf(1.0, delta * 2.0))
+	lluvia.emitting = fuerza_lluvia > 0.05 and lluvia.amount > 1
+	material_lluvia.albedo_color.a = 0.45 * fuerza_lluvia
 	var en_tormenta := fuerza_tormenta(jugador.pos) if activa and jugador != null else 0.0
 	sol.light_energy = lerpf(sol.light_energy, lerpf(Paleta.SOL_ENERGIA, Paleta.SOL_TORMENTA, en_tormenta), minf(1.0, delta * 2.0))
 	entorno.ambient_light_energy = lerpf(entorno.ambient_light_energy, lerpf(Paleta.AMBIENTE_ENERGIA, Paleta.AMBIENTE_TORMENTA, en_tormenta), minf(1.0, delta * 2.0))
@@ -987,8 +1324,9 @@ func en_puerto() -> bool:
 
 
 # Fuera de la partida solo existe el puerto: una isla con su muelle y el barco amarrado.
-func _preparar_puerto() -> void:
-	_vaciar_mar()
+func _preparar_puerto(ya_vaciado := false) -> void:
+	if not ya_vaciado:
+		_vaciar_mar()
 	peligros.vaciar()
 	tiburones.vaciar()
 	barriles.vaciar()
@@ -1009,9 +1347,14 @@ func _amarrar() -> void:
 	jugador.rumbo = -PI / 2.0
 
 
-func _preparar_mar() -> void:
+func _preparar_mar(carga: PantallaCarga) -> void:
 	_vaciar_mar()
+	# El mar libre conserva el puerto; los demás modos levantan su propio mapa.
+	if modo != "libre":
+		restos.append_array(islas.soltar_todo())
+	await _desmontar(carga, "Preparando el mar...", 0.1, 0.15)
 	if modo == "libre":
+		await _avanzar_carga(carga, "Levantando las islas...", 0.35)
 		libre.empezar()
 		foco = jugador.position
 		camara.position = jugador.position + Vector3(0.0, 5.0, 11.0)
@@ -1021,12 +1364,15 @@ func _preparar_mar() -> void:
 		tiburones.vaciar()
 		barriles.vaciar()
 		misiones.vaciar()
+		await _avanzar_carga(carga, "Levantando los fuertes...", 0.35)
 		moba.empezar()
 		foco = jugador.position
 		camara.position = jugador.position + Vector3(0.0, 5.0, 11.0)
 		return
-	islas.generar()
+	await _avanzar_carga(carga, "Levantando las islas...", 0.15)
+	await islas.generar(func(parte: float) -> void: carga.paso(tr("Levantando las islas..."), lerpf(0.15, 0.6, parte)))
 	peligros.reiniciar()
+	await _avanzar_carga(carga, "Llamando a los piratas...", 0.6)
 
 	var alcance := ZONA_INICIAL * 0.9
 	jugador = _crear_barco(personalizacion, true, _punto_libre(300.0, alcance))
@@ -1039,7 +1385,11 @@ func _preparar_mar() -> void:
 		bot.es_bot = true
 		if randf() < BOTS_CON_COFRE:
 			tesoros.cargar(bot, "cofre")
+		if i % 8 == 0:
+			carga.paso(tr("Llamando a los piratas..."), lerpf(0.6, 0.85, float(i) / TOTAL_BARCOS))
+			await get_tree().process_frame
 	peligros.apartar_krakens()
+	await _avanzar_carga(carga, "Soltando tiburones y barriles...", 0.88)
 	for _i in TOTAL_TABLAS:
 		_soltar_tabla()
 	tiburones.reiniciar()
@@ -1067,7 +1417,7 @@ func _vaciar_mar() -> void:
 	niebla.vaciar()
 	tesoros.vaciar()
 	for barco in barcos:
-		barco.queue_free()
+		_retirar(barco)
 	barcos.clear()
 	for bala in balas:
 		bala.nodo.queue_free()
@@ -1108,6 +1458,8 @@ func _crear_barco(aspecto: Personalizacion, es_jugador: bool, pos: Vector2) -> B
 	barco.rumbo = randf_range(-PI, PI)
 	capa_barcos.add_child(barco)
 	barco.preparar(aspecto, es_jugador, self)
+	if not es_jugador:
+		islas.preparar_aparicion(barco, "MeshInstance3D")
 	barco.colocar(0.0)
 	barcos.append(barco)
 	return barco
@@ -1398,7 +1750,7 @@ func _mover_balas(delta: float) -> void:
 
 		var termina := false
 		var golpeado: Barco = null
-		for isla in islotes:
+		for isla in islas.cerca(bala.pos):
 			if isla != bala.origen and isla.dentro(bala.pos):
 				termina = true
 				if modo == "libre" and is_instance_valid(bala.dueno):
@@ -1856,7 +2208,7 @@ func _tocar_final(evento: InputEvent) -> void:
 # Efectos
 
 func crear_efecto(forma: Mesh, color: Color, pos: Vector3, vel: Vector3, vida: float, escala: float, crece: float, gravedad := 0.0, sombreado := false) -> void:
-	if pos.distance_to(foco) > DISTANCIA_VISIBLE:
+	if pos.distance_to(foco) > _alcance_efectos():
 		return
 	var efecto := Efecto.new()
 	efecto.material = StandardMaterial3D.new()
@@ -1982,7 +2334,7 @@ func _arma_pulsada(arma: String) -> bool:
 
 # En la tienda y al elegir capitán: un dedo gira la cámara alrededor del barco, dos dedos o la rueda acercan.
 func _unhandled_input(event: InputEvent) -> void:
-	if estado not in [Estado.ASTILLERO, Estado.CAPITANES]:
+	if not listo or estado not in [Estado.ASTILLERO, Estado.CAPITANES]:
 		return
 	var panel := panel_astillero if estado == Estado.ASTILLERO else moba.panel_capitanes
 	var toque := event as InputEventScreenTouch
@@ -2011,6 +2363,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if not listo or cargando:
+		return
 	if estado != Estado.JUGANDO:
 		var tecla := event as InputEventKey
 		if tecla and tecla.pressed and not tecla.echo and tecla.keycode in [KEY_SPACE, KEY_ENTER]:
@@ -2043,7 +2397,7 @@ func _input(event: InputEvent) -> void:
 	var toque := event as InputEventScreenTouch
 	if toque:
 		if toque.pressed:
-			if toque.position.y < ALTO_HUD:
+			if toque.position.y < ALTO_HUD * maxf(1.0, escala_controles):
 				return
 			if toque.position.x < controles.size.x / 2.0:
 				if palanca_dedo == -1:
@@ -2063,15 +2417,41 @@ func _input(event: InputEvent) -> void:
 
 	var arrastre := event as InputEventScreenDrag
 	if arrastre and arrastre.index == palanca_dedo:
-		palanca = (arrastre.position - centro_palanca).limit_length(RADIO_PALANCA) / RADIO_PALANCA
+		var alcance := RADIO_PALANCA * escala_controles
+		palanca = (arrastre.position - centro_palanca).limit_length(alcance) / alcance
 
 
 func _posicion_palanca_reposo() -> Vector2:
-	return Vector2(125.0, controles.size.y - 120.0)
+	return Vector2(125.0 * escala_controles, controles.size.y - 120.0 * escala_controles)
 
 
 func _posicion_fuego(arma: String) -> Vector2:
-	return controles.size + BOTONES_FUEGO[arma][0]
+	return controles.size + BOTONES_FUEGO[arma][0] * escala_controles
+
+
+# Tamaño de los controles táctiles de la partida. En el móvil se agrandan hasta que el aro
+# de la palanca mida unos 10 mm en la pantalla real; encima va el ajuste del jugador.
+var escala_controles := 1.0
+
+
+func _escala_automatica() -> float:
+	if not OS.has_feature("mobile"):
+		return 1.0
+	var dpi := float(DisplayServer.screen_get_dpi())
+	var alto_vista := get_viewport().get_visible_rect().size.y
+	if dpi <= 0.0 or alto_vista <= 0.0:
+		return 1.3
+	var pixeles_por_punto := float(DisplayServer.window_get_size().y) / alto_vista
+	var milimetros := (RADIO_PALANCA + 12.0) * pixeles_por_punto / dpi * 25.4
+	return clampf(10.0 / milimetros, 1.0, 1.5)
+
+
+func aplicar_tamano_controles() -> void:
+	escala_controles = clampf(_escala_automatica() * personalizacion.tam_botones, 0.7, 2.0)
+	for control: Control in get_tree().get_nodes_in_group("control_tactil"):
+		Ui.escalar_desde_ancla(control, escala_controles)
+	if controles != null:
+		controles.queue_redraw()
 
 
 # El botón más cercano al dedo, con algo de margen alrededor de cada círculo.
@@ -2080,7 +2460,7 @@ func _boton_fuego_en(punto: Vector2) -> String:
 	var mejor := INF
 	for arma in BOTONES_FUEGO:
 		var distancia := punto.distance_to(_posicion_fuego(arma))
-		if distancia < BOTONES_FUEGO[arma][1] * 1.35 and distancia < mejor:
+		if distancia < BOTONES_FUEGO[arma][1] * escala_controles * 1.35 and distancia < mejor:
 			mejor = distancia
 			elegido = arma
 	return elegido
@@ -2131,6 +2511,15 @@ func _crear_interfaz() -> void:
 	texto_mision = Ui.etiqueta("", 18)
 	texto_mision.add_theme_color_override("font_color", Color("ffe7a8"))
 	hud.add_child(texto_mision)
+	marcador_moba = HBoxContainer.new()
+	marcador_moba.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marcador_moba.add_theme_constant_override("separation", 6)
+	hud.add_child(marcador_moba)
+	cifra_hundidos = _cifra_con_icono("res://interfaz/hundidos.svg", COLOR_ORO)
+	var hueco := Control.new()
+	hueco.custom_minimum_size = Vector2(14, 0)
+	marcador_moba.add_child(hueco)
+	cifra_veces_hundido = _cifra_con_icono("res://interfaz/veces_hundido.svg", COLOR_TEXTO)
 
 	minimapa = Control.new()
 	minimapa.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2150,6 +2539,21 @@ func _crear_interfaz() -> void:
 	misiones.crear_interfaz(capa)
 	emotes.crear_interfaz(capa)
 	moba.crear_interfaz(capa)
+
+
+func _cifra_con_icono(ruta: String, color: Color) -> Label:
+	var icono := TextureRect.new()
+	icono.texture = load(ruta)
+	icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icono.custom_minimum_size = Vector2(38, 38)
+	icono.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marcador_moba.add_child(icono)
+	var cifra := Ui.etiqueta("0", 26)
+	cifra.add_theme_color_override("font_color", color)
+	cifra.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	marcador_moba.add_child(cifra)
+	return cifra
 
 
 func _crear_logo() -> Control:
@@ -2250,6 +2654,7 @@ func _cambiar_idioma() -> void:
 	Idioma.usar(personalizacion.idioma)
 	boton_idioma.idioma = personalizacion.idioma
 	boton_idioma.queue_redraw()
+	aplicar_graficos()
 	voz_equipar.play()
 	_mostrar(estado)
 
@@ -2294,10 +2699,14 @@ func _crear_opciones_partida(capa: CanvasLayer) -> void:
 	cuerpo.add_theme_constant_override("separation", 14)
 	panel.add_child(cuerpo)
 	cuerpo.add_child(Ui.etiqueta_panel("Opciones", 40, COLOR_TEXTO))
-	_deslizador_volumen(cuerpo, "Música", personalizacion.volumen_musica, func(valor: float) -> void:
+	var opciones := _lista_desplazable(cuerpo)
+	opciones.get_parent().get_parent().custom_minimum_size = Vector2(0, 380)
+	_deslizador_volumen(opciones, "Música", personalizacion.volumen_musica, func(valor: float) -> void:
 		personalizacion.volumen_musica = valor)
-	_deslizador_volumen(cuerpo, "Efectos", personalizacion.volumen_efectos, func(valor: float) -> void:
+	_deslizador_volumen(opciones, "Efectos", personalizacion.volumen_efectos, func(valor: float) -> void:
 		personalizacion.volumen_efectos = valor)
+	_deslizador_botones(opciones)
+	_selector_graficos(opciones)
 	var seguir := Ui.boton("Seguir jugando", true)
 	seguir.pressed.connect(_cerrar_opciones_partida)
 	cuerpo.add_child(seguir)
@@ -2362,6 +2771,9 @@ func _crear_ajustes(capa: CanvasLayer) -> void:
 	var cuerpo: VBoxContainer = partes[1]
 	var titulo := Ui.etiqueta_panel("Configuración", 40, COLOR_TEXTO)
 	cuerpo.add_child(titulo)
+	var lista_cuerpo := cuerpo
+	cuerpo = _lista_desplazable(lista_cuerpo)
+	cuerpo.get_parent().get_parent().size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 	cuerpo.add_child(Ui.etiqueta_panel("Nombre del barco", 22, COLOR_ORO))
 	campo_nombre = LineEdit.new()
@@ -2390,13 +2802,57 @@ func _crear_ajustes(capa: CanvasLayer) -> void:
 		personalizacion.volumen_efectos = valor)
 	efectos.drag_ended.connect(func(_cambio: bool) -> void:
 		_sonar_en_vista(voces_canon, camara.global_position + camara.global_basis.z * -5.0, -9.0, -9.0, 1.0))
+	_deslizador_botones(cuerpo)
+	_selector_graficos(cuerpo)
 
-	var espacio := Control.new()
-	espacio.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	cuerpo.add_child(espacio)
 	var listo := Ui.boton("Listo", true)
 	listo.pressed.connect(_cerrar_ajustes)
-	cuerpo.add_child(listo)
+	lista_cuerpo.add_child(listo)
+
+
+# Columna con desplazamiento vertical (se arrastra con el dedo) dentro de otra columna.
+func _lista_desplazable(cuerpo: VBoxContainer) -> VBoxContainer:
+	var desplazar := ScrollContainer.new()
+	desplazar.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	desplazar.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+	desplazar.follow_focus = true
+	desplazar.scroll_deadzone = 12
+	cuerpo.add_child(desplazar)
+	var riel := StyleBoxFlat.new()
+	riel.bg_color = Color(0, 0, 0, 0.35)
+	riel.set_corner_radius_all(9)
+	riel.content_margin_left = 9
+	riel.content_margin_right = 9
+	var tirador := StyleBoxFlat.new()
+	tirador.bg_color = COLOR_ORO
+	tirador.set_corner_radius_all(9)
+	tirador.content_margin_top = 30
+	var tirador_activo := tirador.duplicate() as StyleBoxFlat
+	tirador_activo.bg_color = COLOR_ORO.lightened(0.25)
+	var barra := desplazar.get_v_scroll_bar()
+	barra.add_theme_stylebox_override("scroll", riel)
+	barra.add_theme_stylebox_override("scroll_focus", riel)
+	barra.add_theme_stylebox_override("grabber", tirador)
+	barra.add_theme_stylebox_override("grabber_highlight", tirador_activo)
+	barra.add_theme_stylebox_override("grabber_pressed", tirador_activo)
+	var margen := MarginContainer.new()
+	margen.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margen.add_theme_constant_override("margin_right", 16)
+	desplazar.add_child(margen)
+	var lista := VBoxContainer.new()
+	lista.add_theme_constant_override("separation", 14)
+	margen.add_child(lista)
+	return lista
+
+
+# Del 70 % al 150 % del tamaño automático de los botones de la partida.
+func _deslizador_botones(cuerpo: VBoxContainer) -> void:
+	var deslizador := _deslizador_volumen(cuerpo, "Tamaño de botones", personalizacion.tam_botones, func(valor: float) -> void:
+		personalizacion.tam_botones = valor
+		aplicar_tamano_controles())
+	deslizador.max_value = 150.0
+	deslizador.min_value = 70.0
+	deslizador.value = personalizacion.tam_botones * 100.0
 
 
 func _deslizador_volumen(cuerpo: VBoxContainer, titulo: String, valor: float, guardar: Callable) -> HSlider:
@@ -3009,8 +3465,7 @@ func _crear_final(capa: CanvasLayer) -> void:
 	otra.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	otra.pressed.connect(func() -> void:
 		if modo == "moba":
-			_preparar_puerto()
-			moba.abrir_seleccion()
+			_al_puerto(true)
 		else:
 			_buscar_partida(modo))
 	fila.add_child(otra)
@@ -3067,20 +3522,98 @@ func _mostrar(nuevo: Estado) -> void:
 	palanca = Vector2.ZERO
 
 
+# Mientras se arma o desarma el mar, el juego no avanza ni atiende toques: la pantalla de
+# carga lo tapa y su barra muestra cada paso.
+var cargando := false
+
+
+func _abrir_carga(titulo: String) -> PantallaCarga:
+	cargando = true
+	palanca_dedo = -1
+	dedos_fuego.clear()
+	palanca = Vector2.ZERO
+	var carga := PantallaCarga.new()
+	add_child(carga)
+	carga.titular(tr(titulo))
+	return carga
+
+
+# Deja dibujar la pantalla de carga antes de seguir con el trabajo pesado.
+func _avanzar_carga(carga: PantallaCarga, texto: String, parte: float) -> void:
+	carga.paso(tr(texto), parte)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+# Barcos e islas que se quitan durante una carga. Borrados todos juntos al final de un cuadro
+# dejarían el móvil congelado unos segundos; _desmontar los borra por tandas.
+var restos: Array[Node] = []
+
+
+func _retirar(nodo: Node3D) -> void:
+	if cargando:
+		nodo.visible = false
+		restos.append(nodo)
+	else:
+		nodo.queue_free()
+
+
+func _desmontar(carga: PantallaCarga, texto: String, desde: float, hasta: float) -> void:
+	var total := maxi(1, restos.size())
+	while not restos.is_empty():
+		var inicio := Time.get_ticks_msec()
+		while not restos.is_empty() and Time.get_ticks_msec() - inicio < 60:
+			var nodo: Node = restos.pop_back()
+			if is_instance_valid(nodo):
+				if nodo.get_parent() != null:
+					nodo.get_parent().remove_child(nodo)
+				nodo.queue_free()
+		carga.paso(tr(texto), lerpf(desde, hasta, 1.0 - float(restos.size()) / total))
+		await get_tree().process_frame
+
+
+func _cerrar_carga(carga: PantallaCarga) -> void:
+	await _avanzar_carga(carga, "¡Listo!", 1.0)
+	cargando = false
+	carga.cerrar(0.15, 0.3)
+
+
 func _zarpar() -> void:
-	_preparar_mar()
+	if cargando:
+		return
+	var carga := _abrir_carga("Zarpando...")
+	await _avanzar_carga(carga, "Preparando el mar...", 0.1)
+	await _preparar_mar(carga)
+	aplicar_tamano_controles()
 	_mostrar(Estado.JUGANDO)
 	_pintar_hud()
+	await _cerrar_carga(carga)
 
 
-func _al_puerto() -> void:
-	_preparar_puerto()
-	_mostrar(Estado.MENU)
+# Con elegir_capitan se vuelve a la elección de capitán del 5 contra 5 en vez de al menú.
+func _al_puerto(elegir_capitan := false) -> void:
+	if cargando:
+		return
+	var carga := _abrir_carga("Volviendo al puerto...")
+	await _avanzar_carga(carga, "Recogiendo las velas...", 0.1)
+	_vaciar_mar()
+	restos.append_array(islas.soltar_todo())
+	await _desmontar(carga, "Recogiendo las velas...", 0.1, 0.75)
+	_preparar_puerto(true)
+	await _avanzar_carga(carga, "Amarrando el barco...", 0.8)
+	if elegir_capitan:
+		moba.abrir_seleccion()
+	else:
+		_mostrar(Estado.MENU)
+	await _cerrar_carga(carga)
 
 
 func _pintar_hud() -> void:
 	_pintar_botin()
 	texto_botin.visible = modo != "moba"
+	texto_tormenta.visible = true
+	marcador_moba.visible = false
+	texto_mision.visible = true
 	var ultima := DURACION_FASES.size() - 1
 	texto_mision.text = misiones.texto_hud()
 	var peligro := peligros.aviso(jugador) if jugador.viva else ""
@@ -3095,7 +3628,12 @@ func _pintar_hud() -> void:
 	if modo == "moba":
 		texto_vivos.text = moba.texto_estado()
 		texto_tormenta.text = moba.texto_aviso()
-		texto_mision.text = moba.texto_marcador()
+		texto_tormenta.visible = texto_tormenta.text != ""
+		texto_mision.visible = false
+		var marcador := moba.marcador()
+		marcador_moba.visible = marcador.x >= 0
+		cifra_hundidos.text = str(marcador.x)
+		cifra_veces_hundido.text = str(marcador.y)
 		return
 	texto_vivos.text = tr("A flote: %d") % _contar_vivos()
 	if peligro != "":
@@ -3177,6 +3715,52 @@ func _dibujar_moneda(centro: Vector2, radio: float) -> void:
 	marcadores.draw_circle(centro, radio * 0.5, Color("f0cd62"))
 
 
+# Las islas del minimapa, todas en una malla (un solo dibujo) que se rehace al cambiar el mar.
+# Cada círculo suelto era un dibujo aparte y con 200 islas el móvil se ahogaba.
+var islas_minimapa: ArrayMesh
+var clave_islas_minimapa := ""
+
+
+func _islas_minimapa(escala: float) -> ArrayMesh:
+	# En el radar del mar libre se rehace cada pocos metros que avanza el barco.
+	var radar := modo == "libre" and jugador != null
+	var sitio_radar := (jugador.pos / 25.0).round() * 25.0 if radar else Vector2.ZERO
+	var clave := "%d|%f|%s|%s" % [islotes.size(), escala, islotes[0].pos if not islotes.is_empty() else Vector2.ZERO, sitio_radar]
+	if clave == clave_islas_minimapa:
+		return islas_minimapa
+	clave_islas_minimapa = clave
+	var puntos := PackedVector2Array()
+	var colores := PackedColorArray()
+	for isla in islotes:
+		if radar and isla.pos.distance_to(sitio_radar) >= MarLibre.RADAR * 0.94:
+			continue
+		var tono := Islas.COLOR_ROCA if isla.radio <= Islas.RADIO_ROCAS else Islas.COLOR_ARENA
+		if isla.lobulos.is_empty():
+			_circulo_minimapa(puntos, colores, isla.pos, maxf(1.5 / escala, isla.radio), tono)
+			continue
+		for lobulo in isla.lobulos:
+			var sitio: Vector2 = isla.pos + Vector2(lobulo.x, lobulo.y) * isla.radio
+			_circulo_minimapa(puntos, colores, sitio, maxf(1.0 / escala, lobulo.z * isla.radio), tono)
+	islas_minimapa = ArrayMesh.new()
+	if not puntos.is_empty():
+		var datos := []
+		datos.resize(Mesh.ARRAY_MAX)
+		datos[Mesh.ARRAY_VERTEX] = puntos
+		datos[Mesh.ARRAY_COLOR] = colores
+		islas_minimapa.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, datos)
+	return islas_minimapa
+
+
+func _circulo_minimapa(puntos: PackedVector2Array, colores: PackedColorArray, centro: Vector2, radio: float, color: Color) -> void:
+	var lados := 16
+	for k in lados:
+		puntos.append(centro)
+		puntos.append(centro + Vector2.from_angle(TAU * k / lados) * radio)
+		puntos.append(centro + Vector2.from_angle(TAU * (k + 1) / lados) * radio)
+		for _v in 3:
+			colores.append(color)
+
+
 func _dibujar_minimapa() -> void:
 	var exterior := minimapa.size.x / 2.0
 	var radio := exterior - ANCHO_BRUJULA
@@ -3197,16 +3781,9 @@ func _dibujar_minimapa() -> void:
 		minimapa.draw_circle(centro, radio, Color("0e2f38"))
 		minimapa.draw_circle(centro + zona_centro * escala, maxf(3.0, zona_radio * escala), Color("1f7f86"))
 		minimapa.draw_arc(centro + zona_centro * escala, maxf(3.0, zona_radio * escala), 0.0, TAU, 64, Color(1.0, 0.96, 0.84), 2.0, true)
-	for isla in islotes:
-		if not en_mapa(isla.pos):
-			continue
-		var tono := Islas.COLOR_ROCA if isla.radio <= Islas.RADIO_ROCAS else Islas.COLOR_ARENA
-		if isla.lobulos.is_empty():
-			minimapa.draw_circle(centro + isla.pos * escala, maxf(1.5, isla.radio * escala), tono)
-			continue
-		for lobulo in isla.lobulos:
-			var sitio: Vector2 = isla.pos + Vector2(lobulo.x, lobulo.y) * isla.radio
-			minimapa.draw_circle(centro + sitio * escala, maxf(1.0, lobulo.z * isla.radio * escala), tono)
+	minimapa.draw_set_transform(centro, 0.0, Vector2.ONE * escala)
+	minimapa.draw_mesh(_islas_minimapa(escala), null)
+	minimapa.draw_set_transform(Vector2.ZERO)
 	peligros.dibujar_minimapa(minimapa, centro, escala)
 	for tabla in tablas:
 		if en_mapa(tabla.pos):
@@ -3287,7 +3864,10 @@ func _dibujar_brujula(centro: Vector2, exterior: float, interior: float) -> void
 
 
 func _dibujar_controles() -> void:
-	var base := centro_palanca if palanca_dedo != -1 else _posicion_palanca_reposo()
+	if not listo or jugador == null:
+		return
+	controles.draw_set_transform(centro_palanca if palanca_dedo != -1 else _posicion_palanca_reposo(), 0.0, Vector2.ONE * escala_controles)
+	var base := Vector2.ZERO
 	var aro := RADIO_PALANCA + 12.0
 	controles.draw_circle(base + Vector2(0, 3), aro + 2.0, Color(0, 0, 0, 0.18))
 	controles.draw_circle(base, aro, Color(0.05, 0.16, 0.22, 0.42))
@@ -3310,7 +3890,8 @@ func _dibujar_controles() -> void:
 		var carga: float = 1.0 - jugador.recargas[arma] / (RECARGAS[arma] * jugador.factor_recarga)
 		var lista := carga >= 1.0
 		var pulsado := _arma_pulsada(arma)
-		var centro := _posicion_fuego(arma) + (Vector2(0, 2) if pulsado else Vector2.ZERO)
+		controles.draw_set_transform(_posicion_fuego(arma) + (Vector2(0, 2) if pulsado else Vector2.ZERO), 0.0, Vector2.ONE * escala_controles)
+		var centro := Vector2.ZERO
 		if pulsado:
 			radio *= 0.93
 		var borde := COLOR_ORO if lista else Color("7d7368")
@@ -3330,6 +3911,7 @@ func _dibujar_controles() -> void:
 		var rotulo := tr(texto)
 		var ancho_texto := fuente.get_string_size(rotulo, HORIZONTAL_ALIGNMENT_LEFT, -1, tam).x
 		controles.draw_string(fuente, centro + Vector2(-ancho_texto / 2.0, radio * 0.58), rotulo, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, tinta)
+	controles.draw_set_transform(Vector2.ZERO)
 
 
 func _dibujar_sector(centro: Vector2, radio: float, desde: float, hasta: float, color: Color) -> void:

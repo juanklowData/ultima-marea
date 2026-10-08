@@ -32,7 +32,12 @@ func borde(punto: Vector2) -> float:
 
 
 func dentro(punto: Vector2, margen := 0.0) -> bool:
-	return punto.distance_to(pos) < borde(punto) + margen
+	# El borde nunca pasa del radio: lejos se descarta sin calcular el ángulo.
+	var alcance := radio + margen
+	var distancia := punto.distance_squared_to(pos)
+	if alcance <= 0.0 or distancia >= alcance * alcance:
+		return false
+	return sqrt(distancia) < borde(punto) + margen
 
 
 func factor_minimo() -> float:

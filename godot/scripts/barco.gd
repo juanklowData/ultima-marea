@@ -40,6 +40,8 @@ var espera_choque := 0.0
 var viva := true
 var hundimiento := 0.0
 var deriva := 0.0
+# Tiempo aún sin calcular de un bot lejano, que se pone al día cada pocos cuadros.
+var pendiente := 0.0
 var temporizador_estela := 0.0
 var fase_oleaje := 0.0
 var cabeceo_ola := 0.0
@@ -173,8 +175,12 @@ func actualizar(delta: float) -> void:
 
 	espera_roca = maxf(0.0, espera_roca - delta)
 	espera_choque = maxf(0.0, espera_choque - delta)
-	for isla in mundo.islotes:
+	for isla in mundo.islas.cerca(pos, radio * 0.7):
 		var separacion: Vector2 = pos - isla.pos
+		# El borde nunca pasa del radio: las islas lejanas se descartan sin calcularlo.
+		var alcance: float = isla.radio + radio * 0.7
+		if separacion.length_squared() >= alcance * alcance:
+			continue
 		var minimo: float = isla.borde(pos) + radio * 0.7
 		if separacion.length() < minimo and separacion != Vector2.ZERO:
 			pos = isla.pos + separacion.normalized() * minimo
