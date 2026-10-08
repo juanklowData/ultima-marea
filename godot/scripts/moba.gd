@@ -58,8 +58,12 @@ const VEL_HEROE := 1.45
 const GIRO_HEROE := 1.5
 # Botón único de cañones: se arrastra para apuntar y, según hacia dónde quede el tiro respecto
 # a la proa, dispara el cañón de proa o la andanada de un costado.
-const BOTON_CANONES := Vector2(-140.0, -122.0)
-const RADIO_CANONES := 44.0
+const BOTON_CANONES := Vector2(-108.0, -108.0)
+const RADIO_CANONES := 48.0
+# Como en los MOBA: la habilidad en arco arriba a la izquierda de los cañones y la tienda
+# (solo en la base) encima, separada para no pulsarla sin querer.
+const BOTON_HABILIDAD := Vector2(-212.0, -192.0)
+const BOTON_TIENDA := Vector2(-92.0, -262.0)
 const ALCANCE_CANON := Principal.VEL_BALA * Principal.VIDA_BALA
 const ANGULO_PROA := PI / 4.0
 const RADIO_AUTO := 20.0
@@ -2440,7 +2444,7 @@ func tecla(evento: InputEvent) -> bool:
 
 func crear_interfaz(capa: CanvasLayer) -> void:
 	var comercio := mundo.comercio
-	boton_habilidad = comercio._boton_redondo(Comercio.BOTON_MUNICION, _dibujar_habilidad, _usar_jugador)
+	boton_habilidad = comercio._boton_redondo(BOTON_HABILIDAD, _dibujar_habilidad, _usar_jugador)
 	capa.add_child(boton_habilidad)
 	boton_canones = comercio._boton_redondo(BOTON_CANONES, _dibujar_canones, func() -> void: pass)
 	var lado := (RADIO_CANONES + 8.0) * 2.0
@@ -2448,6 +2452,8 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 	capa.add_child(boton_canones)
 	boton_tienda = comercio.boton_lugar(func() -> void:
 		comercio.dibujar_boton_lugar(boton_tienda, Objetos.icono_mejora("canones"), tr("Tienda")), abrir_tienda)
+	var lado_tienda := (Comercio.RADIO_BOTON + 10.0) * 2.0
+	Ui.anclar(boton_tienda, Vector2(1, 1), BOTON_TIENDA - Vector2.ONE * lado_tienda / 2.0, Vector2.ONE * lado_tienda)
 	capa.add_child(boton_tienda)
 	boton_terminar = Ui.boton(tr("Terminar ensayo"), false)
 	Ui.estilo_volver(boton_terminar)

@@ -37,6 +37,14 @@ const RADIO_PALANCA := 60.0
 const ALTO_HUD := 150.0
 const ANCHO_BRUJULA := 20.0
 const CAMARA_JUEGO := Vector3(0.0, 18.0, 11.5)
+# En partida un dedo en el centro de la pantalla gira la cámara alrededor del barco y la sube
+# o baja; dos dedos (o la rueda) la acercan. Inclinación en radianes, distancia en metros.
+const INCLINACION_CAMARA := 1.00226
+const INCLINACION_MIN := 0.9
+const INCLINACION_MAX := 1.4
+const DISTANCIA_CAMARA := 21.36
+const DISTANCIA_CAMARA_MIN := 14.0
+const DISTANCIA_CAMARA_MAX := 25.0
 # Radianes por segundo que gira sola la cámara alrededor del barco en el puerto.
 # En el menú la cámara va y viene por el lado del mar, sin pasar sobre la isla del puerto,
 # mirando a un punto entre el barco y la isla.
@@ -199,6 +207,10 @@ var altura_vitrina := 5.0
 var distancia_vitrina := 11.0
 var pausa_giro := 0.0
 var dedos_vitrina := {}
+var dedos_camara := {}
+var giro_juego := 0.0
+var inclinacion_juego := INCLINACION_CAMARA
+var distancia_juego := DISTANCIA_CAMARA
 
 # Módulos del mundo
 var islas: Islas
@@ -491,10 +503,13 @@ func _cobertura_pantalla() -> Vector2:
 	var tam := get_viewport().get_visible_rect().size
 	var aspecto := tam.x / maxf(tam.y, 1.0)
 	var medio := deg_to_rad(camara.fov) * 0.5
-	var borde := atan2(CAMARA_JUEGO.y, CAMARA_JUEGO.z) - medio
-	var largo := CAMARA_JUEGO.y / sin(borde)
+	# Con la cámara lo más alejada y tumbada que permite el jugador.
+	var alto := sin(INCLINACION_MIN) * DISTANCIA_CAMARA_MAX
+	var atras := cos(INCLINACION_MIN) * DISTANCIA_CAMARA_MAX
+	var borde := atan2(alto, atras) - medio
+	var largo := alto / sin(borde)
 	var lado := largo * cos(medio) * tan(medio) * aspecto
-	var delante := CAMARA_JUEGO.y / tan(borde) - CAMARA_JUEGO.z
+	var delante := alto / tan(borde) - atras
 	return Vector2(Vector2(largo, lado).length(), Vector2(delante, lado).length())
 
 
@@ -1303,9 +1318,32 @@ func _mover_camara(delta: float) -> void:
 	else:
 		var avance := jugador.proa() * jugador.velocidad * ESCALA * 0.7
 		foco = foco.lerp(objetivo + Vector3(avance.x, 0.0, avance.y), minf(1.0, delta * 2.2))
-		camara.position = camara.position.lerp(foco + CAMARA_JUEGO, minf(1.0, delta * 2.6))
+		camara.position = camara.position.lerp(foco + _desfase_camara(), minf(1.0, delta * (9.0 if not dedos_camara.is_empty() else 2.6)))
 		camara.h_offset = lerpf(camara.h_offset, 0.0, minf(1.0, delta * 2.0))
 	camara.look_at(foco, Vector3.UP)
+
+
+func _desfase_camara() -> Vector3:
+	var plano := cos(inclinacion_juego) * distancia_juego
+	return Vector3(sin(giro_juego) * plano, sin(inclinacion_juego) * distancia_juego, cos(giro_juego) * plano)
+
+
+func _reiniciar_camara() -> void:
+	dedos_camara.clear()
+	giro_juego = 0.0
+	inclinacion_juego = INCLINACION_CAMARA
+	distancia_juego = DISTANCIA_CAMARA
+
+
+# Franja central de la pantalla, fuera de los botones: ahí el dedo mueve la cámara.
+func _en_zona_camara(punto: Vector2) -> bool:
+	var ancho := controles.size.x
+	if punto.x < ancho * 0.3 or punto.x > ancho * 0.7:
+		return false
+	for control: Control in get_tree().get_nodes_in_group("control_tactil"):
+		if control.is_visible_in_tree() and control.get_global_rect().grow(8.0).has_point(punto):
+			return false
+	return true
 
 
 # Partida
@@ -2305,9 +2343,10 @@ func direccion_jugador() -> Vector2:
 		teclas.y -= 1.0
 	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
 		teclas.y += 1.0
+	# La palanca y las teclas van según la pantalla: si la cámara está girada, giran con ella.
 	if teclas != Vector2.ZERO:
-		return teclas.normalized()
-	return palanca
+		return teclas.normalized().rotated(-giro_juego)
+	return palanca.rotated(-giro_juego)
 
 
 # Teclado: Espacio dispara al frente, Q a la izquierda y E a la derecha.
@@ -2388,10 +2427,18 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	var rueda := event as InputEventMouseButton
+	if rueda and rueda.pressed and rueda.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		distancia_juego = clampf(distancia_juego + (-1.2 if rueda.button_index == MOUSE_BUTTON_WHEEL_UP else 1.2), DISTANCIA_CAMARA_MIN, DISTANCIA_CAMARA_MAX)
+		return
+
 	var toque := event as InputEventScreenTouch
 	if toque:
 		if toque.pressed:
 			if toque.position.y < ALTO_HUD * maxf(1.0, escala_controles):
+				return
+			if _en_zona_camara(toque.position) and _boton_fuego_en(toque.position) == "":
+				dedos_camara[toque.index] = toque.position
 				return
 			if toque.position.x < controles.size.x / 2.0:
 				if palanca_dedo == -1:
@@ -2407,12 +2454,22 @@ func _input(event: InputEvent) -> void:
 				palanca_dedo = -1
 				palanca = Vector2.ZERO
 			dedos_fuego.erase(toque.index)
+			dedos_camara.erase(toque.index)
 		return
 
 	var arrastre := event as InputEventScreenDrag
 	if arrastre and arrastre.index == palanca_dedo:
 		var alcance := RADIO_PALANCA * escala_controles
 		palanca = (arrastre.position - centro_palanca).limit_length(alcance) / alcance
+	elif arrastre and dedos_camara.has(arrastre.index):
+		if dedos_camara.size() == 1:
+			giro_juego = wrapf(giro_juego - arrastre.relative.x * 0.008, -PI, PI)
+			inclinacion_juego = clampf(inclinacion_juego - arrastre.relative.y * 0.004, INCLINACION_MIN, INCLINACION_MAX)
+		else:
+			var otro: Vector2 = dedos_camara[dedos_camara.keys().filter(func(i: int) -> bool: return i != arrastre.index)[0]]
+			var antes := otro.distance_to(dedos_camara[arrastre.index])
+			distancia_juego = clampf(distancia_juego - (otro.distance_to(arrastre.position) - antes) * 0.04, DISTANCIA_CAMARA_MIN, DISTANCIA_CAMARA_MAX)
+		dedos_camara[arrastre.index] = arrastre.position
 
 
 func _posicion_palanca_reposo() -> Vector2:
@@ -2719,6 +2776,7 @@ func _abrir_opciones_partida() -> void:
 	controles.visible = false
 	palanca_dedo = -1
 	dedos_fuego.clear()
+	dedos_camara.clear()
 	palanca = Vector2.ZERO
 
 
@@ -3515,6 +3573,9 @@ func _mostrar(nuevo: Estado) -> void:
 			musica.tocar("menu")
 	palanca_dedo = -1
 	dedos_fuego.clear()
+	dedos_camara.clear()
+	if not en_juego:
+		_reiniciar_camara()
 	palanca = Vector2.ZERO
 
 
