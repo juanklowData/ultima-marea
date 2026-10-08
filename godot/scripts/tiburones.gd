@@ -98,7 +98,7 @@ func vaciar() -> void:
 
 func reiniciar() -> void:
 	vaciar()
-	for _i in CANTIDAD:
+	for _i in mundo.cantidad_mapa(CANTIDAD):
 		var tiburon := Tiburon.new()
 		tiburon.pos = _lugar_libre()
 		tiburon.hogar = tiburon.pos

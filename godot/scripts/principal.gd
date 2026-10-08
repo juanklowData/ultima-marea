@@ -2,7 +2,7 @@ class_name Principal
 extends Node3D
 
 const ESCALA := 0.05
-const RADIO_MUNDO := 3900.0
+const RADIO_MUNDO := 1500.0
 const DANIO_BALA := 11.0
 # Segundos de recarga de cada arma; iguales para el jugador y los bots.
 const RECARGAS := {"proa": 1.8, "babor": 4.5, "estribor": 4.5}
@@ -14,8 +14,8 @@ const BOTONES_FUEGO := {
 }
 const VEL_BALA := 240.0
 const VIDA_BALA := 1.15
-const TOTAL_BARCOS := 50
-const TOTAL_TABLAS := 34
+const TOTAL_BARCOS := 20
+const TOTAL_TABLAS := 14
 const REPARACION := 26.0
 const TABLAS_RESTOS := 2
 const MEDIO_EJE_CASCO := 0.83
@@ -27,7 +27,7 @@ const DURACION_COMBATE := 7.0
 const REPARACION_RESTOS := 14.0
 # Segundos que flotan las tablas de un naufragio antes de hundirse.
 const VIDA_RESTOS := 25.0
-const ZONA_INICIAL := 3500.0
+const ZONA_INICIAL := 1350.0
 # Más allá de esta distancia a la cámara (metros 3D) los barcos y efectos no se dibujan.
 const DISTANCIA_VISIBLE := 60.0
 # Más allá (metros 3D desde el foco) los bots se calculan uno de cada CADA_LEJOS cuadros.
@@ -88,8 +88,8 @@ const NOMBRES_SUELTOS: Array[String] = [
 const TITULOS_PIRATAS: Array[String] = ["Capitán", "Capitana", "Almirante", "Contramaestre", "Corsario"]
 
 # Segundos que tarda en cerrarse cada fase; en total, 15 minutos de partida.
-const DURACION_FASES: Array[float] = [176.0, 148.0, 133.0, 120.0, 112.0, 107.0, 104.0]
-const RADIO_FASES: Array[float] = [2750.0, 2100.0, 1550.0, 1050.0, 650.0, 360.0, 190.0]
+const DURACION_FASES: Array[float] = [80.0, 70.0, 65.0, 60.0, 55.0, 50.0, 50.0]
+const RADIO_FASES: Array[float] = [1100.0, 850.0, 620.0, 420.0, 260.0, 160.0, 100.0]
 
 const COLOR_TEXTO := Paleta.TEXTO
 const COLOR_ORO := Paleta.ORO
@@ -766,6 +766,11 @@ func centro_juego() -> Vector2:
 	return jugador.pos if modo == "libre" and jugador != null else zona_centro
 
 
+# El mapa de la tormenta es pequeño (pensado para móviles): reparte menos peligros que el mar libre.
+func cantidad_mapa(cantidad: int) -> int:
+	return cantidad if modo == "libre" else maxi(1, roundi(cantidad * 0.45))
+
+
 func alcance_juego() -> float:
 	return MarLibre.ACTIVO if modo == "libre" else zona_radio
 
@@ -1399,13 +1404,14 @@ func _preparar_mar(carga: PantallaCarga) -> void:
 		camara.position = jugador.position + Vector3(0.0, 5.0, 11.0)
 		return
 	await _avanzar_carga(carga, "Levantando las islas...", 0.15)
-	await islas.generar(func(parte: float) -> void: carga.paso(tr("Levantando las islas..."), lerpf(0.15, 0.6, parte)))
+	islas.generar()
 	peligros.reiniciar()
-	await _avanzar_carga(carga, "Llamando a los piratas...", 0.6)
-
 	var alcance := ZONA_INICIAL * 0.9
 	jugador = _crear_barco(personalizacion, true, _punto_libre(300.0, alcance))
 	jugador.nombre = personalizacion.nombre_visible()
+	await islas.construir_cerca(jugador.pos * ESCALA, alcance_vista(),
+			func(parte: float) -> void: carga.paso(tr("Levantando las islas..."), lerpf(0.15, 0.6, parte)))
+	await _avanzar_carga(carga, "Llamando a los piratas...", 0.6)
 	var nombres := _nombres_bots(TOTAL_BARCOS - 1)
 	for i in range(1, TOTAL_BARCOS):
 		var bot := _crear_barco(Personalizacion.al_azar(), false, _punto_libre(300.0, alcance))
@@ -2650,10 +2656,8 @@ func _crear_menu(capa: CanvasLayer) -> void:
 	panel_menu = partes[0]
 	var cuerpo: VBoxContainer = partes[1]
 	cuerpo.add_child(_crear_logo())
-	var lema := Ui.etiqueta_panel("El mar no perdona.\n¿Serás el último a flote?", 30, COLOR_TEXTO)
+	var lema := Ui.etiqueta_panel("El mar no perdona.\n¿Serás el último a flote?", 19, Color("b9cdd2"))
 	lema.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lema.add_theme_color_override("font_outline_color", Color(0.02, 0.08, 0.12))
-	lema.add_theme_constant_override("outline_size", 8)
 	cuerpo.add_child(lema)
 
 	var espacio := Control.new()
@@ -2662,25 +2666,37 @@ func _crear_menu(capa: CanvasLayer) -> void:
 	cuerpo.add_child(_crear_boton_nivel())
 	var tesoro := HBoxContainer.new()
 	tesoro.add_theme_constant_override("separation", 10)
-	tesoro.add_child(Ui.icono_moneda(34))
-	texto_monedas_menu = Ui.etiqueta_panel("", 28, COLOR_ORO)
-	texto_monedas_menu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tesoro.add_child(texto_monedas_menu)
-	tesoro.add_child(Ui.icono_gema(32))
-	texto_gemas_menu = Ui.etiqueta_panel("", 28, Misiones.COLOR_GEMA)
-	texto_gemas_menu.autowrap_mode = TextServer.AUTOWRAP_OFF
-	tesoro.add_child(texto_gemas_menu)
 	cuerpo.add_child(tesoro)
+	texto_monedas_menu = _ficha_tesoro(tesoro, Ui.icono_moneda(30), COLOR_ORO)
+	texto_gemas_menu = _ficha_tesoro(tesoro, Ui.icono_gema(28), Misiones.COLOR_GEMA)
 	var tienda := Ui.boton("Tienda", false)
+	tienda.custom_minimum_size = Vector2(0, 62)
+	tienda.add_theme_font_size_override("font_size", 24)
+	tienda.icon = Ui.textura_moneda()
+	tienda.add_theme_constant_override("icon_max_width", 30)
+	tienda.add_theme_constant_override("h_separation", 12)
 	tienda.pressed.connect(_mostrar.bind(Estado.ASTILLERO))
 	cuerpo.add_child(tienda)
+
+	var titulo_modos := HBoxContainer.new()
+	titulo_modos.add_theme_constant_override("separation", 10)
+	cuerpo.add_child(titulo_modos)
+	for lado in 2:
+		var raya := ColorRect.new()
+		raya.color = Color(COLOR_ORO, 0.35)
+		raya.custom_minimum_size = Vector2(0, 2)
+		raya.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		raya.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		titulo_modos.add_child(raya)
+		if lado == 0:
+			var rotulo := Ui.etiqueta_panel(tr("ELIGE TU MODO"), 15, COLOR_ORO)
+			rotulo.autowrap_mode = TextServer.AUTOWRAP_OFF
+			titulo_modos.add_child(rotulo)
 	var modos := HBoxContainer.new()
 	modos.add_theme_constant_override("separation", 10)
 	cuerpo.add_child(modos)
 	for nombre in ["tormenta", "libre", "moba"]:
-		var boton_modo := Ui.boton({"tormenta": "Tormenta", "libre": "Libre", "moba": "MOBA 1v1"}[nombre], true)
-		boton_modo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		boton_modo.add_theme_font_size_override("font_size", 24)
+		var boton_modo := _tarjeta_modo(nombre)
 		if nombre == "moba":
 			boton_modo.pressed.connect(func() -> void: moba.abrir_seleccion())
 		else:
@@ -2698,6 +2714,105 @@ func _crear_menu(capa: CanvasLayer) -> void:
 	Ui.anclar(boton_idioma, Vector2(0, 0), Vector2(124, 36), Vector2(92, 64))
 	boton_idioma.pressed.connect(_cambiar_idioma)
 	capa.add_child(boton_idioma)
+
+
+# Monedas o gemas del menú en una ficha redondeada; devuelve la cifra para actualizarla.
+func _ficha_tesoro(fila: HBoxContainer, icono: TextureRect, color: Color) -> Label:
+	var ficha := PanelContainer.new()
+	ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(0, 0, 0, 0.28)
+	estilo.border_color = Color(color, 0.45)
+	estilo.set_border_width_all(2)
+	estilo.set_corner_radius_all(26)
+	estilo.content_margin_left = 12
+	estilo.content_margin_right = 16
+	estilo.content_margin_top = 6
+	estilo.content_margin_bottom = 6
+	ficha.add_theme_stylebox_override("panel", estilo)
+	fila.add_child(ficha)
+	var dentro := HBoxContainer.new()
+	dentro.add_theme_constant_override("separation", 10)
+	ficha.add_child(dentro)
+	dentro.add_child(icono)
+	var cifra := Ui.etiqueta_panel("", 24, color)
+	cifra.autowrap_mode = TextServer.AUTOWRAP_OFF
+	cifra.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cifra.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dentro.add_child(cifra)
+	return cifra
+
+
+const MODOS_MENU := {
+	"tormenta": {"nombre": "Tormenta", "info": "Esquiva la tormenta", "color": Color("6a55d8")},
+	"libre": {"nombre": "Libre", "info": "Explora y comercia", "color": Color("1f9e8c")},
+	"moba": {"nombre": "MOBA 1v1", "info": "Capitanes frente a frente", "color": Color("d0533f")},
+}
+
+
+# Cada modo es una tarjeta con su color, su dibujo, el nombre y una frase.
+func _tarjeta_modo(nombre: String) -> Button:
+	var color: Color = MODOS_MENU[nombre]["color"]
+	var boton := Button.new()
+	boton.focus_mode = Control.FOCUS_NONE
+	boton.custom_minimum_size = Vector2(0, 132)
+	boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = color.darkened(0.45)
+	normal.border_color = color
+	normal.set_border_width_all(2)
+	normal.border_width_bottom = 6
+	normal.set_corner_radius_all(18)
+	normal.shadow_color = Color(0, 0, 0, 0.3)
+	normal.shadow_size = 6
+	normal.shadow_offset = Vector2(0, 3)
+	var encima := normal.duplicate() as StyleBoxFlat
+	encima.bg_color = color.darkened(0.3)
+	var pulsado := normal.duplicate() as StyleBoxFlat
+	pulsado.bg_color = color.darkened(0.2)
+	pulsado.border_width_bottom = 2
+	pulsado.border_width_top = 6
+	boton.add_theme_stylebox_override("normal", normal)
+	boton.add_theme_stylebox_override("hover", encima)
+	boton.add_theme_stylebox_override("pressed", pulsado)
+	boton.draw.connect(_dibujar_modo.bind(boton, nombre))
+	return boton
+
+
+func _dibujar_modo(boton: Button, nombre: String) -> void:
+	var datos: Dictionary = MODOS_MENU[nombre]
+	var color: Color = datos["color"]
+	var ancho := boton.size.x
+	var c := Vector2(ancho / 2.0, 42.0)
+	boton.draw_circle(c, 28.0, color.darkened(0.15))
+	boton.draw_circle(c, 25.0, color.darkened(0.6))
+	var claro := Color("fff3dc")
+	match nombre:
+		"tormenta":
+			for nube: Vector3 in [Vector3(-8, -5, 8.0), Vector3(2, -9, 10.0), Vector3(11, -4, 7.0), Vector3(1, -2, 9.0)]:
+				boton.draw_circle(c + Vector2(nube.x, nube.y), nube.z, Color("c9d1e8"))
+			boton.draw_colored_polygon(PackedVector2Array([c + Vector2(2, 2), c + Vector2(-6, 13), c + Vector2(0, 13),
+					c + Vector2(-4, 22), c + Vector2(8, 9), c + Vector2(2, 9), c + Vector2(6, 2)]), Color("ffe24a"))
+		"libre":
+			boton.draw_arc(c, 17.0, 0.0, TAU, 32, claro, 2.0, true)
+			boton.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -15), c + Vector2(4, 0), c + Vector2(-4, 0)]), Color("ff6b5b"))
+			boton.draw_colored_polygon(PackedVector2Array([c + Vector2(0, 15), c + Vector2(4, 0), c + Vector2(-4, 0)]), claro)
+			boton.draw_colored_polygon(PackedVector2Array([c + Vector2(-15, 0), c + Vector2(0, -3), c + Vector2(0, 3)]), Color(claro, 0.7))
+			boton.draw_colored_polygon(PackedVector2Array([c + Vector2(15, 0), c + Vector2(0, -3), c + Vector2(0, 3)]), Color(claro, 0.7))
+			boton.draw_circle(c, 2.5, COLOR_ORO)
+		"moba":
+			for lado: float in [-1.0, 1.0]:
+				var punta := c + Vector2(lado * 14.0, -14.0)
+				var mango := c + Vector2(-lado * 12.0, 12.0)
+				boton.draw_line(mango, punta, Color("dfe6ee"), 3.5, true)
+				var guarda := (punta - mango).normalized().orthogonal() * 6.0
+				var cruz := mango.lerp(punta, 0.22)
+				boton.draw_line(cruz - guarda, cruz + guarda, COLOR_ORO, 3.0, true)
+				boton.draw_circle(mango, 2.5, COLOR_ORO)
+	var fuente := ThemeDB.fallback_font
+	boton.draw_string_outline(fuente, Vector2(0, 95), tr(datos["nombre"]), HORIZONTAL_ALIGNMENT_CENTER, ancho, 21, 6, Color(0, 0, 0, 0.6))
+	boton.draw_string(fuente, Vector2(0, 95), tr(datos["nombre"]), HORIZONTAL_ALIGNMENT_CENTER, ancho, 21, Color.WHITE)
+	boton.draw_string(fuente, Vector2(4, 116), tr(datos["info"]), HORIZONTAL_ALIGNMENT_CENTER, ancho - 8, 12, Color(1, 1, 1, 0.75))
 
 
 func _cambiar_idioma() -> void:
@@ -3539,7 +3654,7 @@ func _mostrar(nuevo: Estado) -> void:
 	minimapa.visible = en_juego
 	marcadores.visible = en_juego
 	controles.visible = estado == Estado.JUGANDO
-	texto_monedas_menu.text = tr("Tesoro: %d monedas") % personalizacion.monedas
+	texto_monedas_menu.text = str(personalizacion.monedas)
 	texto_gemas_menu.text = str(personalizacion.gemas)
 	_pintar_nivel_menu()
 	panel_niveles.visible = estado == Estado.NIVELES

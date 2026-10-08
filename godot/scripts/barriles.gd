@@ -70,7 +70,7 @@ func vaciar() -> void:
 
 func reiniciar() -> void:
 	vaciar()
-	for _i in CANTIDAD:
+	for _i in mundo.cantidad_mapa(CANTIDAD):
 		var barril := Barril.new()
 		barril.pos = _lugar_libre()
 		barril.rumbo = randf() * TAU

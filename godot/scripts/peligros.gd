@@ -240,7 +240,7 @@ func vaciar() -> void:
 
 func reiniciar() -> void:
 	vaciar()
-	for _i in TOTAL_REMOLINOS:
+	for _i in mundo.cantidad_mapa(TOTAL_REMOLINOS):
 		var remolino := Remolino.new()
 		remolino.radio = randf_range(45.0, 65.0)
 		remolino.pos = _lugar_libre(remolino.radio + 40.0, mundo.alcance_juego() * 0.85)
@@ -249,7 +249,7 @@ func reiniciar() -> void:
 		remolino.fase = randf() * 100.0
 		_crear_remolino(remolino)
 		remolinos.append(remolino)
-	for _i in TOTAL_KRAKENS:
+	for _i in mundo.cantidad_mapa(TOTAL_KRAKENS):
 		var kraken := Kraken.new()
 		kraken.pos = lugar_kraken(kraken, mundo.alcance_juego() * 0.8)
 		kraken.hogar = kraken.pos
@@ -260,7 +260,7 @@ func reiniciar() -> void:
 		kraken.espera_rugido = randf_range(0.0, 6.0)
 		_crear_kraken(kraken)
 		krakens.append(kraken)
-	for _i in TOTAL_VENTISCAS:
+	for _i in mundo.cantidad_mapa(TOTAL_VENTISCAS):
 		var ventisca := Ventisca.new()
 		ventisca.radio = randf_range(90.0, 130.0)
 		ventisca.pos = _lugar_libre(ventisca.radio, mundo.alcance_juego() * 0.85)

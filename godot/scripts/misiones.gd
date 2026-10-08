@@ -123,17 +123,17 @@ func vaciar() -> void:
 func reiniciar() -> void:
 	vaciar()
 	# El primer puerto queda cerca del jugador para empezar enseguida.
-	var cerca := _lugar_libre(mundo.jugador.pos, 350.0, 650.0, 1000.0)
+	var cerca := _lugar_libre(mundo.jugador.pos, 250.0, 450.0, 500.0)
 	_crear_puerto(cerca)
-	for _i in PUERTOS - 1:
-		_crear_puerto(_lugar_libre(mundo.zona_centro, 300.0, mundo.zona_radio * 0.75, 1000.0))
-	for _i in COFRES_GEMAS:
-		_crear_cofre(_lugar_libre(mundo.zona_centro, 200.0, mundo.zona_radio * 0.9, 800.0))
+	for _i in mundo.cantidad_mapa(PUERTOS - 1):
+		_crear_puerto(_lugar_libre(mundo.zona_centro, 300.0, mundo.zona_radio * 0.75, 500.0))
+	for _i in mundo.cantidad_mapa(COFRES_GEMAS):
+		_crear_cofre(_lugar_libre(mundo.zona_centro, 200.0, mundo.zona_radio * 0.9, 400.0))
 
 
 # En el mar libre los puertos salen con las celdas del mapa; al zarpar solo se reparten gemas.
 func poner_gemas() -> void:
-	for _i in COFRES_GEMAS:
+	for _i in mundo.cantidad_mapa(COFRES_GEMAS):
 		_crear_cofre(_lugar_libre(mundo.centro_juego(), 600.0, mundo.alcance_juego(), 800.0))
 
 

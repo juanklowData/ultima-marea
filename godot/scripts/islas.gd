@@ -6,10 +6,12 @@ extends Node3D
 
 # Todo el mar se reparte al azar en cada partida.
 const ISLAS_CENTRO := 3
-const ISLAS_GRANDES := 24
-const ARCHIPIELAGOS := 8
-const ISLOTES_CHICOS := 40
-const GRUPOS_ROCAS := 80
+# Metros 3D antes de entrar en vista a los que se construye una isla, para que no aparezca de golpe.
+const MARGEN_CONSTRUIR := 25.0
+const ISLAS_GRANDES := 5
+const ARCHIPIELAGOS := 2
+const ISLOTES_CHICOS := 7
+const GRUPOS_ROCAS := 14
 # Hueco mínimo entre orillas: el normal y el de los canales dentro de un archipiélago
 # (cabe un galeón con margen).
 const SEPARACION_ISLAS := 110.0
@@ -53,6 +55,8 @@ var algas: Array[ArrayMesh] = []
 # Mallas sueltas del fondo: rama, esfera, semiesfera, caja, cono.
 var piezas_fondo := {}
 var espera_recorte := 0.0
+# Islas ya repartidas cuyo modelo aún no se ha construido porque quedan lejos.
+var pendientes: Array[Circulo] = []
 # Solo en el puerto: el muelle y el ángulo de la orilla de donde sale (NAN en partida).
 var muelle: Muelle
 var angulo_muelle := NAN
@@ -90,29 +94,45 @@ func cerca(punto: Vector2, margen := 0.0) -> Array[Circulo]:
 	return celdas.get(Vector2i(floori(punto.x / CELDA), floori(punto.y / CELDA)), ninguna)
 
 
-# Borra el mar anterior y reparte uno nuevo. Construir todas las islas tarda varios segundos en
-# un móvil: cada décima de segundo cede un cuadro y avisa a avance (de 0 a 1) para la barra de carga.
-func generar(avance := Callable()) -> void:
+# Borra el mar anterior y reparte uno nuevo. Solo se fija dónde va cada isla y su forma (con
+# eso ya chocan los barcos); los modelos se construyen al acercarse, con construir_cerca y
+# recortar, porque armarlos todos de golpe tarda varios segundos en un móvil.
+func generar() -> void:
 	_vaciar()
 	# Cerca del centro, donde acaba la tormenta, siempre hay islas para cubrirse.
-	_repartir_islotes(ISLAS_CENTRO, 55.0, 85.0, Vector2.ZERO, 650.0)
+	_repartir_islotes(ISLAS_CENTRO, 55.0, 85.0, Vector2.ZERO, 420.0)
 	_repartir_islotes(ISLAS_GRANDES, 58.0, 96.0)
 	_repartir_archipielagos()
 	_repartir_islotes(ISLOTES_CHICOS, 40.0, 54.0)
 	_repartir_islotes(GRUPOS_ROCAS, 22.0, 34.0, Vector2.ZERO, Principal.RADIO_MUNDO * 0.85, 80.0)
-	var desde := Time.get_ticks_msec()
-	for k in islotes.size():
-		var isla := islotes[k]
-		if isla.radio <= RADIO_ROCAS:
-			add_child(_crear_rocas(isla))
-		else:
+	for isla in islotes:
+		if isla.radio > RADIO_ROCAS:
 			isla.radio *= 1.15
 			isla.dar_forma()
-			add_child(_crear_isla(isla))
+		pendientes.append(isla)
+
+
+# Construye ya las islas que se verán alrededor de "punto" (metros 3D); cada décima de segundo
+# cede un cuadro y avisa a avance (de 0 a 1) para la barra de carga.
+func construir_cerca(punto: Vector2, alcance: float, avance := Callable()) -> void:
+	var cerca := pendientes.filter(func(isla: Circulo) -> bool: return _a_la_vista(isla, punto, alcance))
+	var desde := Time.get_ticks_msec()
+	for k in cerca.size():
+		_construir(cerca[k])
 		if avance.is_valid() and Time.get_ticks_msec() - desde > 100:
-			avance.call(float(k + 1) / islotes.size())
+			avance.call(float(k + 1) / cerca.size())
 			await get_tree().process_frame
 			desde = Time.get_ticks_msec()
+
+
+func _a_la_vista(isla: Circulo, punto: Vector2, alcance: float) -> bool:
+	var r := isla.radio * Principal.ESCALA
+	return (isla.pos * Principal.ESCALA).distance_to(punto) < alcance + MARGEN_CONSTRUIR + maxf(r * ALCANCE_ORILLA * 1.15, r + alcance_fondo(r))
+
+
+func _construir(isla: Circulo) -> void:
+	pendientes.erase(isla)
+	add_child(_crear_rocas(isla) if isla.radio <= RADIO_ROCAS else _crear_isla(isla))
 
 
 # El puerto del menú: una sola isla con su muelle, que sale de su orilla oeste, su
@@ -143,6 +163,7 @@ func soltar_todo() -> Array[Node]:
 	for hijo: Node3D in hijos:
 		hijo.visible = false
 	islotes.clear()
+	pendientes.clear()
 	materiales_orilla.clear()
 	muelle = null
 	return hijos
@@ -152,6 +173,7 @@ func _vaciar() -> void:
 	for hijo in get_children():
 		hijo.queue_free()
 	islotes.clear()
+	pendientes.clear()
 	materiales_orilla.clear()
 	muelle = null
 
@@ -170,6 +192,12 @@ func recortar(delta: float, foco: Vector3, alcance: float) -> void:
 		return
 	espera_recorte = 0.2
 	var foco_plano := Vector2(foco.x, foco.z)
+	# Como mucho una isla nueva por vuelta para no dar tirones; mientras falten, se mira más seguido.
+	for isla in pendientes:
+		if _a_la_vista(isla, foco_plano, alcance):
+			_construir(isla)
+			espera_recorte = 0.05
+			break
 	var cercanas: Array = []
 	for nodo: Node3D in get_children():
 		var r: float = nodo.get_meta("radio", 0.0)
