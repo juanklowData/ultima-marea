@@ -60,7 +60,7 @@ const GIRO_VITRINA := 0.12
 # Segundos sin girar solo después de que el jugador mueva la cámara a mano.
 const PAUSA_GIRO_MANUAL := 300.0
 const LADO_AGUA := 190.0
-const DIVISIONES_AGUA := 64
+const DIVISIONES_AGUA := 32
 const ANCHO_PANEL := 540.0
 const MONEDAS_VICTORIA := 15
 const MONEDAS_POR_HUNDIDO := 1
@@ -450,7 +450,7 @@ const EFECTOS_VISUALES := {
 
 
 const CALIDADES_MAR: Array[String] = ["Plano", "Suave", "Con olas", "Detallado"]
-const DIVISIONES_MAR: Array[int] = [32, 44, DIVISIONES_AGUA, 96]
+const DIVISIONES_MAR: Array[int] = [16, 24, DIVISIONES_AGUA, 48]
 var botones_mar: Array[Button] = []
 
 
@@ -475,7 +475,6 @@ func aplicar_graficos() -> void:
 	camara.far = 400.0 if efecto_visual("lejos") else [140.0, 180.0, 260.0, 400.0][nivel]
 	var mar := calidad_mar()
 	agua.material_override = material_agua
-	material_agua.set_shader_parameter("detalle", mar >= 2)
 	var plano := agua.mesh as PlaneMesh
 	plano.subdivide_width = DIVISIONES_MAR[mar]
 	plano.subdivide_depth = plano.subdivide_width
@@ -1165,15 +1164,13 @@ func altura_mar(x: float, z: float) -> float:
 	var p := Vector2(x, z)
 	var radio := zona_radio * ESCALA
 	var fuera := smoothstep(radio, radio + 8.0, p.distance_to(zona_centro * ESCALA))
-	var h := _ola(p, Vector2(1.0, 0.3), 14.0, 0.12) + _ola(p, Vector2(-0.4, 1.0), 9.0, 0.08) + _ola(p, Vector2(0.7, -0.7), 6.0, 0.05) \
-		+ _ola(p, Vector2(-0.8, -0.35), 4.3, 0.04)
-	return peligros.ajustar_mar(x, z, h * (1.0 + fuera * 2.0) + _ola(p, Vector2(0.2, 1.0), 21.0, 0.35) * fuera)
+	var h := _ola(p, Vector2(1.0, 0.3), 18.0, 0.07) + _ola(p, Vector2(-0.4, 1.0), 11.0, 0.04)
+	return peligros.ajustar_mar(x, z, h * (1.0 + fuera * 1.5) + _ola(p, Vector2(0.2, 1.0), 21.0, 0.25) * fuera)
 
 
 func _ola(p: Vector2, direccion: Vector2, largo: float, amplitud: float) -> float:
 	var k := TAU / largo
-	var s := sin(direccion.normalized().dot(p) * k - sqrt(9.8 * k) * tiempo)
-	return amplitud * (2.0 * pow(0.5 + 0.5 * s, 1.8) - 0.6)
+	return amplitud * sin(direccion.normalized().dot(p) * k - sqrt(9.8 * k) * tiempo * 0.6)
 
 
 func fuerza_tormenta(punto: Vector2) -> float:

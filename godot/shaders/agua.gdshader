@@ -1,5 +1,5 @@
 shader_type spatial;
-// Estilo retro low poly: opaco, sin luz por píxel, facetas planas y colores por bandas.
+// Mar sencillo: opaco, sin luz por píxel, una ondulación suave y lenta y color liso.
 render_mode unshaded, cull_back, depth_draw_opaque;
 
 uniform vec4 color_hondo : source_color = vec4(0.02, 0.15, 0.23, 1.0);
@@ -12,8 +12,6 @@ uniform vec2 zona_centro = vec2(0.0);
 uniform float zona_radio = 80.0;
 uniform float relampago = 0.0;
 uniform float tiempo = 0.0;
-// Con detalle las crestas de espuma se ven más blancas.
-uniform bool detalle = true;
 // Remolinos cercanos: x, z, radio y profundidad del embudo (metros). Radio 0 = vacío.
 uniform vec4 remolinos[6];
 // Bajíos de las islas cercanas (Islas.BAJIOS): x, z, radio interior y exterior del agua
@@ -30,16 +28,12 @@ float fuera_de_zona(vec2 p) {
 // Debe coincidir con Principal.altura_mar() para que los barcos floten sobre la ola.
 float ola(vec2 p, vec2 dir, float largo, float amp, float t) {
 	float k = 6.2831853 / largo;
-	float s = sin(dot(normalize(dir), p) * k - sqrt(9.8 * k) * t);
-	return amp * (2.0 * pow(0.5 + 0.5 * s, 1.8) - 0.6);
+	return amp * sin(dot(normalize(dir), p) * k - sqrt(9.8 * k) * t * 0.6);
 }
 
 float altura_mar(vec2 p, float t, float fuera) {
-	float h = ola(p, vec2(1.0, 0.3), 14.0, 0.12, t)
-		+ ola(p, vec2(-0.4, 1.0), 9.0, 0.08, t)
-		+ ola(p, vec2(0.7, -0.7), 6.0, 0.05, t)
-		+ ola(p, vec2(-0.8, -0.35), 4.3, 0.04, t);
-	return h * (1.0 + fuera * 2.0) + ola(p, vec2(0.2, 1.0), 21.0, 0.35, t) * fuera;
+	float h = ola(p, vec2(1.0, 0.3), 18.0, 0.07, t) + ola(p, vec2(-0.4, 1.0), 11.0, 0.04, t);
+	return h * (1.0 + fuera * 1.5) + ola(p, vec2(0.2, 1.0), 21.0, 0.25, t) * fuera;
 }
 
 // Debe coincidir con Peligros.ajustar_mar(): el remolino calma las olas y hunde el agua.
@@ -69,26 +63,13 @@ void vertex() {
 
 void fragment() {
 	vec2 p = pos_mundo.xz;
-	// Normal de cada triángulo de la malla: las olas se ven como facetas planas.
-	vec3 n = normalize(cross(dFdx(pos_mundo), dFdy(pos_mundo)));
-	if (n.y < 0.0) {
-		n = -n;
-	}
-	float luz = clamp(dot(n, normalize(vec3(0.45, 1.0, 0.3))), 0.0, 1.0);
-
-	// Tres tonos según la altura de la ola, sin degradados.
-	float alto = clamp(0.5 + altura * 2.2, 0.0, 1.0);
-	float banda = min(floor(alto * 3.0) * 0.5, 1.0);
-	vec3 color = mix(color_hondo.rgb, color_claro.rgb, banda);
+	// Color liso con un leve aclarado en lo alto de la ondulación.
+	vec3 color = mix(color_hondo.rgb, color_claro.rgb, clamp(0.75 + altura * 1.5, 0.0, 1.0));
 	color = mix(color, color_cielo.rgb, 0.12);
-	color *= 0.78 + 0.32 * luz;
-	// Crestas blancas planas en lo alto de las olas.
-	color = mix(color, color_espuma.rgb, step(0.22, altura) * (detalle ? 0.55 : 0.4));
 
 	float d = length(p - zona_centro);
 	float fuera_color = step(zona_radio, d);
-	vec3 bravo = mix(color_tormenta.rgb, vec3(0.08, 0.12, 0.16), banda) * (0.8 + 0.3 * luz)
-		+ step(0.3, altura) * vec3(0.35, 0.38, 0.42);
+	vec3 bravo = mix(color_tormenta.rgb, vec3(0.08, 0.12, 0.16), clamp(0.5 + altura, 0.0, 1.0));
 	color = mix(color, bravo, fuera_color);
 	color += vec3(0.55, 0.6, 0.8) * relampago * fuera_color * 0.3;
 	color = mix(color, color_espuma.rgb, 1.0 - step(0.4, abs(d - zona_radio)));

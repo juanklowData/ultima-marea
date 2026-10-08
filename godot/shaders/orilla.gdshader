@@ -26,17 +26,13 @@ float ruido(vec2 p) {
 // Debe coincidir con agua.gdshader para que la espuma quede pegada al agua.
 float ola(vec2 p, vec2 dir, float largo, float amp, float t) {
 	float k = 6.2831853 / largo;
-	float s = sin(dot(normalize(dir), p) * k - sqrt(9.8 * k) * t);
-	return amp * (2.0 * pow(0.5 + 0.5 * s, 1.8) - 0.6);
+	return amp * sin(dot(normalize(dir), p) * k - sqrt(9.8 * k) * t * 0.6);
 }
 
 float altura_mar(vec2 p, float t) {
 	float fuera = smoothstep(zona_radio, zona_radio + 8.0, length(p - zona_centro));
-	float h = ola(p, vec2(1.0, 0.3), 14.0, 0.12, t)
-		+ ola(p, vec2(-0.4, 1.0), 9.0, 0.08, t)
-		+ ola(p, vec2(0.7, -0.7), 6.0, 0.05, t)
-		+ ola(p, vec2(-0.8, -0.35), 4.3, 0.04, t);
-	return h * (1.0 + fuera * 2.0) + ola(p, vec2(0.2, 1.0), 21.0, 0.35, t) * fuera;
+	float h = ola(p, vec2(1.0, 0.3), 18.0, 0.07, t) + ola(p, vec2(-0.4, 1.0), 11.0, 0.04, t);
+	return h * (1.0 + fuera * 1.5) + ola(p, vec2(0.2, 1.0), 21.0, 0.25, t) * fuera;
 }
 
 void vertex() {
