@@ -1,0 +1,38 @@
+---
+description: Cómo se generan los archivos de Android (.apk/.aab) y de iPhone (.ipa) de Última Marea
+alwaysApply: true
+---
+
+# Compilar para Android e iPhone
+
+Solo se compila cuando el usuario lo pide expresamente; si no, se hacen los cambios, se revisan con `--check-only` y se suben.
+
+## Android: en este PC con Godot
+
+- Godot: `C:/Users/usuario/Desktop/Godot_v4.7.2-stable_win64.exe`. Proyecto: `C:/Users/usuario/Desktop/Ultima Marea/godot`.
+- Credenciales de firma ya configuradas en `godot/.godot/export_credentials.cfg`. Nunca leer ni mostrar `C:\Users\usuario\Documents\Jedal_claves_android\LEEME_contrasena.txt`.
+- Exportar de uno en uno (si se encadenan en un bucle, el segundo puede no generarse):
+
+```powershell
+$g="C:/Users/usuario/Desktop/Godot_v4.7.2-stable_win64.exe"; $p="C:/Users/usuario/Desktop/Ultima Marea/godot"
+& $g --headless --path $p --export-release "Android APK" "../android_builds/ultima_marea.apk"
+& $g --headless --path $p --export-release "Android Play Store" "../android_builds/ultima_marea.aab"
+```
+
+- Salida: `C:\Users\usuario\Desktop\Ultima Marea\android_builds\` (ignorada por git). Comprobar la fecha de los archivos después de exportar.
+- Los permisos de red (internet, wifi) están en los presets de Android de `godot/export_presets.cfg`; los necesita el 1 contra 1 por wifi.
+
+## iPhone: en GitHub Actions (no en este PC)
+
+- En Windows no hay plantilla de iOS ni Xcode: NO exportar el preset "iOS" localmente ni descargar las plantillas.
+- El `.ipa` lo compila el flujo `.github/workflows/ios.yml` ("iOS para probar") en un Mac de GitHub. Se lanza a mano y compila lo que haya en `main`, así que antes hay que subir los cambios:
+
+```powershell
+cd "C:\Users\usuario\Desktop\Ultima Marea"
+gh workflow run ios.yml --ref main
+gh run list --workflow ios.yml --limit 1          # esperar a que termine en "success"
+gh run download <id> -n UltimaMarea-iOS -D "C:\Users\usuario\Desktop\UltimaMarea_iPhone"
+```
+
+- Antes de descargar, borrar el `UltimaMarea.ipa` viejo de `C:\Users\usuario\Desktop\UltimaMarea_iPhone`.
+- El `.ipa` sale sin firmar; el usuario lo instala desde Windows con Sideloadly, que lo firma con su Apple ID.
