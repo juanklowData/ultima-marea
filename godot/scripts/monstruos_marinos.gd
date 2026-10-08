@@ -14,15 +14,15 @@ const EQUIPO := 2
 # Guaridas de una mitad del mapa; la otra mitad las tiene en espejo (salvo los jefes, que
 # están uno en cada mitad).
 const GUARIDAS := [
-	["serpiente", Vector2(-780.0, -300.0)],
-	["serpiente", Vector2(-300.0, -780.0)],
-	["tiburon", Vector2(-420.0, -420.0)],
-	["tiburon", Vector2(-420.0, -420.0)],
-	["tiburon", Vector2(-150.0, -900.0)],
-	["tiburon", Vector2(-150.0, -900.0)],
+	["serpiente", Vector2(-560.0, -170.0)],
+	["serpiente", Vector2(-170.0, -560.0)],
+	["tiburon", Vector2(-250.0, -250.0)],
+	["tiburon", Vector2(-250.0, -250.0)],
+	["tiburon", Vector2(-80.0, -620.0)],
+	["tiburon", Vector2(-80.0, -620.0)],
 ]
-const GUARIDA_CANGREJO := Vector2(-620.0, -620.0)
-const GUARIDA_KRAKEN := Vector2(620.0, 620.0)
+const GUARIDA_CANGREJO := Vector2(-420.0, -420.0)
+const GUARIDA_KRAKEN := Vector2(420.0, 420.0)
 # ataque: "escupir" lanza una bola de agua; el resto golpea directo a quien tenga a su alcance.
 const TIPOS := {
 	"tiburon": {"nombre": "Tiburón", "vida": 110.0, "danio": 6.0, "oro": 18, "xp": 12, "escala": 0.75, "radio": 22.0,
@@ -38,7 +38,7 @@ const TIPOS := {
 }
 const VEL_NADO := 0.35
 # Si su agresor se aleja más que esto de la guarida, lo deja y vuelve a casa.
-const CORREA := 420.0
+const CORREA := 300.0
 const CURA_EN_CASA := 0.2
 const REAPARICION := 90.0
 const REAPARICION_JEFE := 150.0

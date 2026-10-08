@@ -6,9 +6,13 @@ extends Node3D
 # por el carril. Los barcos ganan oro y experiencia, suben de nivel, compran mejoras en la
 # base y tienen una habilidad según su casco. Gana la armada que derribe el nexo rival.
 
-const RADIO_MAPA := 1900.0
-const BASES: Array[Vector2] = [Vector2(-1200.0, 1200.0), Vector2(1200.0, -1200.0)]
-const ESQUINAS := {"arriba": Vector2(-1200.0, -1200.0), "abajo": Vector2(1200.0, 1200.0)}
+const RADIO_MAPA := 1250.0
+const BASES: Array[Vector2] = [Vector2(-750.0, 750.0), Vector2(750.0, -750.0)]
+const ESQUINAS := {"arriba": Vector2(-750.0, -750.0), "abajo": Vector2(750.0, 750.0)}
+# El borde del mapa es un cordón de rocas; los barcos se quedan un poco antes de tocarlas.
+const SEPARACION_CORDON := 72.0
+const RADIO_ROCA_CORDON := 28.0
+const MARGEN_CORDON := 55.0
 # En el 1 contra 1 solo hay un carril, el del medio (la diagonal entre las dos bases).
 const CARRILES: Array[String] = ["medio"]
 const COLORES: Array[Color] = [Color("4fa8ff"), Color("ff5a4f")]
@@ -17,7 +21,7 @@ const POR_EQUIPO := 1
 # Carril de cada capitán: el jugador (primero de la armada azul) va donde quiera.
 const REPARTO: Array[String] = ["medio"]
 # Dónde va cada torre, en fracción del carril desde la propia base: exterior e interior.
-const FRACCIONES_TORRE: Array[float] = [0.41, 0.23]
+const FRACCIONES_TORRE: Array[float] = [0.3, 0.17]
 const RADIO_TORRE := 52.0
 # Las torres quedan a un lado del carril para que los botes no choquen con su islote.
 const APARTE_TORRE := 120.0
@@ -647,21 +651,21 @@ func _crear_islas() -> void:
 	var islas := mundo.islas
 	var puestas: Array[Circulo] = []
 	for _intento in 400:
-		if puestas.size() >= 18:
+		if puestas.size() >= 10:
 			break
-		var radio := randf_range(48.0, 92.0) if puestas.size() < 10 else randf_range(24.0, 34.0)
-		var punto := Vector2(randf_range(-1500.0, 1500.0), randf_range(-1500.0, 1500.0))
+		var radio := randf_range(44.0, 76.0) if puestas.size() < 6 else randf_range(24.0, 34.0)
+		var punto := Vector2(randf_range(-RADIO_MAPA, RADIO_MAPA), randf_range(-RADIO_MAPA, RADIO_MAPA))
 		if punto.y > -punto.x:
 			continue
-		if _distancia_a_carriles(punto) < radio + 240.0 or punto.length() > RADIO_MAPA - 250.0:
+		if _distancia_a_carriles(punto) < radio + 200.0 or punto.length() > RADIO_MAPA - 170.0:
 			continue
-		if punto.distance_to(BASES[0]) < 600.0 or punto.distance_to(BASES[1]) < 600.0:
+		if punto.distance_to(BASES[0]) < 420.0 or punto.distance_to(BASES[1]) < 420.0:
 			continue
 		if absf(punto.y + punto.x) < radio * 2.0 + 60.0:
 			continue
 		var libre := true
 		for otra in puestas:
-			if punto.distance_to(otra.pos) < otra.radio + radio + 110.0:
+			if punto.distance_to(otra.pos) < otra.radio + radio + 90.0:
 				libre = false
 				break
 		if libre:
@@ -677,6 +681,18 @@ func _crear_islas() -> void:
 				nodo = islas._crear_isla(espejo)
 			islas.add_child(nodo)
 			islas.islotes.append(espejo)
+	_crear_cordon()
+
+
+# Anillo de rocas en el borde del mapa que marca hasta dónde se puede navegar.
+func _crear_cordon() -> void:
+	var islas := mundo.islas
+	var cuantas := ceili(TAU * RADIO_MAPA / SEPARACION_CORDON)
+	for k in cuantas:
+		var angulo := TAU * k / cuantas + randf_range(-0.01, 0.01)
+		var roca := Circulo.new(Vector2.from_angle(angulo) * (RADIO_MAPA + randf_range(-8.0, 8.0)), RADIO_ROCA_CORDON * randf_range(0.85, 1.15))
+		islas.add_child(islas._crear_rocas(roca))
+		islas.islotes.append(roca)
 
 
 # Islote con una torre de piedra (o el nexo: un castillo con un faro del color de la armada).

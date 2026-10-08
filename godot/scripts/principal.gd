@@ -756,7 +756,7 @@ func a_3d(punto: Vector2, altura := 0.0) -> Vector3:
 
 func radio_mundo() -> float:
 	if modo == "moba":
-		return Moba.RADIO_MAPA
+		return Moba.RADIO_MAPA - Moba.MARGEN_CORDON
 	return MarLibre.RADIO + 400.0 if modo == "libre" else RADIO_MUNDO
 
 
