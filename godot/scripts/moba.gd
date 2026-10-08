@@ -94,6 +94,12 @@ const OBJETOS := {
 	"velas": {"nombre": "Velas de seda", "detalle": "+10% de velocidad", "precio": 200, "icono": "velas"},
 	"polvora": {"nombre": "Pólvora fina", "detalle": "Recargas un 12% más rápido", "precio": 280, "icono": "recarga"},
 }
+const ESTILO_OBJETO := {
+	"casco": {"categoria": "Vida", "color": Color("6fd06b")},
+	"canones": {"categoria": "Daño", "color": Color("ff6b5b")},
+	"velas": {"categoria": "Velocidad", "color": Color("5cc8ff")},
+	"polvora": {"categoria": "Recarga", "color": Color("ffb347")},
+}
 const HABILIDADES := {
 	"impulso": {"nombre": "Viento a favor", "corto": "Impulso", "espera": 12.0,
 		"info": "Tu barco vuela un 80% más rápido durante 3 segundos."},
@@ -360,7 +366,7 @@ var emerger := 0.0
 var espera_burbujas := 0.0
 var boton_tienda: Button
 var panel_tienda: PanelContainer
-var lista_tienda: VBoxContainer
+var lista_tienda: GridContainer
 var texto_oro_tienda: Label
 var botones_tienda := {}
 var panel_capitanes: PanelContainer
@@ -2505,7 +2511,7 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 	estilo.set_content_margin_all(22)
 	estilo.bg_color.a = 0.97
 	panel_tienda.add_theme_stylebox_override("panel", estilo)
-	Ui.anclar(panel_tienda, Vector2(0.5, 0.5), Vector2(-430, -290), Vector2(860, 580))
+	Ui.anclar(panel_tienda, Vector2(0.5, 0.5), Vector2(-460, -320), Vector2(920, 640))
 	panel_tienda.visible = false
 	capa.add_child(panel_tienda)
 	var cuerpo := VBoxContainer.new()
@@ -2529,9 +2535,14 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 	cerrar_boton.add_theme_font_size_override("font_size", 24)
 	cerrar_boton.pressed.connect(cerrar_tienda)
 	cabecera.add_child(cerrar_boton)
-	lista_tienda = VBoxContainer.new()
-	lista_tienda.add_theme_constant_override("separation", 16)
+	lista_tienda = GridContainer.new()
+	lista_tienda.columns = 2
+	lista_tienda.add_theme_constant_override("h_separation", 14)
+	lista_tienda.add_theme_constant_override("v_separation", 14)
 	cuerpo.add_child(lista_tienda)
+	var consejo := Ui.etiqueta_panel(tr("Las mejoras se notan al instante y duran toda la partida, aunque te hundan."), 15, Color("9fb4b8"))
+	consejo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cuerpo.add_child(consejo)
 	_crear_seleccion(capa)
 
 
@@ -2822,32 +2833,107 @@ func _llenar_tienda() -> void:
 	for hijo in lista_tienda.get_children():
 		hijo.queue_free()
 	for clave in OBJETOS:
-		var datos: Dictionary = OBJETOS[clave]
-		var fila := HBoxContainer.new()
-		fila.add_theme_constant_override("separation", 14)
-		lista_tienda.add_child(fila)
-		var icono := TextureRect.new()
-		icono.texture = Objetos.icono_mejora(datos["icono"])
-		icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icono.custom_minimum_size = Vector2(58, 58)
-		fila.add_child(icono)
-		var columna := VBoxContainer.new()
-		columna.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		columna.add_theme_constant_override("separation", 0)
-		fila.add_child(columna)
-		columna.add_child(Ui.etiqueta_panel(tr(datos["nombre"]), 22, Principal.COLOR_TEXTO))
-		columna.add_child(Ui.etiqueta_panel(tr(datos["detalle"]), 15, Color("c9d1d3")))
-		columna.add_child(Ui.etiqueta_panel(tr("Tienes: %d de %d") % [heroe.objetos[clave], MAX_OBJETO], 16, Principal.COLOR_ORO))
-		var lleno: bool = heroe.objetos[clave] >= MAX_OBJETO
-		var boton := Ui.boton(tr("Completo") if lleno else tr("Comprar: %d") % datos["precio"], true)
-		boton.custom_minimum_size = Vector2(210, 60)
-		boton.add_theme_font_size_override("font_size", 22)
-		boton.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		boton.pressed.connect(comprar.bind(heroe, clave))
-		fila.add_child(boton)
-		botones_tienda[clave] = boton
+		lista_tienda.add_child(_tarjeta_objeto(heroe, clave))
 		_habilitar_compra(heroe, clave)
+
+
+func _tarjeta_objeto(heroe: Heroe, clave: String) -> PanelContainer:
+	var datos: Dictionary = OBJETOS[clave]
+	var tono: Color = ESTILO_OBJETO[clave]["color"]
+	var nivel: int = heroe.objetos[clave]
+	var lleno := nivel >= MAX_OBJETO
+	var tarjeta := PanelContainer.new()
+	tarjeta.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Paleta.PANEL.lightened(0.07)
+	estilo.border_color = Color(tono, 0.75)
+	estilo.set_border_width_all(2)
+	estilo.border_width_left = 7
+	estilo.set_corner_radius_all(16)
+	estilo.set_content_margin_all(12)
+	tarjeta.add_theme_stylebox_override("panel", estilo)
+	var cuerpo := VBoxContainer.new()
+	cuerpo.add_theme_constant_override("separation", 6)
+	tarjeta.add_child(cuerpo)
+
+	var arriba := HBoxContainer.new()
+	arriba.add_theme_constant_override("separation", 12)
+	cuerpo.add_child(arriba)
+	var marco := PanelContainer.new()
+	var fondo := StyleBoxFlat.new()
+	fondo.bg_color = Color(tono, 0.22)
+	fondo.border_color = tono
+	fondo.set_border_width_all(2)
+	fondo.set_corner_radius_all(40)
+	fondo.set_content_margin_all(6)
+	marco.add_theme_stylebox_override("panel", fondo)
+	marco.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	arriba.add_child(marco)
+	var icono := TextureRect.new()
+	icono.texture = Objetos.icono_mejora(datos["icono"])
+	icono.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icono.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icono.custom_minimum_size = Vector2(56, 56)
+	marco.add_child(icono)
+	var textos := VBoxContainer.new()
+	textos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	textos.add_theme_constant_override("separation", 0)
+	arriba.add_child(textos)
+	textos.add_child(Ui.etiqueta_panel(tr(ESTILO_OBJETO[clave]["categoria"]).to_upper(), 13, tono))
+	textos.add_child(Ui.etiqueta_panel(tr(datos["nombre"]), 21, Principal.COLOR_TEXTO))
+	textos.add_child(Ui.etiqueta_panel(tr(datos["detalle"]), 14, Color("c9d1d3")))
+
+	var niveles := HBoxContainer.new()
+	niveles.add_theme_constant_override("separation", 10)
+	cuerpo.add_child(niveles)
+	niveles.add_child(Ui.etiqueta_panel(tr("Nivel %d de %d") % [nivel, MAX_OBJETO], 14, Principal.COLOR_ORO))
+	var barras := Control.new()
+	barras.custom_minimum_size = Vector2(3 * 34 + 2 * 6, 12)
+	barras.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	barras.draw.connect(_dibujar_niveles.bind(barras, nivel, tono))
+	niveles.add_child(barras)
+
+	var efecto := HBoxContainer.new()
+	efecto.add_theme_constant_override("separation", 14)
+	cuerpo.add_child(efecto)
+	efecto.add_child(Ui.etiqueta_panel(tr("Ahora: %s") % _efecto_objeto(heroe, clave, nivel), 15, Color("c9d1d3")))
+	if lleno:
+		efecto.add_child(Ui.etiqueta_panel(tr("¡Mejora al máximo!"), 15, tono))
+	else:
+		efecto.add_child(Ui.etiqueta_panel(tr("Al comprar: %s") % _efecto_objeto(heroe, clave, nivel + 1), 15, tono.lightened(0.2)))
+
+	var boton := Ui.boton("", true)
+	boton.custom_minimum_size = Vector2(0, 50)
+	boton.add_theme_font_size_override("font_size", 20)
+	boton.pressed.connect(comprar.bind(heroe, clave))
+	cuerpo.add_child(boton)
+	botones_tienda[clave] = boton
+	return tarjeta
+
+
+# Cómo queda la estadística con `nivel` mejoras compradas, para comparar antes y después.
+func _efecto_objeto(heroe: Heroe, clave: String, nivel: int) -> String:
+	var actual: int = heroe.objetos[clave]
+	match clave:
+		"casco":
+			var base: float = heroe.barco.vida_max / (1.0 + 0.2 * actual)
+			return tr("%d de vida") % roundi(base * (1.0 + 0.2 * nivel))
+		"canones":
+			return tr("+%d%% de daño") % (15 * nivel)
+		"velas":
+			return tr("+%d%% de velocidad") % (10 * nivel)
+		_:
+			return tr("-%d%% de espera") % roundi((1.0 - pow(0.88, nivel)) * 100.0)
+
+
+func _dibujar_niveles(barras: Control, nivel: int, tono: Color) -> void:
+	for i in MAX_OBJETO:
+		var caja := Rect2(Vector2(i * 40.0, 0.0), Vector2(34.0, barras.size.y))
+		if i < nivel:
+			barras.draw_rect(caja, tono)
+		else:
+			barras.draw_rect(caja, Color(1, 1, 1, 0.1))
+			barras.draw_rect(caja, Color(tono, 0.5), false, 1.5)
 
 
 # El oro sigue entrando con la tienda abierta: el botón se enciende en cuanto alcanza.
@@ -2855,7 +2941,15 @@ func _habilitar_compra(heroe: Heroe, clave: String) -> void:
 	var boton: Button = botones_tienda.get(clave)
 	if boton == null or not is_instance_valid(boton):
 		return
-	var bloqueado: bool = heroe.objetos[clave] >= MAX_OBJETO or heroe.oro < OBJETOS[clave]["precio"]
+	var precio: int = OBJETOS[clave]["precio"]
+	var lleno: bool = heroe.objetos[clave] >= MAX_OBJETO
+	var bloqueado: bool = lleno or heroe.oro < precio
+	if lleno:
+		boton.text = tr("Completo")
+	elif bloqueado:
+		boton.text = tr("Comprar: %d") % precio + "   ·   " + tr("Faltan %d") % ceili(precio - heroe.oro)
+	else:
+		boton.text = tr("Comprar: %d") % precio
 	if boton.disabled == bloqueado and boton.has_meta("estilo"):
 		return
 	boton.disabled = bloqueado
