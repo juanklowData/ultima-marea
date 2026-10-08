@@ -3013,11 +3013,14 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 	cerrar_boton.add_theme_font_size_override("font_size", 24)
 	cerrar_boton.pressed.connect(cerrar_tienda)
 	cabecera.add_child(cerrar_boton)
+	var desplazable := Ui.lista_desplazable(cuerpo)
+	desplazable.get_parent().get_parent().size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lista_tienda = GridContainer.new()
 	lista_tienda.columns = 2
+	lista_tienda.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lista_tienda.add_theme_constant_override("h_separation", 14)
 	lista_tienda.add_theme_constant_override("v_separation", 14)
-	cuerpo.add_child(lista_tienda)
+	desplazable.add_child(lista_tienda)
 	var consejo := Ui.etiqueta_panel(tr("Las mejoras se notan al instante y duran toda la partida, aunque te hundan."), 15, Color("9fb4b8"))
 	consejo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cuerpo.add_child(consejo)
@@ -3027,10 +3030,11 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 # Elección de capitán: panel a la derecha y, en el muelle, su barco con él en cubierta.
 
 func _crear_seleccion(capa: CanvasLayer) -> void:
-	var partes := Ui.panel_lateral(capa)
+	var partes := Ui.panel_lateral_desplazable(capa)
 	panel_capitanes = partes[0]
 	panel_capitanes.visible = false
 	var cuerpo: VBoxContainer = partes[1]
+	var pie: VBoxContainer = partes[2]
 	cuerpo.add_theme_constant_override("separation", 6)
 	cuerpo.add_child(Ui.etiqueta_panel(tr("Elige tu capitán"), 34, Principal.COLOR_ORO))
 	cuerpo.add_child(Ui.etiqueta_panel(tr("Cada capitán tiene su barco y tres habilidades propias; todos pueden reparar el barco"), 17, Color("c9d1d3")))
@@ -3086,7 +3090,7 @@ func _crear_seleccion(capa: CanvasLayer) -> void:
 		cuerpo.add_child(fila)
 	var extras := HBoxContainer.new()
 	extras.add_theme_constant_override("separation", 12)
-	cuerpo.add_child(extras)
+	pie.add_child(extras)
 	var ensayar := Ui.boton(tr("Ensayar habilidades"), false)
 	ensayar.custom_minimum_size = Vector2(0, 50)
 	ensayar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -3100,18 +3104,17 @@ func _crear_seleccion(capa: CanvasLayer) -> void:
 	por_wifi.pressed.connect(func() -> void: mundo.red.abrir())
 	extras.add_child(por_wifi)
 
-	var espacio := Control.new()
-	espacio.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	cuerpo.add_child(espacio)
 	var botones := HBoxContainer.new()
 	botones.add_theme_constant_override("separation", 12)
-	cuerpo.add_child(botones)
+	pie.add_child(botones)
 	var volver := Ui.boton(tr("Volver"), false)
 	Ui.estilo_volver(volver)
+	volver.custom_minimum_size = Vector2(0, 64)
 	volver.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	volver.pressed.connect(mundo._mostrar.bind(Principal.Estado.MENU))
 	botones.add_child(volver)
 	var zarpar := Ui.boton(tr("¡Zarpar!"), true)
+	zarpar.custom_minimum_size = Vector2(0, 64)
 	zarpar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	zarpar.pressed.connect(mundo._buscar_partida.bind("moba"))
 	botones.add_child(zarpar)
@@ -3313,6 +3316,10 @@ static func _recortar(c: Vector2, radio: float, puntos: PackedVector2Array) -> P
 
 
 func abrir_tienda() -> void:
+	# Cabe en cualquier pantalla: como mucho 920 × 640 y, si no, lo que deje la pantalla.
+	var pantalla := panel_tienda.get_viewport_rect().size
+	var tam := Vector2(minf(920.0, pantalla.x - 40.0), minf(640.0, pantalla.y - 24.0))
+	Ui.anclar(panel_tienda, Vector2(0.5, 0.5), -tam / 2.0, tam)
 	panel_tienda.visible = true
 	mundo.voz_equipar.play()
 	_llenar_tienda()
@@ -3394,15 +3401,17 @@ func _tarjeta_objeto(heroe: Heroe, clave: String) -> PanelContainer:
 	var niveles := HBoxContainer.new()
 	niveles.add_theme_constant_override("separation", 10)
 	cuerpo.add_child(niveles)
-	niveles.add_child(Ui.etiqueta_panel(tr("Nivel %d de %d") % [nivel, MAX_OBJETO], 14, Principal.COLOR_ORO))
+	var texto_nivel := Ui.etiqueta_panel(tr("Nivel %d de %d") % [nivel, MAX_OBJETO], 14, Principal.COLOR_ORO)
+	texto_nivel.autowrap_mode = TextServer.AUTOWRAP_OFF
+	niveles.add_child(texto_nivel)
 	var barras := Control.new()
 	barras.custom_minimum_size = Vector2(3 * 34 + 2 * 6, 12)
 	barras.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	barras.draw.connect(_dibujar_niveles.bind(barras, nivel, tono))
 	niveles.add_child(barras)
 
-	var efecto := HBoxContainer.new()
-	efecto.add_theme_constant_override("separation", 14)
+	var efecto := VBoxContainer.new()
+	efecto.add_theme_constant_override("separation", 2)
 	cuerpo.add_child(efecto)
 	efecto.add_child(Ui.etiqueta_panel(tr("Ahora: %s") % _efecto_objeto(heroe, clave, nivel), 15, Color("c9d1d3")))
 	if lleno:

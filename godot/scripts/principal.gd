@@ -2993,39 +2993,8 @@ func _crear_ajustes(capa: CanvasLayer) -> void:
 	lista_cuerpo.add_child(listo)
 
 
-# Columna con desplazamiento vertical (se arrastra con el dedo) dentro de otra columna.
 func _lista_desplazable(cuerpo: VBoxContainer) -> VBoxContainer:
-	var desplazar := ScrollContainer.new()
-	desplazar.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	desplazar.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
-	desplazar.follow_focus = true
-	desplazar.scroll_deadzone = 12
-	cuerpo.add_child(desplazar)
-	var riel := StyleBoxFlat.new()
-	riel.bg_color = Color(0, 0, 0, 0.35)
-	riel.set_corner_radius_all(9)
-	riel.content_margin_left = 9
-	riel.content_margin_right = 9
-	var tirador := StyleBoxFlat.new()
-	tirador.bg_color = COLOR_ORO
-	tirador.set_corner_radius_all(9)
-	tirador.content_margin_top = 30
-	var tirador_activo := tirador.duplicate() as StyleBoxFlat
-	tirador_activo.bg_color = COLOR_ORO.lightened(0.25)
-	var barra := desplazar.get_v_scroll_bar()
-	barra.add_theme_stylebox_override("scroll", riel)
-	barra.add_theme_stylebox_override("scroll_focus", riel)
-	barra.add_theme_stylebox_override("grabber", tirador)
-	barra.add_theme_stylebox_override("grabber_highlight", tirador_activo)
-	barra.add_theme_stylebox_override("grabber_pressed", tirador_activo)
-	var margen := MarginContainer.new()
-	margen.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	margen.add_theme_constant_override("margin_right", 16)
-	desplazar.add_child(margen)
-	var lista := VBoxContainer.new()
-	lista.add_theme_constant_override("separation", 14)
-	margen.add_child(lista)
-	return lista
+	return Ui.lista_desplazable(cuerpo)
 
 
 # Del 70 % al 150 % del tamaño automático de los botones de la partida.

@@ -68,10 +68,11 @@ func _hablando() -> bool:
 # Panel
 
 func crear_interfaz(capa: CanvasLayer) -> void:
-	var partes := Ui.panel_lateral(capa)
+	var partes := Ui.panel_lateral_desplazable(capa)
 	panel = partes[0]
 	panel.visible = false
 	var cuerpo: VBoxContainer = partes[1]
+	var pie: VBoxContainer = partes[2]
 	cuerpo.add_theme_constant_override("separation", 12)
 	cuerpo.add_child(Ui.etiqueta_panel(tr("Jugar por wifi"), 34, Principal.COLOR_ORO))
 	cuerpo.add_child(Ui.etiqueta_panel(tr("1 contra 1 con un amigo. Los dos móviles deben estar conectados a la misma red wifi."), 17, Color("c9d1d3")))
@@ -122,13 +123,11 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 
 	texto_estado = Ui.etiqueta_panel("", 22, Principal.COLOR_TEXTO)
 	cuerpo.add_child(texto_estado)
-	var espacio := Control.new()
-	espacio.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	cuerpo.add_child(espacio)
 	var volver := Ui.boton(tr("Volver"), false)
 	Ui.estilo_volver(volver)
+	volver.custom_minimum_size = Vector2(0, 64)
 	volver.pressed.connect(_volver)
-	cuerpo.add_child(volver)
+	pie.add_child(volver)
 
 
 func abrir() -> void:
