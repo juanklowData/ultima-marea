@@ -43,6 +43,8 @@ const VEL_BOTE := 58.0
 const ALCANCE_BOTE := 220.0
 const RECARGA_BOTE := 1.7
 const DANIO_BOTE := 4.0
+# Contra los barcos de los capitanes los botes pegan menos que contra otros botes y fuertes.
+const DANIO_BOTE_A_BARCO := 0.5
 # Artilleros torpes: solo adelantan parte del movimiento del blanco, así que navegando se esquivan.
 const PUNTERIA_BOTE := 0.6
 const DESVIO_BOTE := 0.1
@@ -1129,29 +1131,40 @@ func _mover_bote(bote: Bote, delta: float) -> void:
 				var adelanto := randf_range(0.0, PUNTERIA_BOTE)
 				var previsto: Vector2 = punto + blanco[1] * bote.pos.distance_to(punto) / Principal.VEL_BALA * adelanto
 				var direccion := (previsto - bote.pos).normalized().rotated(randf_range(-DESVIO_BOTE, DESVIO_BOTE))
-				mundo.disparar_desde(bote.pos + direccion * (RADIO_BOTE + 4.0), direccion, null, null, bote.equipo, bote.danio)
+				var danio := bote.danio * (DANIO_BOTE_A_BARCO if blanco.size() > 3 else 1.0)
+				mundo.disparar_desde(bote.pos + direccion * (RADIO_BOTE + 4.0), direccion, null, null, bote.equipo, danio)
 				if bote.nodo.visible:
 					bote.marinero.vitorear()
-		else:
-			bote.rumbo = lerp_angle(bote.rumbo, _rumbo_hacia(bote.pos, punto), minf(1.0, delta * 2.0))
-	else:
-		var puntos := camino(bote.carril, bote.equipo)
-		if bote.paso < puntos.size() and bote.pos.distance_to(puntos[bote.paso]) < 60.0:
-			bote.paso = mini(bote.paso + 1, puntos.size() - 1)
-		bote.rumbo = lerp_angle(bote.rumbo, _rumbo_hacia(bote.pos, puntos[bote.paso]), minf(1.0, delta * 2.0))
+	var destino := Vector2.INF
 	if not parado:
-		var avance := Vector2.UP.rotated(bote.rumbo)
+		if not blanco.is_empty():
+			destino = blanco[0]
+		else:
+			var puntos := camino(bote.carril, bote.equipo)
+			if bote.paso < puntos.size() and bote.pos.distance_to(puntos[bote.paso]) < 60.0:
+				bote.paso = mini(bote.paso + 1, puntos.size() - 1)
+			destino = puntos[bote.paso]
+	# Sin derrapes: el casco gira hacia donde quiere ir (rodeando islas) y solo avanza por la
+	# proa; si lleva un compañero justo delante, frena en vez de apartarse de lado.
+	if destino != Vector2.INF:
+		var deseo := (destino - bote.pos).normalized()
 		for isla in mundo.islas.cerca(bote.pos, RADIO_BOTE + 50.0):
 			var sep: Vector2 = bote.pos - isla.pos
 			var limite: float = isla.radio + RADIO_BOTE + 50.0
 			var d := sep.length()
-			if d < limite and d > 0.0 and avance.dot(-sep / d) > 0.0:
-				avance += sep / d * (1.0 - d / limite) * 2.0
-		bote.pos += avance.normalized() * VEL_BOTE * delta
-	for otro in botes:
-		if otro != bote and otro.pos.distance_to(bote.pos) < RADIO_BOTE * 2.0:
-			var sep := bote.pos - otro.pos
-			bote.pos += (sep.normalized() if sep != Vector2.ZERO else Vector2.RIGHT) * 20.0 * delta
+			if d < limite and d > 0.0 and deseo.dot(-sep / d) > 0.0:
+				deseo += sep / d * (1.0 - d / limite) * 2.0
+		bote.rumbo = lerp_angle(bote.rumbo, atan2(deseo.x, -deseo.y), minf(1.0, delta * 2.0))
+		var proa := Vector2.UP.rotated(bote.rumbo)
+		var marcha := 1.0
+		for otro in botes:
+			if otro == bote or otro.equipo != bote.equipo:
+				continue
+			var hacia := otro.pos - bote.pos
+			var d := hacia.length()
+			if d < RADIO_BOTE * 2.6 and d > 0.0 and proa.dot(hacia / d) > 0.3:
+				marcha = minf(marcha, clampf((d - RADIO_BOTE * 1.4) / (RADIO_BOTE * 1.2), 0.0, 1.0))
+		bote.pos += proa * VEL_BOTE * marcha * delta
 	for isla in mundo.islas.cerca(bote.pos, RADIO_BOTE):
 		var sep: Vector2 = bote.pos - isla.pos
 		var minimo: float = isla.borde(bote.pos) + RADIO_BOTE
@@ -1159,7 +1172,8 @@ func _mover_bote(bote: Bote, delta: float) -> void:
 			bote.pos = isla.pos + sep.normalized() * minimo
 
 
-# [punto, velocidad, radio] del blanco más cercano: primero otros botes, luego torres y barcos.
+# [punto, velocidad, radio] del blanco más cercano: primero otros botes, luego torres y barcos
+# (con un cuarto valor si es un barco).
 func _blanco_bote(bote: Bote) -> Array:
 	var vista := ALCANCE_BOTE + 60.0
 	var mejor: Array = []
@@ -1186,7 +1200,7 @@ func _blanco_bote(bote: Bote) -> Array:
 			var d := barco.pos.distance_to(bote.pos)
 			if d < menor:
 				menor = d
-				mejor = [barco.pos, barco.proa() * barco.velocidad, 0.0]
+				mejor = [barco.pos, barco.proa() * barco.velocidad, 0.0, true]
 	return mejor
 
 
