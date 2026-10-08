@@ -314,6 +314,7 @@ class Torre:
 
 
 class Bote:
+	var id := 0
 	var pos := Vector2.ZERO
 	var pendiente := 0.0
 	var rumbo := 0.0
@@ -392,6 +393,10 @@ var heroes: Array[Heroe] = []
 var de_barco := {}
 var espera_oleada := PRIMERA_OLEADA
 var oleada := 0
+var siguiente_bote := 0
+# Armada del jugador de este móvil (1 cuando se une a una partida por wifi): la suya se ve
+# siempre azul y la rival roja.
+var mi_lado := 0
 var elegido := "barbanegra"
 var figura_muelle: FiguraCapitan
 var ensayo := false
@@ -541,6 +546,7 @@ func _distancia_a_carriles(punto: Vector2) -> float:
 
 func empezar() -> void:
 	vaciar()
+	mi_lado = mundo.red.lado() if mundo.red.en_partida else 0
 	mundo.zona_centro = Vector2.ZERO
 	mundo.zona_radio = 99999.0
 	mundo.islas._vaciar()
@@ -583,6 +589,7 @@ func vaciar() -> void:
 		torre.limite.queue_free()
 	torres.clear()
 	ganador = -1
+	siguiente_bote = 0
 	anuncio_vida = 0.0
 	auto = false
 	dedo_auto = -1
@@ -597,6 +604,9 @@ func vaciar() -> void:
 
 
 func _crear_heroes() -> void:
+	if mundo.red.en_partida:
+		_crear_heroes_red()
+		return
 	for equipo in 2:
 		# Un capitán por armada; el jugador lleva el que eligió y el rival, otro al azar.
 		var reparto := CAPITANES.duplicate()
@@ -621,6 +631,27 @@ func _crear_heroes() -> void:
 			heroe.carril = REPARTO[k] if equipo == 0 else REPARTO[(k + 1) % POR_EQUIPO]
 
 
+# Por wifi no hay bots: el barco de este móvil y el del rival, que se mueve con lo que llega
+# por la red. Los dos móviles los crean en el mismo orden para que se correspondan.
+func _crear_heroes_red() -> void:
+	for equipo in 2:
+		var propio := equipo == mi_lado
+		var capitan := capitan_elegido() if propio else capitan_por_id(mundo.red.rival_capitan)
+		var barco := mundo._crear_barco(aspecto_de(capitan), propio, _salida(equipo, 0))
+		igualar_barco(barco, capitan)
+		barco.rumbo = _rumbo_hacia(barco.pos, Vector2.ZERO)
+		barco.equipo = equipo
+		if propio:
+			barco.nombre = mundo.personalizacion.nombre_visible()
+			mundo.jugador = barco
+		else:
+			barco.nombre = mundo.red.rival_nombre
+			barco.mando = Barco.Mando.REMOTO
+			barco.red_pos = barco.pos
+			barco.red_rumbo = barco.rumbo
+		_sumar_heroe(barco, capitan, equipo)
+
+
 func _sumar_heroe(barco: Barco, capitan: Dictionary, equipo: int) -> Heroe:
 	barco.equipo = equipo
 	var heroe := Heroe.new()
@@ -634,7 +665,7 @@ func _sumar_heroe(barco: Barco, capitan: Dictionary, equipo: int) -> Heroe:
 		var materia := StandardMaterial3D.new()
 		materia.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		materia.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		materia.albedo_color = Color(COLORES[equipo], 0.55)
+		materia.albedo_color = Color(pintura(equipo), 0.55)
 		heroe.anillo.material_override = materia
 		heroe.anillo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(heroe.anillo)
@@ -649,6 +680,7 @@ func _sumar_heroe(barco: Barco, capitan: Dictionary, equipo: int) -> Heroe:
 # y tres botes quietos, sin oleadas ni fuertes. Se sale con «Terminar ensayo».
 func empezar_ensayo() -> void:
 	vaciar()
+	mi_lado = 0
 	ensayo = true
 	mundo.modo = "moba"
 	mundo.zona_centro = Vector2.ZERO
@@ -691,8 +723,12 @@ func _poner_dianas() -> void:
 
 
 func capitan_elegido() -> Dictionary:
+	return capitan_por_id(elegido)
+
+
+func capitan_por_id(id: String) -> Dictionary:
 	for capitan in CAPITANES:
-		if capitan["id"] == elegido:
+		if capitan["id"] == id:
 			return capitan
 	return CAPITANES[0]
 
@@ -811,11 +847,11 @@ func _crear_torre(punto: Vector2, equipo: int, carril: String, orden: int) -> vo
 	nodo.set_meta("radio", r)
 	var piedra := mundo.material(Color("a39e93"), "roca")
 	var oscura := mundo.material(Color("7d786e"), "roca")
-	var color := mundo.material(COLORES[equipo])
+	var color := mundo.material(pintura(equipo))
 	torre.estructura = Node3D.new()
 	nodo.add_child(torre.estructura)
 	var madera := mundo.material(Color("5a3d24"), "madera")
-	var bandera := {"color": COLORES[equipo], "color2": Color("f2f2f2"), "diseno": "estrella"}
+	var bandera := {"color": pintura(equipo), "color2": Color("f2f2f2"), "diseno": "estrella"}
 	if orden == 2:
 		# Ciudadela: muralla cuadrada con un baluarte en cada esquina y el torreón del faro.
 		var lado := r * 0.6
@@ -837,7 +873,7 @@ func _crear_torre(punto: Vector2, equipo: int, carril: String, orden: int) -> vo
 			var junto := Vector3(cos(a), 0, sin(a)) * (lado + 0.22)
 			var pendon := _pieza(torre.estructura, caja, color, junto + Vector3(0, 0.7, 0), Vector3(0.03, 0.75, 0.5))
 			pendon.rotation.y = -a
-		_castillo(torre.estructura, piedra, oscura, color, madera, COLORES[equipo])
+		_castillo(torre.estructura, piedra, oscura, color, madera, pintura(equipo))
 		var asta := Node3D.new()
 		asta.position = Vector3(0, 5.85, 0)
 		torre.estructura.add_child(asta)
@@ -964,8 +1000,8 @@ func _pintar_limites() -> void:
 			torre.contorno.albedo_color = Color(Principal.COLOR_PELIGRO, lerpf(0.55, 0.9, latido))
 			torre.sombreado.albedo_color = Color(Principal.COLOR_PELIGRO, lerpf(0.08, 0.16, latido))
 		else:
-			torre.contorno.albedo_color = Color(COLORES[torre.equipo], 0.5 if enemiga else 0.3)
-			torre.sombreado.albedo_color = Color(COLORES[torre.equipo], 0.06 if enemiga else 0.03)
+			torre.contorno.albedo_color = Color(pintura(torre.equipo), 0.5 if enemiga else 0.3)
+			torre.sombreado.albedo_color = Color(pintura(torre.equipo), 0.06 if enemiga else 0.03)
 
 
 # Lienzo de muralla entre dos puntos, con almenas encima.
@@ -1046,10 +1082,11 @@ func actualizar(delta: float) -> void:
 			_atender(heroe, delta)
 		_actualizar_interfaz()
 		return
-	espera_oleada -= delta
-	if espera_oleada <= 0.0:
-		espera_oleada = ESPERA_OLEADA
-		_soltar_oleada()
+	if not mundo.red.es_invitado():
+		espera_oleada -= delta
+		if espera_oleada <= 0.0:
+			espera_oleada = ESPERA_OLEADA
+			mundo.red.avisar_oleada(oleada + 1, _soltar_oleada())
 	for i in range(botes.size() - 1, -1, -1):
 		var paso := mundo.paso_lejano(botes[i], i, delta)
 		if paso > 0.0:
@@ -1113,7 +1150,7 @@ func _atender(heroe: Heroe, delta: float) -> void:
 			_soltar_arpon(heroe)
 	if not barco.viva:
 		heroe.reaparece -= delta
-		if heroe.reaparece <= 0.0:
+		if heroe.reaparece <= 0.0 and not mundo.red.es_invitado():
 			_reaparecer(heroe)
 		return
 	if en_fuente(barco):
@@ -1132,6 +1169,8 @@ func _reaparecer(heroe: Heroe) -> void:
 	var barco := heroe.barco
 	barco.pos = heroe.ancla if ensayo else _salida(heroe.equipo, randi_range(0, POR_EQUIPO - 1))
 	barco.rumbo = _rumbo_hacia(barco.pos, Vector2.ZERO)
+	barco.red_pos = barco.pos
+	barco.red_rumbo = barco.rumbo
 	barco.viva = true
 	barco.vida = barco.vida_max
 	barco.hundimiento = 0.0
@@ -1198,20 +1237,29 @@ func _aplicar(heroe: Heroe) -> void:
 
 # Oleadas de botes
 
-func _soltar_oleada() -> void:
+# Devuelve los botes de más de cada carril (uno por fuerte rival caído); por wifi el
+# invitado recibe esos mismos números para soltar exactamente la misma oleada.
+func _soltar_oleada(dados: Array = []) -> Array:
 	oleada += 1
 	var fuerza := 1.0 + MEJORA_OLEADA * (oleada - 1)
+	var extras := []
 	for equipo in 2:
 		for carril in CARRILES:
 			var puntos := camino(carril, equipo)
 			var salida := _punto_en(puntos, RADIO_NEXO + 60.0)
 			var hacia := (puntos[1] - puntos[0]).normalized()
 			var extra := 0
-			for torre in torres:
-				if not torre.viva and torre.equipo != equipo and torre.carril == carril:
-					extra += 1
+			if extras.size() < dados.size():
+				extra = dados[extras.size()]
+			else:
+				for torre in torres:
+					if not torre.viva and torre.equipo != equipo and torre.carril == carril:
+						extra += 1
+			extras.append(extra)
 			for k in BOTES_POR_OLEADA + extra:
 				var bote := Bote.new()
+				bote.id = siguiente_bote
+				siguiente_bote += 1
 				bote.equipo = equipo
 				bote.carril = carril
 				var fila := (k + 1) / 2
@@ -1225,6 +1273,7 @@ func _soltar_oleada() -> void:
 				_crear_bote(bote)
 				add_child(bote.nodo)
 				botes.append(bote)
+	return extras
 
 
 # Balandra de guerra: casco de verdad con franja del color de la armada, un palo con su vela
@@ -1236,11 +1285,12 @@ func _crear_bote(bote: Bote) -> void:
 	var nodo := Node3D.new()
 	bote.nodo = nodo
 	ModeloBarco._perfil = ModeloBarco.PERFILES["plano"]
-	if not mallas_bote.has(equipo):
-		mallas_bote[equipo] = ModeloBarco._casco(LARGO_BOTE, ANCHO_BOTE, ALTO_BOTE, Color("8a5a32"), COLORES[equipo].lightened(0.2), COLORES[equipo])
+	var tono := equipo ^ mi_lado
+	if not mallas_bote.has(tono):
+		mallas_bote[tono] = ModeloBarco._casco(LARGO_BOTE, ANCHO_BOTE, ALTO_BOTE, Color("8a5a32"), pintura(equipo).lightened(0.2), pintura(equipo))
 		mallas_bote["cubierta"] = ModeloBarco._cubierta(LARGO_BOTE, ANCHO_BOTE, ALTO_BOTE)
 		mallas_bote["vela"] = ModeloBarco._vela(1.05, 0.85, 0.22)
-	for malla in [mallas_bote[equipo], mallas_bote["cubierta"]]:
+	for malla in [mallas_bote[tono], mallas_bote["cubierta"]]:
 		var pieza := MeshInstance3D.new()
 		pieza.mesh = malla
 		pieza.material_override = ModeloBarco._material_vertices()
@@ -1252,7 +1302,7 @@ func _crear_bote(bote: Bote) -> void:
 	ModeloBarco._pieza(palo, ModeloBarco._cilindro(0.03, 0.045, 1.7), ModeloBarco.COLOR_MADERA, Vector3(0, 0.85, 0))
 	bote.aparejo = Node3D.new()
 	palo.add_child(bote.aparejo)
-	var dibujo := Dibujos.textura({"color": Color("f3ecdf"), "color2": COLORES[equipo], "diseno": "franjas"}, 64, 64)
+	var dibujo := Dibujos.textura({"color": Color("f3ecdf"), "color2": pintura(equipo), "diseno": "franjas"}, 64, 64)
 	ModeloBarco._tela(bote.aparejo, mallas_bote["vela"], dibujo, Vector3(0, 0.98, -0.06))
 	ModeloBarco._pieza(bote.aparejo, ModeloBarco._cilindro(0.018, 0.018, 1.2), ModeloBarco.COLOR_MADERA, Vector3(0, 1.42, -0.04)).rotation.z = PI / 2.0
 	ModeloBarco._pieza(bote.aparejo, ModeloBarco._cilindro(0.016, 0.016, 1.15), ModeloBarco.COLOR_MADERA, Vector3(0, 0.56, -0.04)).rotation.z = PI / 2.0
@@ -1260,8 +1310,8 @@ func _crear_bote(bote: Bote) -> void:
 	tope.position = Vector3(0, 1.55, 0)
 	tope.scale = Vector3.ONE * 0.55
 	palo.add_child(tope)
-	ModeloBarco._izar_bandera(tope, 0.0, 0.6, COLORES[equipo], {"color": COLORES[equipo], "diseno": "lisa"})
-	var marinero := crear_figura({"piel": "e8b892", "abrigo": COLORES[equipo].darkened(0.3).to_html(false), "sombrero": "2e2b2b",
+	ModeloBarco._izar_bandera(tope, 0.0, 0.6, pintura(equipo), {"color": pintura(equipo), "diseno": "lisa"})
+	var marinero := crear_figura({"piel": "e8b892", "abrigo": pintura(equipo).darkened(0.3).to_html(false), "sombrero": "2e2b2b",
 		"pelo": "", "pluma": "", "barba": "", "parche": false, "saludo": "marinero"})
 	bote.marinero = marinero
 	marinero.scale = Vector3.ONE * 0.4
@@ -1404,7 +1454,9 @@ func recibir_bala(bala: Principal.Bala) -> bool:
 	return monstruos.recibir_bala(bala)
 
 
-func _hundir_bote(i: int, verdugo: Barco) -> void:
+func _hundir_bote(i: int, verdugo: Barco, de_red := false) -> void:
+	if mundo.red.es_invitado() and not de_red:
+		return
 	var bote := botes[i]
 	mundo.salpicar(bote.pos, 12)
 	mundo.astillas(mundo.a_3d(bote.pos, 0.4))
@@ -1511,7 +1563,9 @@ func golpear_isla(isla: Circulo, bala: Principal.Bala) -> void:
 		_derribar(torre)
 
 
-func _derribar(torre: Torre) -> void:
+func _derribar(torre: Torre, de_red := false) -> void:
+	if mundo.red.es_invitado() and not de_red:
+		return
 	torre.viva = false
 	torre.vida = 0.0
 	torre.estructura.visible = false
@@ -1528,8 +1582,8 @@ func _derribar(torre: Torre) -> void:
 			_ganar_xp(heroe, XP_TORRE)
 	if torre.orden == 2:
 		ganador = rival
-		_anunciar(tr("¡Nexo enemigo derribado!") if rival == 0 else tr("¡Han derribado tu nexo!"), Principal.COLOR_ORO if rival == 0 else Principal.COLOR_PELIGRO)
-	elif rival == 0:
+		_anunciar(tr("¡Nexo enemigo derribado!") if rival == mi_lado else tr("¡Han derribado tu nexo!"), Principal.COLOR_ORO if rival == mi_lado else Principal.COLOR_PELIGRO)
+	elif rival == mi_lado:
 		_anunciar(tr("¡Fuerte enemigo derribado!"), Principal.COLOR_ORO)
 	else:
 		_anunciar(tr("¡Han derribado uno de tus fuertes!"), Principal.COLOR_PELIGRO)
@@ -1578,11 +1632,15 @@ func rival_de(barco: Barco) -> Barco:
 
 
 func color_de(barco: Barco) -> Color:
-	return COLORES[barco.equipo] if barco.equipo >= 0 else Principal.COLOR_PELIGRO
+	return pintura(barco.equipo) if barco.equipo >= 0 else Principal.COLOR_PELIGRO
 
 
 func tinta(barco: Barco) -> Color:
-	return COLOR_NOMBRE_ALIADO if barco.equipo == 0 else Principal.COLOR_PELIGRO
+	return COLOR_NOMBRE_ALIADO if barco.equipo == mi_lado else Principal.COLOR_PELIGRO
+
+
+func pintura(equipo: int) -> Color:
+	return COLORES[equipo ^ mi_lado]
 
 
 # Inteligencia de los capitanes bot: se retiran a curarse, pelean con lo que tengan cerca y,
@@ -1756,6 +1814,8 @@ func usar_habilidad(heroe: Heroe, ranura: int, hacia := Vector2.ZERO, largo := 1
 	var barco := heroe.barco
 	if not barco.viva or heroe.esperas[ranura] > 0.0:
 		return
+	if barco == mundo.jugador:
+		mundo.red.avisar_habilidad(ranura, hacia, largo)
 	var clave := habilidad_en(heroe, ranura)
 	heroe.esperas[ranura] = ESPERA_ENSAYO if ensayo else HABILIDADES[clave]["espera"]
 	match clave:
@@ -2668,12 +2728,146 @@ func comprar(heroe: Heroe, clave: String) -> void:
 	heroe.objetos[clave] += 1
 	_aplicar(heroe)
 	if heroe.barco == mundo.jugador:
+		mundo.red.avisar_compra(clave)
 		mundo.voz_monedas.play()
 		_llenar_tienda()
 
 
 func heroe_jugador() -> Heroe:
 	return de_barco.get(mundo.jugador)
+
+
+# Partida por wifi
+
+func heroe_rival() -> Heroe:
+	for heroe in heroes:
+		if heroe.barco.mando == Barco.Mando.REMOTO:
+			return heroe
+	return null
+
+
+func _colocar_rival(barco: Barco, pos: Vector2, rumbo: float) -> void:
+	barco.pos = pos
+	barco.rumbo = rumbo
+	barco.red_pos = pos
+	barco.red_rumbo = rumbo
+
+
+func habilidad_rival(ranura: int, hacia: Vector2, largo: float, pos: Vector2, rumbo: float) -> void:
+	var heroe := heroe_rival()
+	if heroe == null or ranura < 0 or ranura >= heroe.esperas.size():
+		return
+	_colocar_rival(heroe.barco, pos, rumbo)
+	heroe.esperas[ranura] = 0.0
+	usar_habilidad(heroe, ranura, hacia, largo)
+
+
+func disparo_rival(arma: String, hacia: Vector2, pos: Vector2, rumbo: float) -> void:
+	var heroe := heroe_rival()
+	if heroe == null or not heroe.barco.recargas.has(arma):
+		return
+	_colocar_rival(heroe.barco, pos, rumbo)
+	heroe.barco.recargas[arma] = 0.0
+	mundo.disparar(heroe.barco, arma, hacia)
+
+
+func compra_rival(clave: String) -> void:
+	var heroe := heroe_rival()
+	if heroe != null and OBJETOS.has(clave):
+		comprar(heroe, clave)
+
+
+func oleada_rival(numero: int, extras: Array) -> void:
+	if heroes.is_empty() or ganador >= 0:
+		return
+	oleada = numero - 1
+	_soltar_oleada(extras)
+
+
+func rival_se_fue() -> void:
+	ganador = mi_lado
+	_anunciar(tr("Tu rival se desconectó"), Principal.COLOR_ORO)
+
+
+# Lo que el anfitrión decide y el invitado copia: vidas, hundimientos, oro, mejoras,
+# fuertes, botes y monstruos.
+func foto() -> Dictionary:
+	var lista_heroes := []
+	for heroe in heroes:
+		var barco := heroe.barco
+		lista_heroes.append([barco.vida, barco.viva, heroe.oro, heroe.xp, heroe.nivel, heroe.objetos,
+				heroe.reaparece, heroe.hundidos, heroe.hundido])
+	var lista_torres := []
+	for torre in torres:
+		lista_torres.append([torre.vida, torre.viva])
+	var lista_botes := []
+	for bote in botes:
+		lista_botes.append([bote.id, bote.pos, bote.rumbo, bote.vida, bote.paso])
+	return {"heroes": lista_heroes, "torres": lista_torres, "botes": lista_botes,
+			"siguiente": siguiente_bote, "monstruos": monstruos.foto()}
+
+
+func aplicar_foto(datos: Dictionary) -> void:
+	if heroes.is_empty() or ganador >= 0:
+		return
+	var lista_heroes: Array = datos["heroes"]
+	for k in mini(lista_heroes.size(), heroes.size()):
+		_copiar_heroe(heroes[k], lista_heroes[k])
+	var lista_torres: Array = datos["torres"]
+	for k in mini(lista_torres.size(), torres.size()):
+		var torre := torres[k]
+		if not lista_torres[k][1]:
+			if torre.viva:
+				_derribar(torre, true)
+		else:
+			torre.vida = lista_torres[k][0]
+	_copiar_botes(datos["botes"], datos["siguiente"])
+	monstruos.aplicar_foto(datos["monstruos"])
+
+
+func _copiar_heroe(heroe: Heroe, datos: Array) -> void:
+	var barco := heroe.barco
+	var nivel: int = datos[4]
+	var objetos: Dictionary = datos[5]
+	var cambia := nivel != heroe.nivel or objetos != heroe.objetos
+	if nivel > heroe.nivel and barco == mundo.jugador:
+		_anunciar(tr("¡Nivel %d!") % nivel, Color("7dffb2"))
+	heroe.oro = datos[2]
+	heroe.xp = datos[3]
+	heroe.nivel = nivel
+	heroe.objetos = objetos.duplicate()
+	heroe.hundidos = datos[7]
+	heroe.hundido = datos[8]
+	if cambia:
+		_aplicar(heroe)
+	var viva: bool = datos[1]
+	if not viva and barco.viva:
+		barco.vida = 0.0
+		barco.viva = false
+		mundo.al_hundirse(barco)
+	elif viva and not barco.viva:
+		_reaparecer(heroe)
+	if barco.viva:
+		barco.vida = datos[0]
+	heroe.reaparece = datos[6]
+
+
+func _copiar_botes(lista: Array, siguiente: int) -> void:
+	var vistos := {}
+	for datos in lista:
+		vistos[datos[0]] = datos
+	for i in range(botes.size() - 1, -1, -1):
+		var bote := botes[i]
+		if not vistos.has(bote.id):
+			if bote.id < siguiente:
+				_hundir_bote(i, null, true)
+			continue
+		var datos: Array = vistos[bote.id]
+		var pos: Vector2 = datos[1]
+		bote.pos = pos if bote.pos.distance_to(pos) > 80.0 else bote.pos.lerp(pos, 0.35)
+		bote.rumbo = lerp_angle(bote.rumbo, datos[2], 0.35)
+		bote.vida = datos[3]
+		bote.paso = datos[4]
 
 
 func torres_en_pie(equipo: int) -> int:
@@ -2890,11 +3084,21 @@ func _crear_seleccion(capa: CanvasLayer) -> void:
 		fila.add_child(barra)
 		barras_capitan[nombre] = barra
 		cuerpo.add_child(fila)
+	var extras := HBoxContainer.new()
+	extras.add_theme_constant_override("separation", 12)
+	cuerpo.add_child(extras)
 	var ensayar := Ui.boton(tr("Ensayar habilidades"), false)
 	ensayar.custom_minimum_size = Vector2(0, 50)
+	ensayar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ensayar.add_theme_font_size_override("font_size", 22)
 	ensayar.pressed.connect(empezar_ensayo)
-	cuerpo.add_child(ensayar)
+	extras.add_child(ensayar)
+	var por_wifi := Ui.boton(tr("Jugar por wifi"), false)
+	por_wifi.custom_minimum_size = Vector2(0, 50)
+	por_wifi.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	por_wifi.add_theme_font_size_override("font_size", 22)
+	por_wifi.pressed.connect(func() -> void: mundo.red.abrir())
+	extras.add_child(por_wifi)
 
 	var espacio := Control.new()
 	espacio.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -3982,7 +4186,7 @@ func dibujar(lienzo: Control, camara: Camera3D) -> void:
 			continue
 		var pantalla := camara.unproject_position(punto)
 		var ancho := 130.0 if torre.orden == 2 else 84.0
-		_barra(lienzo, pantalla, ancho, torre.vida / torre.vida_max, COLORES[torre.equipo], torre.destello)
+		_barra(lienzo, pantalla, ancho, torre.vida / torre.vida_max, pintura(torre.equipo), torre.destello)
 		if not vulnerable(torre):
 			var candado := pantalla + Vector2(ancho / 2.0 + 12.0, 0.0)
 			lienzo.draw_rect(Rect2(candado + Vector2(-6, -3), Vector2(12, 9)), Color("c9d1d3"))
@@ -4003,7 +4207,7 @@ func dibujar(lienzo: Control, camara: Camera3D) -> void:
 		var arriba := sitio + Vector3(0, 2.6, 0)
 		if camara.is_position_behind(arriba):
 			continue
-		_barra(lienzo, camara.unproject_position(arriba), 34.0, bote.vida / bote.vida_max, COLORES[bote.equipo], bote.destello)
+		_barra(lienzo, camara.unproject_position(arriba), 34.0, bote.vida / bote.vida_max, pintura(bote.equipo), bote.destello)
 	for heroe in heroes:
 		var barco := heroe.barco
 		if not barco.viva or not barco.visible:
@@ -4014,7 +4218,7 @@ func dibujar(lienzo: Control, camara: Camera3D) -> void:
 		var pantalla := camara.unproject_position(punto)
 		var insignia := pantalla + Vector2(-38.0 - 13.0, 0.0)
 		lienzo.draw_circle(insignia, 11.0, Color("0b1a20"))
-		lienzo.draw_arc(insignia, 11.0, 0.0, TAU, 24, COLORES[heroe.equipo], 2.0, true)
+		lienzo.draw_arc(insignia, 11.0, 0.0, TAU, 24, pintura(heroe.equipo), 2.0, true)
 		var cifra := str(heroe.nivel)
 		var ancho_cifra := fuente.get_string_size(cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
 		lienzo.draw_string(fuente, insignia + Vector2(-ancho_cifra / 2.0, 5.0), cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
@@ -4052,15 +4256,15 @@ func _dibujar_nexos(lienzo: Control, fuente: Font, equipo: int) -> void:
 		var x := mitad - 18.0 - largo if lado == 0 else mitad + 18.0
 		var fondo := Rect2(x - 34.0, 14.0, largo + 40.0, 34.0)
 		lienzo.draw_rect(fondo, Color(0.03, 0.09, 0.12, 0.75))
-		lienzo.draw_rect(fondo, COLORES[bando], false, 2.0)
+		lienzo.draw_rect(fondo, pintura(bando), false, 2.0)
 		var icono := Vector2(x - 17.0, 31.0)
-		var piedra := COLORES[bando].lerp(Color.WHITE, 0.25)
+		var piedra := pintura(bando).lerp(Color.WHITE, 0.25)
 		lienzo.draw_rect(Rect2(icono + Vector2(-9, -3), Vector2(18, 11)), piedra)
 		lienzo.draw_rect(Rect2(icono + Vector2(-4, -10), Vector2(8, 8)), piedra)
 		for k in 3:
 			lienzo.draw_rect(Rect2(icono + Vector2(-9 + k * 7, -6), Vector2(4, 3)), piedra)
 		lienzo.draw_rect(Rect2(x, 24.0, largo, 14.0), Color(0, 0, 0, 0.6))
-		var relleno := COLORES[bando].lerp(Color.WHITE, nexo.destello * 0.6)
+		var relleno := pintura(bando).lerp(Color.WHITE, nexo.destello * 0.6)
 		lienzo.draw_rect(Rect2(x + 2.0, 26.0, (largo - 4.0) * clampf(parte, 0.0, 1.0), 10.0), relleno)
 		var cifra := "%d%%" % ceili(parte * 100.0)
 		var ancho := fuente.get_string_size(cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
@@ -4118,20 +4322,20 @@ func dibujar_minimapa(lienzo: Control, centro: Vector2, escala: float) -> void:
 			trazo.append(centro + punto * escala)
 		lienzo.draw_polyline(trazo, Color(1, 1, 1, 0.22), 5.0, true)
 	for equipo in 2:
-		lienzo.draw_circle(centro + BASES[equipo] * escala, RADIO_FUENTE * escala, Color(COLORES[equipo], 0.22))
+		lienzo.draw_circle(centro + BASES[equipo] * escala, RADIO_FUENTE * escala, Color(pintura(equipo), 0.22))
 	for torre in torres:
 		var punto := centro + torre.pos * escala
 		var lado := 9.0 if torre.orden == 2 else 6.0
-		var color := COLORES[torre.equipo] if torre.viva else Color(0.35, 0.35, 0.35)
+		var color := pintura(torre.equipo) if torre.viva else Color(0.35, 0.35, 0.35)
 		lienzo.draw_rect(Rect2(punto - Vector2.ONE * (lado / 2.0 + 1.5), Vector2.ONE * (lado + 3.0)), Color("08161c"))
 		lienzo.draw_rect(Rect2(punto - Vector2.ONE * lado / 2.0, Vector2.ONE * lado), color)
 	monstruos.dibujar_minimapa(lienzo, centro, escala)
 	var propio := mundo.jugador.equipo if mundo.jugador != null else 0
 	for bote in botes:
 		if bote.equipo == propio or a_la_vista(bote.pos, propio):
-			lienzo.draw_circle(centro + bote.pos * escala, 1.8, COLORES[bote.equipo].lightened(0.3))
+			lienzo.draw_circle(centro + bote.pos * escala, 1.8, pintura(bote.equipo).lightened(0.3))
 	for heroe in heroes:
 		var barco := heroe.barco
 		if barco.viva and barco != mundo.jugador and (heroe.equipo == propio or (a_la_vista(barco.pos, propio) and heroe.oculto <= 0.0)):
 			lienzo.draw_circle(centro + barco.pos * escala, 4.5, Color("08161c"))
-			lienzo.draw_circle(centro + barco.pos * escala, 3.5, COLORES[heroe.equipo])
+			lienzo.draw_circle(centro + barco.pos * escala, 3.5, pintura(heroe.equipo))

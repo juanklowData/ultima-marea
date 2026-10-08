@@ -100,7 +100,7 @@ const COLORES_TABLA: Array[Color] = [Color("a7774a"), Color("8e6239"), Color("b8
 # Pestaña de la tienda con las piezas únicas que se pagan con gemas.
 const TESOROS := "tesoros"
 
-enum Estado { MENU, ASTILLERO, BUSCANDO, JUGANDO, FIN, AJUSTES, NIVELES, CAPITANES }
+enum Estado { MENU, ASTILLERO, BUSCANDO, JUGANDO, FIN, AJUSTES, NIVELES, CAPITANES, RED }
 
 
 class Bala:
@@ -225,6 +225,7 @@ var niebla: Niebla
 var recompensas: Recompensas
 var emotes: Emotes
 var moba: Moba
+var red: Red
 var libre: MarLibre
 var fauna: Fauna
 var capa_barcos: Node3D
@@ -818,6 +819,9 @@ func _crear_escena() -> void:
 	add_child(emotes)
 	moba = Moba.new()
 	add_child(moba)
+	red = Red.new()
+	red.name = "Red"
+	add_child(red)
 	add_child(comercio)
 	libre = MarLibre.new()
 	add_child(libre)
@@ -839,6 +843,7 @@ func _crear_escena() -> void:
 	recompensas.preparar(self)
 	emotes.preparar(self)
 	moba.preparar(self)
+	red.preparar(self)
 	libre.preparar(self)
 	fauna.preparar(self)
 
@@ -1305,7 +1310,7 @@ func _mover_camara(delta: float) -> void:
 		return
 	var objetivo := jugador.position
 	if en_puerto():
-		var vitrina := estado in [Estado.ASTILLERO, Estado.CAPITANES]
+		var vitrina := estado in [Estado.ASTILLERO, Estado.CAPITANES, Estado.RED]
 		if moba.figura_muelle != null:
 			objetivo = objetivo.lerp(moba.figura_muelle.global_position, 0.25)
 		pausa_giro -= delta
@@ -1354,7 +1359,7 @@ func _en_zona_camara(punto: Vector2) -> bool:
 # Partida
 
 func en_puerto() -> bool:
-	return estado in [Estado.MENU, Estado.ASTILLERO, Estado.BUSCANDO, Estado.AJUSTES, Estado.NIVELES, Estado.CAPITANES]
+	return estado in [Estado.MENU, Estado.ASTILLERO, Estado.BUSCANDO, Estado.AJUSTES, Estado.NIVELES, Estado.CAPITANES, Estado.RED]
 
 
 # Fuera de la partida solo existe el puerto: una isla con su muelle y el barco amarrado.
@@ -1399,7 +1404,12 @@ func _preparar_mar(carga: PantallaCarga) -> void:
 		barriles.vaciar()
 		misiones.vaciar()
 		await _avanzar_carga(carga, "Levantando los fuertes...", 0.35)
+		# Por wifi los dos móviles levantan el mismo mapa con la misma semilla.
+		if red.en_partida:
+			seed(red.semilla)
 		moba.empezar()
+		if red.en_partida:
+			randomize()
 		foco = jugador.position
 		camara.position = jugador.position + Vector3(0.0, 5.0, 11.0)
 		return
@@ -1710,6 +1720,8 @@ func disparar(barco: Barco, arma: String, hacia := Vector2.ZERO) -> void:
 	barco.recargas[arma] = RECARGAS[arma] * barco.factor_recarga
 	if barco.es_jugador:
 		avisar_combate()
+	if barco == jugador:
+		red.avisar_disparo(arma, hacia)
 	var proa := barco.proa()
 	var salidas: Array[Vector2] = []
 	var direccion := proa
@@ -2095,7 +2107,7 @@ func _revisar_fin(delta: float) -> void:
 			if modo == "moba":
 				if resultado == "victoria":
 					titulo_final.text = "[salto]%s[/salto]" % tr("Victoria")
-					texto_final.text = tr("Tu armada derribó el nexo enemigo.")
+					texto_final.text = tr("Tu rival se desconectó.") if red.rival_perdido else tr("Tu armada derribó el nexo enemigo.")
 				else:
 					titulo_final.text = tr("Derrota")
 					texto_final.text = tr("La armada rival derribó tu nexo.")
@@ -2111,8 +2123,8 @@ func _revisar_fin(delta: float) -> void:
 
 	if modo == "moba":
 		if moba.ganador >= 0:
-			resultado = "victoria" if moba.ganador == 0 else "hundido"
-			puesto = 1 if moba.ganador == 0 else 25
+			resultado = "victoria" if moba.ganador == jugador.equipo else "hundido"
+			puesto = 1 if moba.ganador == jugador.equipo else 25
 			cierre = 2.5
 		return
 	var vivos := _contar_vivos()
@@ -2598,6 +2610,7 @@ func _crear_interfaz() -> void:
 	misiones.crear_interfaz(capa)
 	emotes.crear_interfaz(capa)
 	moba.crear_interfaz(capa)
+	red.crear_interfaz(capa)
 
 
 func _cifra_con_icono(ruta: String, color: Color) -> Label:
@@ -2916,6 +2929,7 @@ func _salir_de_partida() -> void:
 	personalizacion.guardar()
 	resultado = "retirada"
 	if modo == "moba":
+		red.cerrar()
 		puesto = 25
 		titulo_final.text = tr("Retirada")
 		texto_final.text = tr("Abandonaste a tu armada antes de que cayera un nexo.")
@@ -3659,6 +3673,7 @@ func _mostrar(nuevo: Estado) -> void:
 	_pintar_nivel_menu()
 	panel_niveles.visible = estado == Estado.NIVELES
 	moba.panel_capitanes.visible = estado == Estado.CAPITANES
+	red.panel.visible = estado == Estado.RED
 	if estado != Estado.CAPITANES:
 		moba.quitar_del_muelle()
 	if estado in [Estado.MENU, Estado.ASTILLERO, Estado.AJUSTES, Estado.NIVELES]:
@@ -3756,6 +3771,8 @@ func _zarpar() -> void:
 	var carga := _abrir_carga("Zarpando...")
 	await _avanzar_carga(carga, "Preparando el mar...", 0.1)
 	await _preparar_mar(carga)
+	if red.en_partida:
+		await red.esperar_rival(carga)
 	aplicar_tamano_controles()
 	_mostrar(Estado.JUGANDO)
 	_pintar_hud()
@@ -3766,6 +3783,7 @@ func _zarpar() -> void:
 func _al_puerto(elegir_capitan := false) -> void:
 	if cargando:
 		return
+	red.cerrar()
 	var carga := _abrir_carga("Volviendo al puerto...")
 	await _avanzar_carga(carga, "Recogiendo las velas...", 0.1)
 	_vaciar_mar()
@@ -3831,7 +3849,7 @@ func _dibujar_marcadores() -> void:
 		var pantalla := camara.unproject_position(punto)
 		var ancho := 76.0
 		marcadores.draw_rect(Rect2(pantalla + Vector2(-ancho / 2.0, -6.0), Vector2(ancho, 12.0)), Color(0, 0, 0, 0.5))
-		var color := Color("3dde7a") if barco.es_jugador else (Moba.COLORES[barco.equipo] if barco.equipo >= 0 else Color("e23d3d"))
+		var color := Color("3dde7a") if barco.es_jugador else (moba.pintura(barco.equipo) if barco.equipo >= 0 else Color("e23d3d"))
 		var lleno := (ancho - 4.0) * barco.vida / barco.vida_max
 		marcadores.draw_rect(Rect2(pantalla + Vector2(-ancho / 2.0 + 2.0, -4.0), Vector2(lleno, 8.0)), color)
 		var fuente := ThemeDB.fallback_font

@@ -396,7 +396,7 @@ func actualizar(delta: float) -> void:
 	for monstruo in monstruos:
 		if not monstruo.viva:
 			monstruo.espera -= delta
-			if monstruo.espera <= 0.0:
+			if monstruo.espera <= 0.0 and not mundo.red.es_invitado():
 				_revivir(monstruo)
 			continue
 		monstruo.destello = maxf(0.0, monstruo.destello - delta * 3.0)
@@ -412,7 +412,7 @@ func actualizar(delta: float) -> void:
 				continue
 		if monstruo.aliado >= 0:
 			monstruo.tiempo_aliado -= delta
-			if monstruo.tiempo_aliado <= 0.0:
+			if monstruo.tiempo_aliado <= 0.0 and not mundo.red.es_invitado():
 				_retirar(monstruo)
 				continue
 			_asaltar(monstruo, delta)
@@ -725,8 +725,53 @@ func danar(monstruo: Monstruo, cantidad: float, atacante: Barco) -> void:
 	monstruo.destello = 1.0
 	if monstruo.aliado < 0 and is_instance_valid(atacante) and atacante.viva:
 		monstruo.agresor = atacante
-	if monstruo.vida <= 0.0:
+	if monstruo.vida <= 0.0 and not mundo.red.es_invitado():
 		_vencer(monstruo, atacante)
+
+
+# Por wifi: el anfitrión manda cómo están los monstruos y el invitado lo copia.
+func foto() -> Array:
+	var lista := []
+	for monstruo in monstruos:
+		lista.append([monstruo.pos, monstruo.rumbo, monstruo.vida, monstruo.viva, monstruo.aliado, monstruo.tiempo_aliado])
+	return lista
+
+
+func aplicar_foto(lista: Array) -> void:
+	for k in mini(lista.size(), monstruos.size()):
+		var monstruo := monstruos[k]
+		var datos: Array = lista[k]
+		var viva: bool = datos[3]
+		if viva and not monstruo.viva:
+			_revivir(monstruo)
+		elif not viva and monstruo.viva:
+			if monstruo.aliado >= 0:
+				_retirar(monstruo)
+			else:
+				_estallar(monstruo)
+				monstruo.viva = false
+				monstruo.agresor = null
+				monstruo.ardor = 0.0
+				monstruo.nodo.visible = false
+		if not viva:
+			continue
+		var aliado: int = datos[4]
+		if aliado >= 0 and monstruo.aliado < 0:
+			_estallar(monstruo)
+			monstruo.furia = 1.0
+			monstruo.agresor = null
+			var nombre := tr(_datos(monstruo)["nombre"])
+			var propio := moba.heroe_jugador()
+			if propio != null and aliado == propio.equipo:
+				moba._anunciar(tr("¡El %s lucha por tu armada!") % nombre, Principal.COLOR_ORO)
+			else:
+				moba._anunciar(tr("¡El %s lucha por la armada enemiga!") % nombre, Principal.COLOR_PELIGRO)
+		monstruo.aliado = aliado
+		monstruo.tiempo_aliado = datos[5]
+		monstruo.vida = datos[2]
+		var pos: Vector2 = datos[0]
+		monstruo.pos = pos if monstruo.pos.distance_to(pos) > 150.0 else monstruo.pos.lerp(pos, 0.3)
+		monstruo.rumbo = lerp_angle(monstruo.rumbo, datos[1], 0.3)
 
 
 func _vencer(monstruo: Monstruo, verdugo: Barco) -> void:

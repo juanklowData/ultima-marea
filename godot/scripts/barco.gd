@@ -165,11 +165,12 @@ func actualizar(delta: float) -> void:
 			else:
 				_pilotar(direccion, mundo.armas_jugador(), delta)
 		Mando.REMOTO:
-			_pilotar(entrada_direccion, entrada_fuego, delta)
+			pass
 		_:
 			_pilotar_rival(delta)
 
-	velocidad += (acelerador * vel_max - velocidad) * minf(1.0, delta * (1.4 if agil else 0.5))
+	if mando != Mando.REMOTO:
+		velocidad += (acelerador * vel_max - velocidad) * minf(1.0, delta * (1.4 if agil else 0.5))
 	if frenado > 0.0:
 		frenado -= delta
 		velocidad = minf(velocidad, vel_max * Comercio.FRENO)
@@ -178,6 +179,9 @@ func actualizar(delta: float) -> void:
 		recibir_danio(Comercio.DANIO_FUEGO * delta, false, quemador)
 		if not viva:
 			return
+	if mando == Mando.REMOTO:
+		seguir_red(delta)
+		return
 	rumbo = wrapf(rumbo + vel_giro * delta, -PI, PI)
 	pos += proa() * velocidad * delta
 
@@ -278,6 +282,8 @@ func recibir_danio(cantidad: float, de_bala := false, atacante: Barco = null) ->
 		mundo.astillas(position + Vector3(0, 0.9, 0))
 	if vida <= 0.0:
 		vida = 0.0
+		if mundo.red.es_invitado():
+			return
 		viva = false
 		mundo.al_hundirse(self)
 
