@@ -19,12 +19,30 @@ const ARRASTRE_GIRO := 62.0
 const ARRASTRE_CENTRO := 26.0
 const DANIO_REMOLINO := 12.0
 const HONDURA_REMOLINO := 0.24
+# Los remolinos se buscan poco a poco; si dos se juntan nace un tornado pequeño que daña más.
+const ATRACCION_REMOLINOS := 1100.0
+const SHADER_TORNADO := preload("res://shaders/tornado.gdshader")
+const MAX_TORNADOS := 2
+const RADIO_TORNADO := 46.0
+const VEL_TORNADO := 16.0
+const DURACION_TORNADO := 35.0
+const DANIO_TORNADO := 18.0
+const ARRASTRE_TORNADO := 24.0
+const GIRO_TORNADO := 120.0
+const ALTO_TORNADO := 5.5
 
-const VEL_KRAKEN := 11.0
+const VEL_KRAKEN := 16.0
 # Escala del modelo 3D; los radios de juego van en proporción.
 const TAM_KRAKEN := 0.45
 const RADIO_KRAKEN := 28.0
 const ALCANCE_KRAKEN := 125.0
+# Cada kraken patrulla una zona amplia alrededor de su sitio y solo va a por los barcos que
+# pasan cerca; la emboscada a un barco malherido sí lo lleva lejos y allí queda su nueva zona.
+const ZONA_KRAKEN := 300.0
+# Distancia mínima entre los sitios de dos krakens y a los barcos al aparecer.
+const SEPARACION_KRAKENS := 1300.0
+const LEJOS_KRAKEN := 650.0
+const ALERTA_KRAKEN := 200.0
 const VISTA_KRAKEN := 1100.0
 const VIDA_KRAKEN := 176.0
 const DANIO_TENTACULO := 16.0
@@ -35,6 +53,18 @@ const COFRES_KRAKEN := 2
 const DURACION_AGONIA := 2.6
 const ESPERA_ATAQUE := 3.0
 const DURACION_ATAQUE := 2.4
+# Al emerger junto a un barco, el primer golpe tarda más para que pueda escapar.
+const ESPERA_EMERGER := 1.6
+const LENTITUD_EMERGER := 1.8
+# Emboscada: el kraken se esconde y emerge junto a un barco que ya va a media vida o menos.
+const VIDA_PRESA := 0.5
+const ALCANCE_EMBOSCADA := 1500.0
+const ESCONDIDO := 3.5
+const ESPERA_EMBOSCADA := Vector2(16.0, 26.0)
+# Agarre: el tentáculo sujeta el barco y no lo deja moverse.
+const DURACION_AGARRE := 3.0
+const DANIO_AGARRE := 4.0
+const PROBABILIDAD_AGARRE := 0.3
 # Fracciones del ataque: apunta mientras carga, el látigo cae en MOMENTO_GOLPE,
 # se queda arrastrando hasta FIN_ARRASTRE y luego se recoge.
 const FIN_PUNTERIA := 0.35
@@ -61,12 +91,28 @@ class Remolino:
 	var fase := 0.0
 	var fuerza := 1.0
 	var espera_gotas := 0.0
+	# Segundos que sigue fundido en un tornado; al acabar reaparece en otro sitio.
+	var fundido := 0.0
 	var nodo: MeshInstance3D
 	var materia: ShaderMaterial
 
 
+class Tornado:
+	var pos := Vector2.ZERO
+	var radio := RADIO_TORNADO
+	var giro := 1.0
+	var rumbo := 0.0
+	var fase := 0.0
+	var fuerza := 0.0
+	var vida := DURACION_TORNADO
+	var espera_gotas := 0.0
+	var nodo: Node3D
+	var capas: Array[ShaderMaterial] = []
+
 class Kraken:
 	var pos := Vector2.ZERO
+	var hogar := Vector2.ZERO
+	var rumbo_a := Vector2.ZERO
 	var radio := RADIO_KRAKEN
 	var rumbo := 0.0
 	var mirada := 0.0
@@ -76,6 +122,8 @@ class Kraken:
 	var sumergido := 0.0
 	var espera := ESPERA_ATAQUE
 	var ataque := -1.0
+	var duracion_ataque := DURACION_ATAQUE
+	var recien_emergido := false
 	var tentaculo := 0
 	var blanco: Barco
 	var punto_golpe := Vector2.ZERO
@@ -104,6 +152,14 @@ class Kraken:
 	var aviso: MeshInstance3D
 	var aviso_materia: StandardMaterial3D
 	var aviso_espuma: StandardMaterial3D
+	var espera_emboscada := randf_range(ESPERA_EMBOSCADA.x, ESPERA_EMBOSCADA.y) * 0.5
+	# Barco tras el que va escondido; al emerger ataca enseguida y su golpe agarra.
+	var presa: Barco
+	var emboscada := false
+	var agarra_al_golpe := false
+	var agarrado: Barco
+	var agarre := 0.0
+	var pos_agarre := Vector2.ZERO
 
 
 class Ventisca:
@@ -119,6 +175,7 @@ class Ventisca:
 
 var mundo: Principal
 var remolinos: Array = []
+var tornados: Array = []
 var krakens: Array = []
 var ventiscas: Array = []
 var material_racha: ShaderMaterial
@@ -126,6 +183,7 @@ var ahuyentados := 0
 var activos := true
 var malla_tentaculo: CylinderMesh
 var rumor: AudioStreamPlayer
+var aullido: AudioStreamPlayer
 var voz_kraken: AudioStreamPlayer
 
 
@@ -145,6 +203,11 @@ func preparar(nuevo_mundo: Principal) -> void:
 	rumor.bus = "Efectos"
 	rumor.volume_db = -60.0
 	add_child(rumor)
+	aullido = AudioStreamPlayer.new()
+	aullido.stream = Sonidos.viento_tornado()
+	aullido.bus = "Efectos"
+	aullido.volume_db = -60.0
+	add_child(aullido)
 	voz_kraken = AudioStreamPlayer.new()
 	voz_kraken.stream = load("res://sonidos/kraken.wav")
 	voz_kraken.bus = "Efectos"
@@ -153,24 +216,30 @@ func preparar(nuevo_mundo: Principal) -> void:
 	material_racha.shader = SHADER_RACHA
 
 
-func reiniciar() -> void:
+func vaciar() -> void:
 	for remolino in remolinos:
 		remolino.nodo.queue_free()
+	for tornado in tornados:
+		tornado.nodo.queue_free()
 	for kraken in krakens:
 		kraken.nodo.queue_free()
 		kraken.aviso.queue_free()
 	for ventisca in ventiscas:
 		ventisca.nodo.queue_free()
 	remolinos.clear()
+	tornados.clear()
 	krakens.clear()
 	ventiscas.clear()
 	ahuyentados = 0
 	activos = true
 
+
+func reiniciar() -> void:
+	vaciar()
 	for _i in TOTAL_REMOLINOS:
 		var remolino := Remolino.new()
 		remolino.radio = randf_range(45.0, 65.0)
-		remolino.pos = _lugar_libre(remolino.radio + 40.0, Principal.ZONA_INICIAL * 0.85)
+		remolino.pos = _lugar_libre(remolino.radio + 40.0, mundo.alcance_juego() * 0.85)
 		remolino.giro = 1.0 if randf() < 0.5 else -1.0
 		remolino.rumbo = randf() * TAU
 		remolino.fase = randf() * 100.0
@@ -178,7 +247,9 @@ func reiniciar() -> void:
 		remolinos.append(remolino)
 	for _i in TOTAL_KRAKENS:
 		var kraken := Kraken.new()
-		kraken.pos = _lugar_libre(RADIO_KRAKEN + 60.0, Principal.ZONA_INICIAL * 0.8)
+		kraken.pos = lugar_kraken(kraken, mundo.alcance_juego() * 0.8)
+		kraken.hogar = kraken.pos
+		kraken.rumbo_a = kraken.pos
 		kraken.rumbo = randf() * TAU
 		kraken.mirada = kraken.rumbo
 		kraken.fase = randf() * 100.0
@@ -188,7 +259,7 @@ func reiniciar() -> void:
 	for _i in TOTAL_VENTISCAS:
 		var ventisca := Ventisca.new()
 		ventisca.radio = randf_range(90.0, 130.0)
-		ventisca.pos = _lugar_libre(ventisca.radio, Principal.ZONA_INICIAL * 0.85)
+		ventisca.pos = _lugar_libre(ventisca.radio, mundo.alcance_juego() * 0.85)
 		ventisca.rumbo = randf() * TAU
 		ventisca.fase = randf() * 100.0
 		_crear_ventisca(ventisca)
@@ -197,27 +268,106 @@ func reiniciar() -> void:
 
 func _lugar_libre(margen: float, alcance: float, lejos_de_barcos := 0.0) -> Vector2:
 	var punto := Vector2.ZERO
+	var separacion := 450.0 if mundo.modo == "libre" else 650.0
 	for _intento in 60:
-		punto = mundo.zona_centro + Vector2.from_angle(randf() * TAU) * sqrt(randf()) * alcance
+		punto = mundo.centro_juego() + Vector2.from_angle(randf() * TAU) * sqrt(randf()) * alcance
 		var libre := true
 		for isla in mundo.islotes:
 			if punto.distance_to(isla.pos) < isla.radio + margen + 40.0:
 				libre = false
 		for otro in remolinos + krakens + ventiscas:
-			if punto.distance_to(otro.pos) < 650.0:
+			if punto.distance_to(otro.pos) < separacion:
 				libre = false
 		for barco in mundo.barcos:
 			if barco.viva and punto.distance_to(barco.pos) < lejos_de_barcos:
 				libre = false
+		if libre and _tranquila(punto):
+			libre = false
 		if libre:
 			return punto
 	return punto
+
+
+# Agua libre lejos de los barcos y de los demás krakens; si el mar no da para tanto,
+# se queda con el sitio más alejado del kraken más cercano.
+func _tranquila(punto: Vector2) -> bool:
+	return mundo.modo == "libre" and mundo.libre.tranquila(punto)
+
+
+func lugar_kraken(kraken: Kraken, alcance: float) -> Vector2:
+	var mejor := mundo.centro_juego()
+	var mejor_nota := -INF
+	for _intento in 160:
+		var punto := mundo.centro_juego() + Vector2.from_angle(randf() * TAU) * sqrt(randf()) * alcance
+		var en_tierra := false
+		for isla in mundo.islotes:
+			if punto.distance_to(isla.pos) < isla.radio + RADIO_KRAKEN + 100.0:
+				en_tierra = true
+				break
+		if en_tierra or _tranquila(punto):
+			continue
+		# Cuánto cumple cada distancia (1 = suficiente); manda la que peor queda.
+		var nota := 1.0
+		for otro in krakens:
+			if otro != kraken and otro.agonia < 0.0:
+				var hueco := minf(punto.distance_to(otro.hogar), punto.distance_to(otro.pos))
+				nota = minf(nota, hueco / SEPARACION_KRAKENS)
+		for barco in mundo.barcos:
+			if barco.viva:
+				nota = minf(nota, punto.distance_to(barco.pos) / LEJOS_KRAKEN)
+		if nota >= 1.0:
+			return punto
+		if nota > mejor_nota:
+			mejor_nota = nota
+			mejor = punto
+	return mejor
+
+
+# Tras colocar los barcos: el kraken que haya quedado pegado a alguno se va a otro sitio.
+func apartar_krakens() -> void:
+	for kraken in krakens:
+		for barco in mundo.barcos:
+			if barco.viva and kraken.pos.distance_to(barco.pos) < LEJOS_KRAKEN:
+				kraken.pos = lugar_kraken(kraken, mundo.alcance_juego() * 0.8)
+				kraken.hogar = kraken.pos
+				kraken.rumbo_a = kraken.pos
+				break
+
+
+# Modo libre: el kraken que queda atrás (vivo o vencido) vuelve a salir del agua en otro sitio.
+func revivir_kraken(kraken: Kraken, punto: Vector2) -> void:
+	_soltar(kraken)
+	kraken.pos = punto
+	kraken.hogar = punto
+	kraken.rumbo_a = punto
+	kraken.vida = VIDA_KRAKEN
+	kraken.agonia = -1.0
+	kraken.fuerza = 0.0
+	kraken.ataque = -1.0
+	kraken.espera = ESPERA_ATAQUE
+	kraken.emboscada = false
+	kraken.recien_emergido = false
+	kraken.presa = null
+	kraken.blanco = null
+
+
+# Si aún queda algún kraken al que vencer (los vencidos no vuelven y con la zona pequeña se retiran).
+func quedan_krakens() -> bool:
+	if not activos:
+		return false
+	for kraken in krakens:
+		if kraken.agonia < 0.0:
+			return true
+	return false
 
 
 # Para no hacer aparecer barcos encima de un peligro.
 func cerca(punto: Vector2, margen: float) -> bool:
 	for remolino in remolinos:
 		if punto.distance_to(remolino.pos) < remolino.radio + margen:
+			return true
+	for tornado in tornados:
+		if punto.distance_to(tornado.pos) < tornado.radio + margen:
 			return true
 	for kraken in krakens:
 		if punto.distance_to(kraken.pos) < ALCANCE_KRAKEN + margen:
@@ -242,6 +392,43 @@ func _crear_remolino(remolino: Remolino) -> void:
 	remolino.nodo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	remolino.nodo.extra_cull_margin = 3.0
 	add_child(remolino.nodo)
+
+
+# Dos embudos (uno claro por fuera y otro más oscuro dentro) que se desvanecen hacia arriba.
+func _crear_tornado(tornado: Tornado) -> void:
+	tornado.nodo = Node3D.new()
+	var embudo := CylinderMesh.new()
+	embudo.top_radius = 1.0
+	embudo.bottom_radius = 1.0
+	embudo.height = 1.0
+	embudo.radial_segments = 28
+	embudo.rings = 28
+	embudo.cap_top = false
+	embudo.cap_bottom = false
+	var capas := [
+		[0.5, 2.1, 1.0, 0.7, Color(0.95, 0.96, 0.98), Color(0.55, 0.6, 0.66)],
+		[0.28, 1.45, 1.4, 0.9, Color(0.8, 0.84, 0.88), Color(0.32, 0.37, 0.42)],
+	]
+	for datos in capas:
+		var materia := ShaderMaterial.new()
+		materia.shader = SHADER_TORNADO
+		materia.set_shader_parameter("radio_base", datos[0])
+		materia.set_shader_parameter("radio_alto", datos[1])
+		materia.set_shader_parameter("vueltas", datos[2])
+		materia.set_shader_parameter("opacidad", datos[3])
+		materia.set_shader_parameter("color_claro", datos[4])
+		materia.set_shader_parameter("color_oscuro", datos[5])
+		materia.set_shader_parameter("giro", tornado.giro)
+		materia.set_shader_parameter("alto", ALTO_TORNADO)
+		var capa := MeshInstance3D.new()
+		capa.mesh = embudo
+		capa.material_override = materia
+		capa.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		capa.extra_cull_margin = 6.0
+		capa.position.y = 0.5
+		tornado.nodo.add_child(capa)
+		tornado.capas.append(materia)
+	add_child(tornado.nodo)
 
 
 func _crear_ventisca(ventisca: Ventisca) -> void:
@@ -403,11 +590,24 @@ func _crear_aviso_golpe(kraken: Kraken) -> void:
 func actualizar(delta: float) -> void:
 	activos = mundo.zona_radio > ZONA_RETIRADA
 	for remolino in remolinos:
+		if remolino.fundido > 0.0:
+			remolino.fundido -= delta
+			remolino.fuerza = move_toward(remolino.fuerza, 0.0, delta * 0.8)
+			if remolino.fundido <= 0.0:
+				remolino.pos = _lugar_libre(remolino.radio + 40.0, mundo.alcance_juego() * 0.8, 400.0)
+			continue
 		remolino.fuerza = move_toward(remolino.fuerza, 1.0 if activos else 0.0, delta * 0.25)
 		if remolino.fuerza <= 0.0:
 			continue
-		_derivar(remolino, VEL_REMOLINO, remolino.radio, delta, Vector2.INF)
+		_derivar(remolino, VEL_REMOLINO, remolino.radio, delta, _remolino_cercano(remolino))
 		_arrastrar_barcos(remolino, delta)
+	_juntar_remolinos()
+	for tornado in tornados:
+		_actualizar_tornado(tornado, delta)
+	for i in range(tornados.size() - 1, -1, -1):
+		if tornados[i].vida <= 0.0 and tornados[i].fuerza <= 0.0:
+			tornados[i].nodo.queue_free()
+			tornados.remove_at(i)
 	for kraken in krakens:
 		_actualizar_kraken(kraken, delta)
 	for ventisca in ventiscas:
@@ -462,6 +662,73 @@ func _arrastrar_barcos(remolino: Remolino, delta: float) -> void:
 			mundo.avisar_combate()
 
 
+func _remolino_cercano(remolino: Remolino) -> Vector2:
+	if not activos or tornados.size() >= MAX_TORNADOS:
+		return Vector2.INF
+	var mejor := Vector2.INF
+	var minima := ATRACCION_REMOLINOS
+	for otro in remolinos:
+		if otro == remolino or otro.fundido > 0.0 or otro.fuerza < 0.9:
+			continue
+		var distancia: float = remolino.pos.distance_to(otro.pos)
+		if distancia < minima:
+			minima = distancia
+			mejor = otro.pos
+	return mejor
+
+
+func _juntar_remolinos() -> void:
+	if not activos:
+		return
+	for a in remolinos:
+		for b in remolinos:
+			if tornados.size() >= MAX_TORNADOS:
+				return
+			if a == b or a.fundido > 0.0 or b.fundido > 0.0 or a.fuerza < 0.9 or b.fuerza < 0.9:
+				continue
+			if a.pos.distance_to(b.pos) < (a.radio + b.radio) * 0.6:
+				_formar_tornado(a, b)
+
+
+func _formar_tornado(a: Remolino, b: Remolino) -> void:
+	a.fundido = DURACION_TORNADO + 10.0
+	b.fundido = DURACION_TORNADO + 14.0
+	var tornado := Tornado.new()
+	tornado.pos = (a.pos + b.pos) * 0.5
+	tornado.giro = a.giro
+	tornado.rumbo = randf() * TAU
+	tornado.fase = randf() * 100.0
+	_crear_tornado(tornado)
+	tornados.append(tornado)
+	mundo.salpicar(tornado.pos, 24)
+
+
+func _actualizar_tornado(tornado: Tornado, delta: float) -> void:
+	tornado.vida -= delta
+	var crece := tornado.vida > 0.0 and activos
+	tornado.fuerza = move_toward(tornado.fuerza, 1.0 if crece else 0.0, delta * (0.5 if crece else 0.35))
+	if tornado.fuerza <= 0.0:
+		return
+	_derivar(tornado, VEL_TORNADO, tornado.radio, delta, Vector2.INF)
+	for barco in mundo.barcos:
+		if not barco.viva:
+			continue
+		var rel: Vector2 = barco.pos - tornado.pos
+		var dist := rel.length()
+		if dist >= tornado.radio + barco.radio * 0.5 or dist < 0.001:
+			continue
+		var k := clampf(1.0 - dist / (tornado.radio + barco.radio * 0.5), 0.0, 1.0) * tornado.fuerza
+		var hacia_centro := -rel / dist
+		var de_lado := Vector2(-rel.y, rel.x) / dist * tornado.giro
+		barco.pos += (hacia_centro * ARRASTRE_TORNADO + de_lado * GIRO_TORNADO) * k * delta
+		barco.velocidad *= 1.0 - minf(1.0, 1.5 * k * delta)
+		barco.rumbo = wrapf(barco.rumbo + tornado.giro * k * 2.6 * delta, -PI, PI)
+		barco.recibir_danio((4.0 + DANIO_TORNADO * k) * delta)
+		if barco.es_jugador:
+			mundo.golpe = maxf(mundo.golpe, 0.12 + 0.3 * k)
+			mundo.avisar_combate()
+
+
 # Velocidad con la que el agua de los remolinos arrastra algo suelto, como las tablas.
 func arrastre(punto: Vector2) -> Vector2:
 	var total := Vector2.ZERO
@@ -472,6 +739,13 @@ func arrastre(punto: Vector2) -> Vector2:
 			continue
 		var k: float = (1.0 - dist / remolino.radio) * remolino.fuerza
 		total += (-rel / dist * ARRASTRE_CENTRO * 0.6 + Vector2(-rel.y, rel.x) / dist * remolino.giro * ARRASTRE_GIRO) * k
+	for tornado in tornados:
+		var rel: Vector2 = punto - tornado.pos
+		var dist := rel.length()
+		if dist >= tornado.radio * 1.3 or dist < 6.0:
+			continue
+		var k: float = (1.0 - dist / (tornado.radio * 1.3)) * tornado.fuerza
+		total += (-rel / dist * ARRASTRE_TORNADO * 0.6 + Vector2(-rel.y, rel.x) / dist * tornado.giro * GIRO_TORNADO) * k
 	return total
 
 
@@ -490,7 +764,7 @@ func _derivar(cosa, velocidad: float, margen: float, delta: float, destino: Vect
 		if sep.length() < limite:
 			empuje += sep.normalized() * 3.0 * (1.2 - sep.length() / limite)
 	for otro in remolinos + krakens:
-		if otro == cosa:
+		if otro == cosa or (cosa is Remolino and otro is Remolino):
 			continue
 		var sep: Vector2 = pos - otro.pos
 		if sep.length() < 600.0 and sep != Vector2.ZERO:
@@ -502,7 +776,7 @@ func _derivar(cosa, velocidad: float, margen: float, delta: float, destino: Vect
 		var minimo: float = isla.borde(pos) + margen
 		if sep.length() < minimo and sep != Vector2.ZERO:
 			pos = isla.pos + sep.normalized() * minimo
-	cosa.pos = pos.limit_length(Principal.RADIO_MUNDO * 0.9)
+	cosa.pos = pos.limit_length(mundo.radio_mundo() * 0.9)
 
 
 func _actualizar_kraken(kraken: Kraken, delta: float) -> void:
@@ -516,19 +790,41 @@ func _actualizar_kraken(kraken: Kraken, delta: float) -> void:
 		kraken.fuerza = move_toward(kraken.fuerza, 0.0, delta * 0.5)
 		kraken.sumergido -= delta
 		if kraken.sumergido <= 0.0:
-			if activos:
-				kraken.pos = _lugar_libre(RADIO_KRAKEN + 60.0, maxf(300.0, mundo.zona_radio * 0.75), 600.0)
-				kraken.vida = VIDA_KRAKEN
+			var presa := kraken.presa
+			kraken.presa = null
+			if activos and presa != null and presa.viva:
+				kraken.pos = _junto_a(presa)
+				kraken.hogar = kraken.pos
+				kraken.rumbo_a = kraken.pos
+				kraken.emboscada = true
+				kraken.recien_emergido = true
+				kraken.ataque = -1.0
+				kraken.espera = ESPERA_EMERGER
+			elif activos:
+				kraken.pos = lugar_kraken(kraken, maxf(300.0, mundo.alcance_juego() * 0.75))
+				kraken.hogar = kraken.pos
+				kraken.rumbo_a = kraken.pos
 				kraken.ataque = -1.0
 				kraken.espera = ESPERA_ATAQUE
 			else:
 				kraken.sumergido = 5.0
 		return
-	kraken.fuerza = move_toward(kraken.fuerza, 1.0 if activos else 0.0, delta * 0.4)
+	# Tras una emboscada sale del agua de golpe.
+	kraken.fuerza = move_toward(kraken.fuerza, 1.0 if activos else 0.0, delta * (1.3 if kraken.emboscada else 0.4))
 	if not activos:
 		kraken.ataque = -1.0
+		_soltar(kraken)
 		if kraken.fuerza <= 0.0:
 			return
+
+	# Si la tormenta se traga su territorio, se sumerge y reaparece en otro sitio. Tras una
+	# emboscada espera a atacar aunque esté junto a la tormenta: el barco está ahí.
+	if kraken.ataque < 0.0 and kraken.agarre <= 0.0 and not kraken.emboscada \
+			and (kraken.hogar.distance_to(mundo.zona_centro) > mundo.zona_radio or _tranquila(kraken.hogar)):
+		kraken.presa = null
+		kraken.sumergido = ESCONDIDO
+		mundo.salpicar(kraken.pos, 14)
+		return
 
 	var blanco: Barco = null
 	var mejor := VISTA_KRAKEN
@@ -537,15 +833,33 @@ func _actualizar_kraken(kraken: Kraken, delta: float) -> void:
 			mejor = barco.pos.distance_to(kraken.pos)
 			blanco = barco
 
+	kraken.espera_emboscada -= delta
+	if kraken.ataque < 0.0 and not kraken.emboscada and kraken.espera_emboscada <= 0.0 and kraken.fuerza > 0.95:
+		var presa := _presa_debil(kraken)
+		if presa != null:
+			kraken.presa = presa
+			kraken.sumergido = ESCONDIDO
+			kraken.espera_emboscada = randf_range(ESPERA_EMBOSCADA.x, ESPERA_EMBOSCADA.y)
+			mundo.salpicar(kraken.pos, 14)
+			return
+		kraken.espera_emboscada = randf_range(3.0, 6.0)
+
 	if kraken.ataque < 0.0:
 		var destino := Vector2.INF
 		var velocidad := VEL_KRAKEN
-		if blanco != null:
+		var cerca_de_el := blanco != null and mejor < ALERTA_KRAKEN and blanco.pos.distance_to(kraken.hogar) < ZONA_KRAKEN + ALCANCE_KRAKEN
+		if cerca_de_el:
 			if mejor > ALCANCE_KRAKEN * 0.55:
-				destino = blanco.pos
+				destino = kraken.hogar + (blanco.pos - kraken.hogar).limit_length(ZONA_KRAKEN)
 			else:
 				velocidad = 0.0
+		else:
+			# Patrulla: nada hacia un punto de su zona y, al llegar, elige otro.
+			if kraken.pos.distance_to(kraken.rumbo_a) < 60.0:
+				kraken.rumbo_a = _punto_patrulla(kraken)
+			destino = kraken.rumbo_a
 		_derivar(kraken, velocidad, RADIO_KRAKEN + 60.0, delta, destino)
+		kraken.pos = kraken.hogar + (kraken.pos - kraken.hogar).limit_length(ZONA_KRAKEN)
 	var mirar_a := kraken.rumbo
 	if blanco != null:
 		mirar_a = (blanco.pos - kraken.pos).angle()
@@ -560,16 +874,25 @@ func _actualizar_kraken(kraken: Kraken, delta: float) -> void:
 			_rugir(kraken)
 
 	kraken.espera -= delta
-	if kraken.ataque < 0.0 and kraken.espera <= 0.0 and blanco != null and kraken.fuerza > 0.95 \
+	var listo := kraken.fuerza > (0.6 if kraken.emboscada else 0.95)
+	if kraken.ataque < 0.0 and kraken.espera <= 0.0 and blanco != null and listo \
 			and mejor < ALCANCE_KRAKEN + blanco.radio * 0.5:
 		kraken.ataque = 0.0
+		kraken.duracion_ataque = DURACION_ATAQUE * (LENTITUD_EMERGER if kraken.recien_emergido else 1.0)
+		kraken.recien_emergido = false
 		kraken.blanco = blanco
 		kraken.golpeado = false
+		kraken.agarra_al_golpe = kraken.emboscada or randf() < PROBABILIDAD_AGARRE
+		kraken.emboscada = false
 		kraken.punto_golpe = _al_alcance(kraken, blanco.pos)
 		kraken.tentaculo = _tentaculo_hacia(kraken, kraken.punto_golpe)
+	elif kraken.emboscada and kraken.fuerza >= 1.0:
+		kraken.emboscada = false
 
-	if kraken.ataque >= 0.0:
-		kraken.ataque += delta / DURACION_ATAQUE
+	if kraken.agarre > 0.0:
+		_sujetar(kraken, delta)
+	elif kraken.ataque >= 0.0:
+		kraken.ataque += delta / kraken.duracion_ataque
 		if kraken.ataque < FIN_PUNTERIA and kraken.blanco != null and kraken.blanco.viva:
 			kraken.punto_golpe = kraken.punto_golpe.lerp(_al_alcance(kraken, kraken.blanco.pos), minf(1.0, delta * 8.0))
 		if not kraken.golpeado and kraken.ataque >= MOMENTO_GOLPE:
@@ -588,6 +911,95 @@ func _actualizar_kraken(kraken: Kraken, delta: float) -> void:
 			if sep.length() < minimo and sep != Vector2.ZERO:
 				barco.pos = kraken.pos + sep.normalized() * minimo
 				barco.velocidad *= 0.9
+
+
+# El tentáculo queda sobre el barco agarrado: no avanza ni gira y la madera cruje.
+func _sujetar(kraken: Kraken, delta: float) -> void:
+	var barco := kraken.agarrado
+	kraken.agarre -= delta
+	if barco == null or not barco.viva or kraken.agarre <= 0.0:
+		_soltar(kraken)
+		return
+	barco.pos = kraken.pos_agarre
+	barco.velocidad = 0.0
+	barco.vel_giro = 0.0
+	barco.recibir_danio(DANIO_AGARRE * delta)
+	kraken.punto_golpe = _al_alcance(kraken, barco.pos)
+	kraken.destello = maxf(kraken.destello, 0.25)
+	if barco.es_jugador:
+		mundo.golpe = maxf(mundo.golpe, 0.1)
+		mundo.avisar_combate()
+	if randf() < delta * 3.0:
+		mundo.salpicar(barco.pos + Vector2.from_angle(randf() * TAU) * barco.radio * 0.5, 4)
+
+
+func _soltar(kraken: Kraken) -> void:
+	kraken.agarre = 0.0
+	kraken.agarrado = null
+
+
+func _agarrado(barco: Barco) -> bool:
+	for kraken in krakens:
+		if kraken.agarrado == barco and kraken.agarre > 0.0:
+			return true
+	return false
+
+
+# El barco más cercano que ya va a media vida o menos y queda fuera del alcance del tentáculo.
+func _presa_debil(kraken: Kraken) -> Barco:
+	var presa: Barco = null
+	var mejor := ALCANCE_EMBOSCADA
+	for barco in mundo.barcos:
+		if not barco.viva or barco.vida > barco.vida_max * VIDA_PRESA or _tranquila(barco.pos):
+			continue
+		var distancia := barco.pos.distance_to(kraken.pos)
+		if distancia > ALCANCE_KRAKEN + 150.0 and distancia < mejor and not _otro_kraken_cerca(kraken, barco):
+			mejor = distancia
+			presa = barco
+	return presa
+
+
+# Otro kraken ya ronda o persigue a ese barco: no se juntan dos en el mismo sitio.
+func _otro_kraken_cerca(kraken: Kraken, barco: Barco) -> bool:
+	for otro in krakens:
+		if otro == kraken or otro.agonia >= 0.0:
+			continue
+		if otro.presa == barco or otro.pos.distance_to(barco.pos) < SEPARACION_KRAKENS * 0.5:
+			return true
+	return false
+
+
+# Un punto de agua libre dentro de la zona del kraken, hacia el que nada mientras patrulla.
+func _punto_patrulla(kraken: Kraken) -> Vector2:
+	var punto := kraken.hogar
+	for _intento in 8:
+		punto = kraken.hogar + Vector2.from_angle(randf() * TAU) * sqrt(randf_range(0.15, 1.0)) * ZONA_KRAKEN
+		var libre := true
+		for isla in mundo.islotes:
+			if punto.distance_to(isla.pos) < isla.radio + RADIO_KRAKEN + 80.0:
+				libre = false
+		if libre:
+			return punto
+	return punto
+
+
+# Un sitio de agua libre delante de la proa del barco, a tiro de tentáculo.
+func _junto_a(barco: Barco) -> Vector2:
+	var distancia := ALCANCE_KRAKEN * 0.75 + barco.radio * 0.3
+	var punto := barco.pos + barco.proa() * distancia
+	for intento in 12:
+		var giro := randf_range(-0.7, 0.7) if intento < 6 else randf() * TAU
+		punto = barco.pos + barco.proa().rotated(giro) * distancia
+		var libre := true
+		for isla in mundo.islotes:
+			if punto.distance_to(isla.pos) < isla.radio + RADIO_KRAKEN + 20.0:
+				libre = false
+		for otro in mundo.barcos:
+			if otro != barco and otro.viva and punto.distance_to(otro.pos) < RADIO_KRAKEN + otro.radio:
+				libre = false
+		if libre:
+			return punto
+	return punto
 
 
 func _al_alcance(kraken: Kraken, punto: Vector2) -> Vector2:
@@ -616,6 +1028,11 @@ func _golpear(kraken: Kraken) -> void:
 			if barco.es_jugador:
 				mundo.golpe = maxf(mundo.golpe, 0.35)
 				mundo.avisar_combate()
+			if kraken.agarra_al_golpe and kraken.agarrado == null and barco.viva:
+				kraken.agarrado = barco
+				kraken.agarre = DURACION_AGARRE
+				kraken.pos_agarre = barco.pos
+	kraken.agarra_al_golpe = false
 	mundo.salpicar(punto, 22)
 	for k in 3:
 		mundo.salpicar(kraken.pos.lerp(punto, 0.5 + k * 0.17), 5)
@@ -661,17 +1078,44 @@ func recibir_bala(punto: Vector2, dueno: Barco) -> bool:
 	return false
 
 
+# Un kraken fuera del agua que alcanza el punto (para que revienten los barriles).
+func toca(punto: Vector2, margen: float) -> bool:
+	for kraken in krakens:
+		if kraken.sumergido <= 0.0 and kraken.fuerza >= 0.5 and kraken.agonia < 0.0 \
+				and punto.distance_to(kraken.pos) < RADIO_KRAKEN + margen:
+			return true
+	return false
+
+
+# Un barril que revienta cerca también hiere al kraken que esté fuera del agua.
+func explosion(punto: Vector2, radio: float, danio: float, dueno: Barco) -> void:
+	for kraken in krakens:
+		if kraken.sumergido > 0.0 or kraken.fuerza < 0.5 or kraken.agonia >= 0.0:
+			continue
+		var distancia := maxf(0.0, punto.distance_to(kraken.pos) - RADIO_KRAKEN)
+		if distancia >= radio:
+			continue
+		kraken.vida -= danio * (1.0 - distancia / radio)
+		kraken.destello = 1.0
+		if kraken.vida <= 0.0:
+			_vencer(kraken, dueno)
+
+
 func _vencer(kraken: Kraken, dueno: Barco) -> void:
 	kraken.vida = 0.0
 	kraken.sumergido = INF
 	kraken.ataque = -1.0
 	kraken.agonia = 0.0
 	kraken.destello = 1.0
+	kraken.presa = null
+	kraken.emboscada = false
+	_soltar(kraken)
 	voz_kraken.stop()
 	_rugir(kraken)
 	mundo.salpicar(kraken.pos, 30)
 	if dueno == mundo.jugador:
 		ahuyentados += 1
+		mundo.recompensas.al_vencer("kraken")
 	if dueno != null and dueno.viva:
 		mundo.ganar_botin(dueno, MONEDAS_KRAKEN, mundo.a_3d(kraken.pos, 2.0))
 	var giro := randf() * TAU
@@ -690,6 +1134,13 @@ func evitar(barco: Barco) -> Vector2:
 		var limite: float = remolino.radio + barco.radio + 140.0
 		if sep.length() < limite and sep != Vector2.ZERO:
 			huida += sep.normalized() * (1.2 - sep.length() / limite)
+	for tornado in tornados:
+		if tornado.fuerza < 0.2:
+			continue
+		var sep: Vector2 = barco.pos - tornado.pos
+		var limite: float = tornado.radio + barco.radio + 200.0
+		if sep.length() < limite and sep != Vector2.ZERO:
+			huida += sep.normalized() * (1.5 - sep.length() / limite)
 	for kraken in krakens:
 		if kraken.sumergido > 0.0 or kraken.fuerza < 0.5:
 			continue
@@ -701,6 +1152,15 @@ func evitar(barco: Barco) -> Vector2:
 
 
 func aviso(barco: Barco) -> String:
+	if _agarrado(barco):
+		return "¡El Kraken te tiene atrapado!"
+	for tornado in tornados:
+		if tornado.fuerza > 0.3:
+			var dist: float = barco.pos.distance_to(tornado.pos)
+			if dist < tornado.radio + barco.radio * 0.5:
+				return "¡Atrapado en un tornado!"
+			if dist < tornado.radio + 220.0:
+				return "¡Cuidado: tornado!"
 	for remolino in remolinos:
 		if remolino.fuerza > 0.3 and barco.pos.distance_to(remolino.pos) < remolino.radio:
 			return "¡Atrapado en un remolino!"
@@ -713,32 +1173,10 @@ func aviso(barco: Barco) -> String:
 	return ""
 
 
-# Barra de vida sobre cada kraken a la vista, para que se note que se le puede vencer.
-func dibujar_vidas(lienzo: Control, camara: Camera3D) -> void:
-	var fuente := ThemeDB.fallback_font
-	for kraken: Kraken in krakens:
-		if not kraken.nodo.visible or kraken.sumergido > 0.0 or kraken.fuerza < 0.6:
-			continue
-		var punto := kraken.nodo.position + Vector3(0.0, 4.2 * TAM_KRAKEN, 0.0)
-		if camara.is_position_behind(punto):
-			continue
-		var pantalla := camara.unproject_position(punto)
-		var ancho := 96.0
-		lienzo.draw_rect(Rect2(pantalla + Vector2(-ancho / 2.0, -7.0), Vector2(ancho, 14.0)), Color(0, 0, 0, 0.55))
-		var lleno := (ancho - 4.0) * kraken.vida / VIDA_KRAKEN
-		var color := Color("c04aa0").lerp(Color.WHITE, kraken.destello * 0.6)
-		lienzo.draw_rect(Rect2(pantalla + Vector2(-ancho / 2.0 + 2.0, -5.0), Vector2(lleno, 10.0)), color)
-		var nombre := tr("Kraken")
-		var medida := fuente.get_string_size(nombre, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
-		var sitio := pantalla + Vector2(-medida / 2.0, -13.0)
-		lienzo.draw_string_outline(fuente, sitio, nombre, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, 5, Color(0, 0, 0, 0.7))
-		lienzo.draw_string(fuente, sitio, nombre, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("ffb3e6"))
-
-
 func dibujar_minimapa(lienzo: Control, centro: Vector2, escala: float) -> void:
 	var t := mundo.tiempo
 	for ventisca in ventiscas:
-		if ventisca.fuerza < 0.05:
+		if ventisca.fuerza < 0.05 or not mundo.en_mapa(ventisca.pos):
 			continue
 		var punto: Vector2 = centro + ventisca.pos * escala
 		var radio := maxf(5.0, ventisca.radio * escala)
@@ -750,7 +1188,7 @@ func dibujar_minimapa(lienzo: Control, centro: Vector2, escala: float) -> void:
 			var cabeza := punto + dir * radio * lerpf(-0.6, 0.7, fmod(paso + k * 0.5, 1.0))
 			lienzo.draw_polyline(PackedVector2Array([cabeza - dir.rotated(0.6) * 4.0, cabeza, cabeza - dir.rotated(-0.6) * 4.0]), color, 1.5, true)
 	for remolino in remolinos:
-		if remolino.fuerza < 0.05:
+		if remolino.fuerza < 0.05 or not mundo.en_mapa(remolino.pos):
 			continue
 		var punto: Vector2 = centro + remolino.pos * escala
 		var radio := maxf(4.0, remolino.radio * escala)
@@ -758,13 +1196,16 @@ func dibujar_minimapa(lienzo: Control, centro: Vector2, escala: float) -> void:
 		var inicio: float = t * 3.0 * remolino.giro
 		lienzo.draw_arc(punto, radio, inicio, inicio + 4.2, 14, color, 1.6, true)
 		lienzo.draw_arc(punto, radio * 0.5, inicio + PI, inicio + PI + 3.6, 10, color, 1.4, true)
-	for kraken in krakens:
-		if kraken.sumergido > 0.0 or kraken.fuerza < 0.3:
+	for tornado in tornados:
+		if tornado.fuerza < 0.05 or not mundo.en_mapa(tornado.pos):
 			continue
-		var punto: Vector2 = centro + kraken.pos * escala
-		lienzo.draw_circle(punto, 5.0, Color("b0306a"))
-		lienzo.draw_circle(punto + Vector2(-1.6, -1.0), 1.1, Color("ffd36b"))
-		lienzo.draw_circle(punto + Vector2(1.6, -1.0), 1.1, Color("ffd36b"))
+		var punto: Vector2 = centro + tornado.pos * escala
+		var radio := maxf(5.0, tornado.radio * escala)
+		var color := Color(0.88, 0.9, 0.95, tornado.fuerza)
+		var inicio: float = t * 6.0 * tornado.giro
+		for k in 3:
+			var r := radio * (1.0 - k * 0.3)
+			lienzo.draw_arc(punto, r, inicio + k * 2.1, inicio + k * 2.1 + 3.4, 12, color, 1.8, true)
 
 
 # Misma fórmula que con_remolinos() en agua.gdshader (metros del mundo 3D).
@@ -831,6 +1272,16 @@ func animar(delta: float) -> void:
 	elif rumor.playing:
 		rumor.stop()
 
+	var aullido_cerca := 0.0
+	for tornado in tornados:
+		aullido_cerca = maxf(aullido_cerca, _animar_tornado(tornado, delta, t, foco_plano))
+	if aullido_cerca > 0.01:
+		aullido.volume_db = linear_to_db(aullido_cerca * 0.3)
+		if not aullido.playing:
+			aullido.play()
+	elif aullido.playing:
+		aullido.stop()
+
 	for kraken in krakens:
 		_animar_kraken(kraken, delta, t, foco_plano)
 	for ventisca in ventiscas:
@@ -857,6 +1308,42 @@ func _animar_ventisca(ventisca: Ventisca, t: float, foco_plano: Vector2) -> void
 		var base := Basis(dir * 2.2 * racha.w, Vector3.UP, lado * 0.2)
 		multi.set_instance_transform(i, Transform3D(base, Vector3(plano.x, y, plano.y)))
 		multi.set_instance_color(i, Color(1, 1, 1, alfa * ventisca.fuerza))
+
+
+# Devuelve lo cerca que suena (0 a 1) para el aullido del viento.
+func _animar_tornado(tornado: Tornado, delta: float, t: float, foco_plano: Vector2) -> float:
+	var centro: Vector2 = tornado.pos * Principal.ESCALA
+	var distancia := centro.distance_to(foco_plano)
+	tornado.nodo.visible = distancia < Principal.DISTANCIA_VISIBLE + 10.0 and tornado.fuerza > 0.01
+	if not tornado.nodo.visible:
+		return 0.0
+	var h := mundo.altura_mar(centro.x, centro.y)
+	tornado.nodo.position = Vector3(centro.x, h - 0.3, centro.y)
+	var inclina := Vector2(sin(t * 0.4 + tornado.fase), cos(t * 0.31 + tornado.fase)) * 0.6
+	for materia in tornado.capas:
+		materia.set_shader_parameter("tiempo", t)
+		materia.set_shader_parameter("fuerza", tornado.fuerza)
+		materia.set_shader_parameter("inclina", inclina)
+	_salpicar_tornado(tornado, delta)
+	return clampf(1.0 - (distancia - tornado.radio * Principal.ESCALA) / 45.0, 0.0, 1.0) * tornado.fuerza
+
+
+# Espuma y gotas que salen girando y suben desde la base.
+func _salpicar_tornado(tornado: Tornado, delta: float) -> void:
+	tornado.espera_gotas -= delta
+	if tornado.espera_gotas > 0.0:
+		return
+	tornado.espera_gotas = 0.05
+	var angulo := randf() * TAU
+	var rel := Vector2.from_angle(angulo) * tornado.radio * randf_range(0.1, 0.45)
+	var sitio := mundo.a_3d(tornado.pos + rel)
+	var h := mundo.altura_mar(sitio.x, sitio.z)
+	var tangente := Vector2(-rel.y, rel.x).normalized() * tornado.giro * 3.5
+	for _i in 3:
+		var vel := Vector3(tangente.x + randf_range(-0.5, 0.5), randf_range(2.5, 5.0), tangente.y + randf_range(-0.5, 0.5))
+		mundo.crear_efecto(mundo.malla_gota, Color(0.9, 0.95, 1.0, 0.85), sitio + Vector3(0, h + 0.1, 0), vel, 0.9, 0.9, 0.0, 6.0)
+	if randf() < 0.5:
+		mundo.crear_efecto(mundo.malla_humo, Color(0.9, 0.93, 0.96, 0.5), sitio + Vector3(0, h + 0.2, 0), Vector3(tangente.x, 0.8, tangente.y) * 0.6, 1.2, 1.4, 1.5)
 
 
 func _salpicar_remolino(remolino: Remolino, delta: float) -> void:

@@ -17,7 +17,9 @@ const VIDA_BALA := 1.15
 const TOTAL_BARCOS := 50
 const TOTAL_TABLAS := 34
 const REPARACION := 26.0
-const TABLAS_RESTOS := 3
+const TABLAS_RESTOS := 2
+const MEDIO_EJE_CASCO := 0.83
+const MEDIA_MANGA_CASCO := 0.5
 # La música de batalla entra con un rival a esta distancia, al disparar o al recibir
 # un cañonazo, y se mantiene unos segundos después del último motivo.
 const DISTANCIA_COMBATE := 420.0
@@ -30,9 +32,19 @@ const ZONA_INICIAL := 3500.0
 const DISTANCIA_VISIBLE := 60.0
 const RADIO_PALANCA := 60.0
 const ALTO_HUD := 150.0
+const ANCHO_BRUJULA := 20.0
 const CAMARA_JUEGO := Vector3(0.0, 18.0, 11.5)
 # Radianes por segundo que gira sola la cámara alrededor del barco en el puerto.
-const GIRO_MENU := 0.035
+# En el menú la cámara va y viene por el lado del mar, sin pasar sobre la isla del puerto,
+# mirando a un punto entre el barco y la isla.
+const ARCO_MENU := 0.3
+const RITMO_MENU := 0.12
+const GIRO_BASE_MENU := PI + 0.75
+const MIRA_MENU := Vector3(3.0, 0.0, 1.2)
+const DISTANCIA_MENU := 12.5
+const ALTURA_MENU := 5.0
+const NIEBLA_MAR := 0.003
+const NIEBLA_PUERTO := 0.0018
 const GIRO_VITRINA := 0.12
 # Segundos sin girar solo después de que el jugador mueva la cámara a mano.
 const PAUSA_GIRO_MANUAL := 300.0
@@ -45,6 +57,10 @@ const MONEDAS_POR_HUNDIDO := 1
 const BOTIN_INICIAL_BOTS := 3
 # Segundos que flota un cofre antes de hundirse.
 const VIDA_COFRE := 45.0
+# Parte de los bots zarpa con un cofre a la vista: hundirlos tiene premio.
+const BOTS_CON_COFRE := 0.2
+# Tamaño de las tablas y cofres que flotan (solo el dibujo; se recogen igual de cerca).
+const ESCALA_FLOTANTES := 0.6
 const ESPERA_BUSQUEDA := 4.0
 const ESPERA_BOTS := 1.4
 const NOMBRES_PIRATAS: Array[String] = [
@@ -60,15 +76,20 @@ const NOMBRES_SUELTOS: Array[String] = [
 ]
 const TITULOS_PIRATAS: Array[String] = ["Capitán", "Capitana", "Almirante", "Contramaestre", "Corsario"]
 
-const DURACION_FASES: Array[float] = [68.0, 57.0, 51.0, 46.0, 43.0, 41.0, 40.0]
+# Segundos que tarda en cerrarse cada fase; en total, 15 minutos de partida.
+const DURACION_FASES: Array[float] = [176.0, 148.0, 133.0, 120.0, 112.0, 107.0, 104.0]
 const RADIO_FASES: Array[float] = [2750.0, 2100.0, 1550.0, 1050.0, 650.0, 360.0, 190.0]
 
-const COLOR_TEXTO := Color("f6efe2")
-const COLOR_ORO := Color("e2b15a")
-const COLOR_PELIGRO := Color("ff8a7a")
+const COLOR_TEXTO := Paleta.TEXTO
+const COLOR_ORO := Paleta.ORO
+const COLOR_PELIGRO := Paleta.PELIGRO
+# Acabado de cada tipo de superficie: la madera y la piedra mates, lo pintado con algo de brillo.
+const ASPEREZA := {"madera": 0.82, "roca": 0.95, "arena": 0.97, "hierba": 0.92, "general": 0.62}
 const COLORES_TABLA: Array[Color] = [Color("a7774a"), Color("8e6239"), Color("b88a58")]
+# Pestaña de la tienda con las piezas únicas que se pagan con gemas.
+const TESOROS := "tesoros"
 
-enum Estado { MENU, ASTILLERO, BUSCANDO, JUGANDO, FIN, AJUSTES, NIVELES }
+enum Estado { MENU, ASTILLERO, BUSCANDO, JUGANDO, FIN, AJUSTES, NIVELES, CAPITANES }
 
 
 class Bala:
@@ -78,6 +99,14 @@ class Bala:
 	var gracia := 0.15
 	var dueno: Barco
 	var nodo: MeshInstance3D
+	# Munición del mar libre ("hierro", "cadena", "fuego", "explosiva"); vacía = bala normal.
+	var tipo := ""
+	# Isla desde la que sale (los fuertes disparan desde su islote): no choca con ella.
+	var origen: Circulo
+	# Armada que dispara en el modo MOBA: no daña a los suyos.
+	var equipo := -1
+	# Daño fijo (botes y torres del MOBA); negativo = el normal.
+	var danio := -1.0
 
 
 class Tabla:
@@ -94,6 +123,8 @@ class Cofre:
 	var pos: Vector2
 	var vel := Vector2.ZERO
 	var monedas := 1
+	# Si no está vacío es un tesoro ("cofre", "calavera") en vez de monedas sueltas.
+	var tesoro := ""
 	var edad := 0.0
 	var fase := 0.0
 	var nodo: Node3D
@@ -120,6 +151,8 @@ class Efecto:
 
 # Estado de la partida
 var estado := Estado.MENU
+# "tormenta": todos contra todos con la zona que se cierra. "libre": mar abierto enorme.
+var modo := "tormenta"
 var personalizacion := Personalizacion.new()
 var barcos: Array[Barco] = []
 var jugador: Barco
@@ -167,6 +200,17 @@ var dedos_vitrina := {}
 # Módulos del mundo
 var islas: Islas
 var peligros: Peligros
+var tiburones: Tiburones
+var barriles: Barriles
+var misiones: Misiones
+var tesoros: Tesoros
+var comercio: Comercio
+var persecucion: Persecucion
+var niebla: Niebla
+var recompensas: Recompensas
+var emotes: Emotes
+var moba: Moba
+var libre: MarLibre
 var fauna: Fauna
 var capa_barcos: Node3D
 var musica: Musica
@@ -203,6 +247,7 @@ var voces_trueno: Array[AudioStreamPlayer] = []
 var sonidos_trueno: Array[AudioStreamWAV] = []
 var voces_canon: Array[AudioStreamPlayer] = []
 var voces_hundir: Array[AudioStreamPlayer] = []
+var voces_explosion: Array[AudioStreamPlayer] = []
 var voz_monedas: AudioStreamPlayer
 var voz_moneda: AudioStreamPlayer
 var voz_equipar: AudioStreamPlayer
@@ -215,6 +260,7 @@ var hud: VBoxContainer
 var texto_vivos: Label
 var texto_tormenta: Label
 var texto_botin: Label
+var texto_mision: Label
 var minimapa: Control
 var aviso_giro: Label
 var boton_partida: Button
@@ -224,6 +270,7 @@ var boton_salir: Button
 # Menú del puerto, ajustes y niveles
 var panel_menu: Control
 var texto_monedas_menu: Label
+var texto_gemas_menu: Label
 var insignia_menu: Insignia
 var texto_nivel_menu: Label
 var texto_xp_menu: Label
@@ -239,6 +286,7 @@ var desliz_niveles: ScrollContainer
 
 # Búsqueda de partida
 var panel_busqueda: Control
+var titulo_busqueda: Label
 var texto_busqueda: Label
 var texto_jugadores: Label
 var tiempo_busqueda := 0.0
@@ -246,6 +294,7 @@ var tiempo_busqueda := 0.0
 # Tienda
 var panel_astillero: Control
 var texto_monedas_tienda: Label
+var texto_gemas_tienda: Label
 var botones_categoria: Array = []
 var rejilla_piezas: GridContainer
 var desplazable: ScrollContainer
@@ -257,7 +306,8 @@ var seleccion := ""
 
 # Pantalla final y premio
 var panel_final: Control
-var titulo_final: Label
+var titulo_final: RichTextLabel
+var salto_titulo := TextoSaltarin.new()
 var texto_final: Label
 var texto_premio: Label
 var caja_final: PanelContainer
@@ -281,7 +331,7 @@ func _ready() -> void:
 	add_child(miniaturas)
 	_crear_escena()
 	_crear_interfaz()
-	_preparar_mar()
+	_preparar_puerto()
 	_mostrar(Estado.MENU)
 
 
@@ -294,18 +344,30 @@ func _process(delta: float) -> void:
 		golpe = maxf(0.0, golpe - delta)
 	if estado == Estado.BUSCANDO:
 		_avanzar_busqueda(delta)
+	if en_puerto() and jugador != null:
+		_amarrar()
 
 	for barco in barcos:
 		var cerca := a_3d(barco.pos).distance_to(Vector3(foco.x, 0.0, foco.z)) < DISTANCIA_VISIBLE
 		if cerca or barco == jugador:
 			barco.colocar(delta)
-		barco.visible = (cerca or barco == jugador) and barco.hundimiento < 1.0
+		barco.visible = (cerca or barco == jugador) and barco.hundimiento < 1.0 \
+				and not (modo == "moba" and jugador != null and barco.equipo != jugador.equipo and moba.escondido(barco))
 	_actualizar_tablas(delta)
 	_actualizar_cofres(delta)
 	_actualizar_efectos(delta)
 	_mover_camara(delta)
 	peligros.animar(delta)
+	tiburones.animar(delta)
+	barriles.animar(delta)
+	misiones.animar(delta)
+	if modo == "libre":
+		libre.animar(delta)
+		comercio.animar(delta)
+	elif modo == "moba":
+		comercio.animar_llamas(delta)
 	fauna.animar(delta)
+	emotes.actualizar(delta)
 	# En puerto la cámara mira al horizonte y las islas se ven más lejos.
 	var en_partida := estado == Estado.JUGANDO or estado == Estado.FIN
 	islas.recortar(delta, foco, DISTANCIA_VISIBLE + 8.0 if en_partida else 170.0)
@@ -319,26 +381,67 @@ func _process(delta: float) -> void:
 
 
 func _actualizar(delta: float) -> void:
-	_mover_zona(delta)
+	if modo == "libre":
+		libre.actualizar(delta)
+	elif modo == "moba":
+		moba.actualizar(delta)
+	else:
+		_mover_zona(delta)
 	for barco in barcos:
 		barco.actualizar(delta)
-	peligros.actualizar(delta)
+	if modo != "moba":
+		peligros.actualizar(delta)
+		tiburones.actualizar(delta)
+		barriles.actualizar(delta)
+		misiones.actualizar(delta)
 	_separar_barcos()
 	_recoger_tablas()
 	_recoger_cofres()
 	_mover_balas(delta)
 	golpe = maxf(0.0, golpe - delta)
 	tiempo_combate = maxf(0.0, tiempo_combate - delta)
-	var rival: Barco = rival_mas_cercano(jugador) if jugador.viva else null
+	var rival: Barco = rival_de(jugador) if jugador.viva else null
 	if rival != null and rival.pos.distance_to(jugador.pos) < DISTANCIA_COMBATE:
 		avisar_combate()
 	musica.batalla = tiempo_combate > 0.0
-	_revisar_fin(delta)
+	if modo != "libre":
+		_revisar_fin(delta)
 	_pintar_hud()
 
 
 func a_3d(punto: Vector2, altura := 0.0) -> Vector3:
 	return Vector3(punto.x * ESCALA, altura, punto.y * ESCALA)
+
+
+func radio_mundo() -> float:
+	if modo == "moba":
+		return Moba.RADIO_MAPA
+	return MarLibre.RADIO + 400.0 if modo == "libre" else RADIO_MUNDO
+
+
+# Dónde y hasta dónde se reparten peligros, tablas y cofres: toda la zona en el modo
+# tormenta, alrededor del barco en el mar libre.
+func centro_juego() -> Vector2:
+	return jugador.pos if modo == "libre" and jugador != null else zona_centro
+
+
+func alcance_juego() -> float:
+	return MarLibre.ACTIVO if modo == "libre" else zona_radio
+
+
+# En el mar libre el minimapa es un radar alrededor del barco: lo de fuera no se dibuja.
+func en_mapa(punto: Vector2) -> bool:
+	return modo != "libre" or jugador == null or punto.distance_to(jugador.pos) < MarLibre.RADAR * 0.94
+
+
+func destino_bot(barco: Barco) -> Vector2:
+	return libre.destino_bot(barco) if modo == "libre" else zona_centro
+
+
+func rival_de(barco: Barco) -> Barco:
+	if modo == "moba":
+		return moba.rival_de(barco)
+	return libre.rival_de(barco) if modo == "libre" else rival_mas_cercano(barco)
 
 
 # Escena 3D
@@ -350,6 +453,28 @@ func _crear_escena() -> void:
 	add_child(islas)
 	peligros = Peligros.new()
 	add_child(peligros)
+	tiburones = Tiburones.new()
+	add_child(tiburones)
+	barriles = Barriles.new()
+	add_child(barriles)
+	misiones = Misiones.new()
+	add_child(misiones)
+	tesoros = Tesoros.new()
+	add_child(tesoros)
+	comercio = Comercio.new()
+	persecucion = Persecucion.new()
+	add_child(persecucion)
+	niebla = Niebla.new()
+	add_child(niebla)
+	recompensas = Recompensas.new()
+	add_child(recompensas)
+	emotes = Emotes.new()
+	add_child(emotes)
+	moba = Moba.new()
+	add_child(moba)
+	add_child(comercio)
+	libre = MarLibre.new()
+	add_child(libre)
 	fauna = Fauna.new()
 	add_child(fauna)
 	capa_barcos = Node3D.new()
@@ -358,28 +483,56 @@ func _crear_escena() -> void:
 	_crear_cielo_tormenta()
 	_crear_sonidos()
 	peligros.preparar(self)
+	tiburones.preparar(self)
+	barriles.preparar(self)
+	misiones.preparar(self)
+	tesoros.preparar(self)
+	comercio.preparar(self)
+	persecucion.preparar(self)
+	niebla.preparar(self)
+	recompensas.preparar(self)
+	emotes.preparar(self)
+	moba.preparar(self)
+	libre.preparar(self)
 	fauna.preparar(self)
 
 
 func _crear_luz_y_camara() -> void:
 	entorno = Environment.new()
-	entorno.background_mode = Environment.BG_COLOR
-	entorno.background_color = Color("8fc9cc")
+	var cielo := ProceduralSkyMaterial.new()
+	cielo.sky_top_color = Paleta.CIELO_ALTO
+	cielo.sky_horizon_color = Paleta.CIELO_HORIZONTE
+	cielo.sky_curve = 0.12
+	cielo.ground_horizon_color = Paleta.CIELO_HORIZONTE
+	cielo.ground_bottom_color = Paleta.MAR_CLARO
+	cielo.sun_angle_max = 20.0
+	entorno.background_mode = Environment.BG_SKY
+	entorno.sky = Sky.new()
+	entorno.sky.sky_material = cielo
 	entorno.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	entorno.ambient_light_color = Color("cfe9ee")
-	entorno.ambient_light_energy = 0.35
-	entorno.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	entorno.ambient_light_color = Paleta.AMBIENTE
+	entorno.ambient_light_energy = Paleta.AMBIENTE_ENERGIA
+	entorno.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	entorno.tonemap_white = 4.0
+	entorno.tonemap_exposure = 1.0
+	entorno.glow_enabled = true
+	entorno.glow_intensity = 0.3
+	entorno.glow_hdr_threshold = 1.1
+	entorno.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	entorno.adjustment_enabled = true
+	entorno.adjustment_saturation = Paleta.SATURACION
+	entorno.adjustment_contrast = Paleta.CONTRASTE
 	entorno.fog_enabled = true
-	entorno.fog_light_color = Color("8fc3c6")
-	entorno.fog_density = 0.003
+	entorno.fog_light_color = Paleta.NIEBLA
+	entorno.fog_density = NIEBLA_MAR
 	var ambiente := WorldEnvironment.new()
 	ambiente.environment = entorno
 	add_child(ambiente)
 
 	sol = DirectionalLight3D.new()
 	sol.rotation_degrees = Vector3(-55.0, -35.0, 0.0)
-	sol.light_energy = 0.8
-	sol.light_color = Color("fff1d6")
+	sol.light_energy = Paleta.SOL_ENERGIA
+	sol.light_color = Paleta.SOL
 	sol.shadow_enabled = true
 	sol.directional_shadow_max_distance = 90.0
 	add_child(sol)
@@ -400,6 +553,14 @@ func _crear_mar() -> void:
 	plano.subdivide_depth = DIVISIONES_AGUA
 	material_agua = ShaderMaterial.new()
 	material_agua.shader = load("res://shaders/agua.gdshader")
+	# Es transparente sobre los bajíos: se dibuja antes que la espuma y los efectos.
+	material_agua.render_priority = -10
+	material_agua.set_shader_parameter("color_hondo", Paleta.MAR_HONDO)
+	material_agua.set_shader_parameter("color_claro", Paleta.MAR_CLARO)
+	material_agua.set_shader_parameter("color_cielo", Paleta.MAR_REFLEJO)
+	material_agua.set_shader_parameter("color_tormenta", Paleta.MAR_TORMENTA)
+	material_agua.set_shader_parameter("color_bajio", Paleta.MAR_BAJIO)
+	material_agua.set_shader_parameter("color_espuma", Paleta.ESPUMA)
 	agua = MeshInstance3D.new()
 	agua.mesh = plano
 	agua.material_override = material_agua
@@ -528,10 +689,16 @@ func _crear_sonidos() -> void:
 	var hundir := Sonidos.hundir()
 	for _i in 3:
 		voces_hundir.append(_nueva_voz(hundir))
+	var explosion := Sonidos.explosion()
+	for _i in 3:
+		voces_explosion.append(_nueva_voz(explosion))
 	voz_monedas = _nueva_voz(Sonidos.monedas(), -16.0)
 	voz_moneda = _nueva_voz(Sonidos.monedas([0.0]), -22.0)
 	voz_moneda.max_polyphony = 4
 	voz_equipar = _nueva_voz(Sonidos.equipar(), -13.0)
+	var ambiente := AmbientePuerto.new()
+	add_child(ambiente)
+	ambiente.preparar(self)
 
 
 func _nueva_voz(sonido: AudioStream, volumen := 0.0) -> AudioStreamPlayer:
@@ -541,6 +708,10 @@ func _nueva_voz(sonido: AudioStream, volumen := 0.0) -> AudioStreamPlayer:
 	voz.volume_db = volumen
 	add_child(voz)
 	return voz
+
+
+func sonar_explosion(punto: Vector3) -> void:
+	_sonar_en_vista(voces_explosion, punto, -3.0, -24.0, 40.0)
 
 
 func _sonar_en_vista(voces: Array[AudioStreamPlayer], punto: Vector3, volumen_cerca: float, volumen_lejos: float, alcance: float) -> void:
@@ -557,19 +728,22 @@ func _sonar_en_vista(voces: Array[AudioStreamPlayer], punto: Vector3, volumen_ce
 
 # Materiales y piezas 3D
 
-func material(color: Color) -> StandardMaterial3D:
-	if not materiales.has(color):
+# textura: uno de los tipos de Texturas (hierba, roca, arena, madera, general).
+func material(color: Color, textura := "general") -> StandardMaterial3D:
+	var clave := "%s|%s" % [color.to_html(), textura]
+	if not materiales.has(clave):
 		var nuevo := StandardMaterial3D.new()
-		nuevo.albedo_color = color
-		nuevo.roughness = 0.85
-		materiales[color] = nuevo
-	return materiales[color]
+		nuevo.albedo_color = Paleta.armonizar(color)
+		nuevo.roughness = ASPEREZA.get(textura, 0.75)
+		Texturas.aplicar(nuevo, textura)
+		materiales[clave] = nuevo
+	return materiales[clave]
 
 
-func _malla(padre: Node3D, forma: Mesh, color: Color, pos: Vector3) -> MeshInstance3D:
+func _malla(padre: Node3D, forma: Mesh, color: Color, pos: Vector3, textura := "general") -> MeshInstance3D:
 	var pieza := MeshInstance3D.new()
 	pieza.mesh = forma
-	pieza.material_override = material(color)
+	pieza.material_override = material(color, textura)
 	pieza.position = pos
 	padre.add_child(pieza)
 	return pieza
@@ -580,12 +754,12 @@ func _crear_tabla() -> Node3D:
 	var tabla := BoxMesh.new()
 	tabla.size = Vector3(1.0, 0.08, 0.22)
 	for i in 3:
-		var pieza := _malla(nodo, tabla, COLORES_TABLA[i], Vector3(randf_range(-0.06, 0.06), 0.0, (i - 1) * 0.25))
+		var pieza := _malla(nodo, tabla, COLORES_TABLA[i], Vector3(randf_range(-0.06, 0.06), 0.0, (i - 1) * 0.25), "madera")
 		pieza.rotation.y = randf_range(-0.08, 0.08)
 	var travesano := BoxMesh.new()
 	travesano.size = Vector3(0.12, 0.06, 0.8)
 	for lado in [-1.0, 1.0]:
-		_malla(nodo, travesano, Color("5e4028"), Vector3(lado * 0.32, 0.07, 0.0))
+		_malla(nodo, travesano, Color("5e4028"), Vector3(lado * 0.32, 0.07, 0.0), "madera")
 
 	var aro := TorusMesh.new()
 	aro.inner_radius = 0.82
@@ -602,6 +776,7 @@ func _crear_tabla() -> Node3D:
 	anillo.scale = Vector3(1.0, 0.2, 1.0)
 	anillo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	nodo.add_child(anillo)
+	nodo.scale = Vector3.ONE * ESCALA_FLOTANTES
 	return nodo
 
 
@@ -618,8 +793,11 @@ func _actualizar_agua() -> void:
 	material_agua.set_shader_parameter("tiempo", tiempo)
 	islas.actualizar_orillas(tiempo, zona_centro, zona_radio)
 	material_muro.set_shader_parameter("relampago", relampago)
+	muro.visible = not en_puerto()
 	muro.position = a_3d(zona_centro, 4.0)
 	muro.scale = Vector3(zona_radio * ESCALA, 1.0, zona_radio * ESCALA)
+	entorno.fog_density = (NIEBLA_PUERTO if en_puerto() else NIEBLA_MAR) + niebla.espesor * Niebla.ESPESOR_MAXIMO
+	entorno.fog_light_color = Paleta.NIEBLA.lerp(Niebla.COLOR_NIEBLA, niebla.espesor)
 
 
 # Misma fórmula que altura_mar() en agua.gdshader, en metros del mundo 3D.
@@ -661,8 +839,8 @@ func _actualizar_tormenta(delta: float) -> void:
 	lluvia.position = foco + Vector3(0.0, 14.0, 0.0)
 	lluvia.amount_ratio = lerpf(lluvia.amount_ratio, intensidad, minf(1.0, delta * 2.0))
 	var en_tormenta := fuerza_tormenta(jugador.pos) if activa and jugador != null else 0.0
-	sol.light_energy = lerpf(sol.light_energy, lerpf(0.8, 0.3, en_tormenta), minf(1.0, delta * 2.0))
-	entorno.ambient_light_energy = lerpf(entorno.ambient_light_energy, lerpf(0.35, 0.18, en_tormenta), minf(1.0, delta * 2.0))
+	sol.light_energy = lerpf(sol.light_energy, lerpf(Paleta.SOL_ENERGIA, Paleta.SOL_TORMENTA, en_tormenta), minf(1.0, delta * 2.0))
+	entorno.ambient_light_energy = lerpf(entorno.ambient_light_energy, lerpf(Paleta.AMBIENTE_ENERGIA, Paleta.AMBIENTE_TORMENTA, en_tormenta), minf(1.0, delta * 2.0))
 
 	for i in range(truenos.size() - 1, -1, -1):
 		truenos[i]["espera"] -= delta
@@ -778,14 +956,18 @@ func _mover_camara(delta: float) -> void:
 	if jugador == null:
 		return
 	var objetivo := jugador.position
-	var en_puerto := estado in [Estado.MENU, Estado.ASTILLERO, Estado.BUSCANDO, Estado.AJUSTES, Estado.NIVELES]
-	if en_puerto:
-		var vitrina := estado == Estado.ASTILLERO
+	if en_puerto():
+		var vitrina := estado in [Estado.ASTILLERO, Estado.CAPITANES]
+		if moba.figura_muelle != null:
+			objetivo = objetivo.lerp(moba.figura_muelle.global_position, 0.25)
 		pausa_giro -= delta
-		if not vitrina or pausa_giro <= 0.0:
-			angulo_puerto += delta * (GIRO_VITRINA if vitrina else GIRO_MENU)
-		var lejos := distancia_vitrina if vitrina else 11.0
-		var alto := altura_vitrina if vitrina else 5.0
+		if not vitrina:
+			angulo_puerto = GIRO_BASE_MENU + sin(tiempo * RITMO_MENU) * ARCO_MENU
+			objetivo += MIRA_MENU
+		elif pausa_giro <= 0.0:
+			angulo_puerto += delta * GIRO_VITRINA
+		var lejos := distancia_vitrina if vitrina else DISTANCIA_MENU
+		var alto := altura_vitrina if vitrina else ALTURA_MENU
 		var deseada := objetivo + Vector3(sin(angulo_puerto) * lejos, alto, cos(angulo_puerto) * lejos)
 		camara.position = camara.position.lerp(deseada, minf(1.0, delta * (7.0 if vitrina else 2.0)))
 		foco = foco.lerp(objetivo + Vector3(0, 1.2, 0), minf(1.0, delta * 2.0))
@@ -800,7 +982,90 @@ func _mover_camara(delta: float) -> void:
 
 # Partida
 
+func en_puerto() -> bool:
+	return estado in [Estado.MENU, Estado.ASTILLERO, Estado.BUSCANDO, Estado.AJUSTES, Estado.NIVELES, Estado.CAPITANES]
+
+
+# Fuera de la partida solo existe el puerto: una isla con su muelle y el barco amarrado.
+func _preparar_puerto() -> void:
+	_vaciar_mar()
+	peligros.vaciar()
+	tiburones.vaciar()
+	barriles.vaciar()
+	misiones.vaciar()
+	islas.generar_puerto()
+	jugador = _crear_barco(personalizacion, true, Vector2.ZERO)
+	jugador.nombre = personalizacion.nombre_visible()
+	_amarrar()
+	islas.muelle.amarrar(jugador)
+	foco = jugador.position
+	camara.position = jugador.position + Vector3(0.0, 5.0, -11.0)
+
+
+# Cambiar de casco en la tienda cambia la manga: el barco se recoloca junto al muelle.
+func _amarrar() -> void:
+	# Los barcos de los capitanes del MOBA miden todos como un bergantín.
+	jugador.pos = Muelle.amarre("bergantin" if jugador.has_meta("capitan") else jugador.tipo) / ESCALA
+	jugador.rumbo = -PI / 2.0
+
+
 func _preparar_mar() -> void:
+	_vaciar_mar()
+	if modo == "libre":
+		libre.empezar()
+		foco = jugador.position
+		camara.position = jugador.position + Vector3(0.0, 5.0, 11.0)
+		return
+	if modo == "moba":
+		peligros.vaciar()
+		tiburones.vaciar()
+		barriles.vaciar()
+		misiones.vaciar()
+		moba.empezar()
+		foco = jugador.position
+		camara.position = jugador.position + Vector3(0.0, 5.0, 11.0)
+		return
+	islas.generar()
+	peligros.reiniciar()
+
+	var alcance := ZONA_INICIAL * 0.9
+	jugador = _crear_barco(personalizacion, true, _punto_libre(300.0, alcance))
+	jugador.nombre = personalizacion.nombre_visible()
+	var nombres := _nombres_bots(TOTAL_BARCOS - 1)
+	for i in range(1, TOTAL_BARCOS):
+		var bot := _crear_barco(Personalizacion.al_azar(), false, _punto_libre(300.0, alcance))
+		bot.nombre = nombres[i - 1]
+		bot.botin = randi_range(0, BOTIN_INICIAL_BOTS)
+		bot.es_bot = true
+		if randf() < BOTS_CON_COFRE:
+			tesoros.cargar(bot, "cofre")
+	peligros.apartar_krakens()
+	for _i in TOTAL_TABLAS:
+		_soltar_tabla()
+	tiburones.reiniciar()
+	barriles.reiniciar()
+	misiones.reiniciar()
+
+	foco = jugador.position
+	camara.position = jugador.position + Vector3(0.0, 5.0, 11.0)
+
+
+
+func _danio_bala(bala: Bala) -> float:
+	if bala.danio >= 0.0:
+		return bala.danio
+	var base := comercio.danio(bala.tipo) if bala.tipo != "" else DANIO_BALA
+	return base * (bala.dueno.factor_danio if is_instance_valid(bala.dueno) else 1.0)
+
+
+func _vaciar_mar() -> void:
+	libre.vaciar()
+	comercio.vaciar()
+	persecucion.vaciar()
+	emotes.vaciar()
+	moba.vaciar()
+	niebla.vaciar()
+	tesoros.vaciar()
 	for barco in barcos:
 		barco.queue_free()
 	barcos.clear()
@@ -819,11 +1084,8 @@ func _preparar_mar() -> void:
 		efecto.nodo.queue_free()
 	efectos.clear()
 	fauna.limpiar()
-	islas.generar()
 
 	zona_centro = Vector2.ZERO
-	zona_radio = ZONA_INICIAL
-	peligros.reiniciar()
 	zona_radio = ZONA_INICIAL
 	zona_desde = ZONA_INICIAL
 	centro_desde = Vector2.ZERO
@@ -838,21 +1100,6 @@ func _preparar_mar() -> void:
 	truenos.clear()
 	proximo_rayo = 2.5
 	rayo_vida = 0.0
-
-	var alcance := ZONA_INICIAL * 0.9
-	jugador = _crear_barco(personalizacion, true, _punto_libre(300.0, alcance))
-	jugador.nombre = personalizacion.nombre_visible()
-	var nombres := _nombres_bots(TOTAL_BARCOS - 1)
-	for i in range(1, TOTAL_BARCOS):
-		var bot := _crear_barco(Personalizacion.al_azar(), false, _punto_libre(300.0, alcance))
-		bot.nombre = nombres[i - 1]
-		bot.botin = randi_range(0, BOTIN_INICIAL_BOTS)
-		bot.es_bot = true
-	for _i in TOTAL_TABLAS:
-		_soltar_tabla()
-
-	foco = jugador.position
-	camara.position = jugador.position + Vector3(0.0, 5.0, 11.0)
 
 
 func _crear_barco(aspecto: Personalizacion, es_jugador: bool, pos: Vector2) -> Barco:
@@ -900,8 +1147,8 @@ func _punto_libre(radio_min: float, radio_max: float) -> Vector2:
 
 func _soltar_tabla() -> void:
 	for _intento in 20:
-		var alcance := maxf(120.0, zona_radio * 0.75)
-		var punto := zona_centro + Vector2.from_angle(randf() * TAU) * randf() * alcance
+		var alcance := maxf(120.0, alcance_juego() * 0.75)
+		var punto := centro_juego() + Vector2.from_angle(randf() * TAU) * randf() * alcance
 		var libre := true
 		for isla in islotes:
 			if punto.distance_to(isla.pos) < isla.radio + 30.0:
@@ -977,6 +1224,10 @@ func _recoger_tablas() -> void:
 
 # Las tablas sueltas se reparten según el tamaño de la zona: cuando se achica hay pocas.
 func _tablas_deseadas() -> int:
+	if modo == "libre":
+		return MarLibre.TABLAS
+	if modo == "moba":
+		return 0
 	var area := pow(zona_radio / ZONA_INICIAL, 2.0)
 	return clampi(roundi(TOTAL_TABLAS * area), 2, TOTAL_TABLAS)
 
@@ -997,6 +1248,9 @@ func _mover_zona(delta: float) -> void:
 		centro_hacia = (zona_centro + corrimiento).limit_length(RADIO_MUNDO * 0.25)
 
 
+# Cada casco es una cápsula alargada como el modelo (proa y popa a 1.33 radios del centro,
+# media manga de medio radio). Al tocarse se apartan y el que empuja contra el otro frena,
+# así resbalan uno junto al otro en vez de quedarse pegados.
 func _separar_barcos() -> void:
 	for i in barcos.size():
 		var a: Barco = barcos[i]
@@ -1004,22 +1258,68 @@ func _separar_barcos() -> void:
 			continue
 		for j in range(i + 1, barcos.size()):
 			var b: Barco = barcos[j]
-			if not b.viva:
+			if not b.viva or a.pos.distance_to(b.pos) > (a.radio + b.radio) * 1.4:
 				continue
-			var separacion := b.pos - a.pos
+			var eje_a := a.proa() * a.radio * MEDIO_EJE_CASCO
+			var eje_b := b.proa() * b.radio * MEDIO_EJE_CASCO
+			var puntos := _mas_cercanos(a.pos - eje_a, a.pos + eje_a, b.pos - eje_b, b.pos + eje_b)
+			var separacion: Vector2 = puntos[1] - puntos[0]
 			var dist := separacion.length()
-			var minimo := (a.radio + b.radio) * 0.85
-			if dist < minimo and dist > 0.001:
-				var empuje := separacion / dist * (minimo - dist) / 2.0
-				a.pos -= empuje
-				b.pos += empuje
+			var minimo := (a.radio + b.radio) * MEDIA_MANGA_CASCO
+			if dist >= minimo:
+				continue
+			var normal := separacion / dist if dist > 0.001 else (b.pos - a.pos).normalized()
+			var peso_a := b.radio / (a.radio + b.radio)
+			var empuje := normal * (minimo - dist + 1.0)
+			a.pos -= empuje * peso_a
+			b.pos += empuje * (1.0 - peso_a)
+			var acercamiento := a.proa().dot(normal) * a.velocidad - b.proa().dot(normal) * b.velocidad
+			var fuerza := acercamiento / maxf(a.vel_max, b.vel_max)
+			a.chocar_barco(fuerza, b)
+			b.chocar_barco(fuerza, a)
+			var choque_a := a.proa().dot(normal)
+			if choque_a > 0.0 and a.velocidad > 0.0:
+				a.velocidad *= 1.0 - 0.25 * choque_a
+			var choque_b := -b.proa().dot(normal)
+			if choque_b > 0.0 and b.velocidad > 0.0:
+				b.velocidad *= 1.0 - 0.25 * choque_b
+
+
+# Puntos más cercanos entre los segmentos p1-q1 y p2-q2.
+func _mas_cercanos(p1: Vector2, q1: Vector2, p2: Vector2, q2: Vector2) -> Array[Vector2]:
+	var d1 := q1 - p1
+	var d2 := q2 - p2
+	var r := p1 - p2
+	var a := d1.dot(d1)
+	var e := d2.dot(d2)
+	var f := d2.dot(r)
+	var c := d1.dot(r)
+	var b := d1.dot(d2)
+	var den := a * e - b * b
+	var s := clampf((b * f - c * e) / den, 0.0, 1.0) if den > 0.0001 else 0.0
+	var t := (b * s + f) / e
+	if t < 0.0:
+		t = 0.0
+		s = clampf(-c / a, 0.0, 1.0)
+	elif t > 1.0:
+		t = 1.0
+		s = clampf((b - c) / a, 0.0, 1.0)
+	return [p1 + d1 * s, p2 + d2 * t]
 
 
 # "proa" dispara un cañón hacia delante; "babor" y "estribor", andanadas de tres por cada costado.
 func disparar(barco: Barco, arma: String) -> void:
 	if not barco.viva or barco.recargas[arma] > 0.0:
 		return
-	barco.recargas[arma] = RECARGAS[arma]
+	# En el mar libre las balas del jugador se acaban: se recogen en cajas o se compran.
+	var cuantas := 1 if arma == "proa" else 3
+	var tipo := ""
+	if modo == "libre" and barco == jugador:
+		cuantas = comercio.gastar_balas(cuantas)
+		if cuantas == 0:
+			return
+		tipo = comercio.tipo_bala
+	barco.recargas[arma] = RECARGAS[arma] * barco.factor_recarga
 	if barco.es_jugador:
 		avisar_combate()
 	var proa := barco.proa()
@@ -1029,17 +1329,20 @@ func disparar(barco: Barco, arma: String) -> void:
 		salidas.append(barco.pos + proa * barco.radio * 1.15)
 	else:
 		direccion = proa.orthogonal() * (1.0 if arma == "babor" else -1.0)
-		for k in range(-1, 2):
+		for k: int in [0, -1, 1]:
 			salidas.append(barco.pos + direccion * barco.radio * 0.6 + proa * k * barco.radio * 0.4)
+	salidas = salidas.slice(0, cuantas)
 	for k in salidas.size():
 		var bala := Bala.new()
 		bala.pos = salidas[k]
 		bala.vel = direccion.rotated(randf_range(-0.03, 0.03)) * VEL_BALA + proa * barco.velocidad * 0.6
 		bala.vida = VIDA_BALA
 		bala.dueno = barco
+		bala.tipo = tipo
+		bala.equipo = barco.equipo
 		bala.nodo = MeshInstance3D.new()
 		bala.nodo.mesh = malla_bala
-		bala.nodo.material_override = material(Color("1d2024"))
+		bala.nodo.material_override = comercio.material_bala(tipo) if tipo != "" else material(Color("1d2024"))
 		bala.nodo.position = a_3d(bala.pos, 1.0)
 		add_child(bala.nodo)
 		balas.append(bala)
@@ -1053,6 +1356,33 @@ func disparar(barco: Barco, arma: String) -> void:
 		_sonar_en_vista(voces_canon, a_3d(salida, 1.0), -12.0, -26.0, 30.0)
 
 
+# Disparo de un fuerte del mar libre (dueno es quien se lleva el mérito, o null).
+func disparar_desde(desde: Vector2, direccion: Vector2, dueno: Barco, origen: Circulo = null, equipo := -1, danio := -1.0) -> Bala:
+	var bala := Bala.new()
+	bala.origen = origen
+	bala.equipo = equipo
+	bala.danio = danio
+	bala.pos = desde
+	bala.vel = direccion.rotated(randf_range(-0.03, 0.03)) * VEL_BALA
+	bala.vida = VIDA_BALA
+	bala.dueno = dueno
+	bala.gracia = VIDA_BALA
+	bala.nodo = MeshInstance3D.new()
+	bala.nodo.mesh = malla_bala
+	bala.nodo.material_override = material(Color("1d2024"))
+	bala.nodo.position = a_3d(bala.pos, 1.0)
+	add_child(bala.nodo)
+	balas.append(bala)
+	if origen != null:
+		bala.nodo.scale = Vector3.ONE * 1.8
+		crear_efecto(malla_humo, Color(1.0, 0.75, 0.3, 0.95), a_3d(desde, 1.4), Vector3.ZERO, 0.18, 0.9, 3.0)
+	for _i in 4:
+		var deriva := Vector3(randf_range(-0.5, 0.5), randf_range(0.3, 0.8), randf_range(-0.5, 0.5))
+		crear_efecto(malla_humo, Color(0.93, 0.92, 0.9, 0.75), a_3d(desde, 1.4), deriva, randf_range(0.9, 1.3), 0.6, 1.7, 0.0, true)
+	_sonar_en_vista(voces_canon, a_3d(desde, 1.0), -12.0, -26.0, 30.0)
+	return bala
+
+
 func _mover_balas(delta: float) -> void:
 	for i in range(balas.size() - 1, -1, -1):
 		var bala: Bala = balas[i]
@@ -1061,14 +1391,29 @@ func _mover_balas(delta: float) -> void:
 		bala.gracia -= delta
 		var avance := 1.0 - bala.vida / VIDA_BALA
 		bala.nodo.position = a_3d(bala.pos, 1.0 + sin(avance * PI) * 1.1)
+		if bala.tipo != "":
+			comercio.estela(bala.tipo, bala.nodo.position)
+		elif bala.origen != null:
+			crear_efecto(malla_humo, Color(0.95, 0.93, 0.88, 0.7), bala.nodo.position, Vector3(0, 0.2, 0), 0.5, 0.35, 0.8)
 
 		var termina := false
+		var golpeado: Barco = null
 		for isla in islotes:
-			if isla.dentro(bala.pos):
+			if isla != bala.origen and isla.dentro(bala.pos):
 				termina = true
+				if modo == "libre" and is_instance_valid(bala.dueno):
+					libre.golpear_isla(isla, bala.dueno, _danio_bala(bala) * (1.5 if bala.tipo == "explosiva" else 1.0))
+				elif modo == "moba":
+					moba.golpear_isla(isla, bala)
 				astillas(a_3d(bala.pos, 0.6))
 				break
+		if not termina and modo == "moba" and moba.recibir_bala(bala):
+			termina = true
 		if not termina and peligros.recibir_bala(bala.pos, bala.dueno):
+			termina = true
+		if not termina and tiburones.recibir_bala(bala.pos, bala.dueno):
+			termina = true
+		if not termina and barriles.recibir_bala(bala.pos, bala.dueno):
 			termina = true
 		if not termina:
 			for barco in barcos:
@@ -1076,8 +1421,11 @@ func _mover_balas(delta: float) -> void:
 					continue
 				if barco == bala.dueno and bala.gracia > 0.0:
 					continue
+				if bala.equipo >= 0 and barco.equipo == bala.equipo:
+					continue
 				if barco.pos.distance_to(bala.pos) < barco.radio * 0.85:
-					barco.recibir_danio(DANIO_BALA, true, bala.dueno)
+					barco.recibir_danio(_danio_bala(bala), true, bala.dueno)
+					golpeado = barco
 					termina = true
 					if barco.es_jugador:
 						golpe = 0.22
@@ -1087,6 +1435,10 @@ func _mover_balas(delta: float) -> void:
 			termina = true
 			salpicar(bala.pos, 7)
 		if termina:
+			if modo == "moba":
+				moba.impacto(bala, golpeado)
+			elif bala.tipo != "":
+				comercio.impacto(bala.tipo, bala.pos, golpeado, bala.dueno)
 			bala.nodo.queue_free()
 			balas.remove_at(i)
 
@@ -1127,8 +1479,20 @@ func ganar_botin(barco: Barco, cantidad: int, punto: Vector3) -> void:
 	create_tween().tween_property(texto_botin, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
+func avisar_premio(punto: Vector3, texto: String, color: Color) -> void:
+	var aviso := AvisoBotin.new()
+	aviso.punto = punto
+	aviso.texto = texto
+	aviso.color = color
+	avisos_botin.append(aviso)
+	voz_moneda.pitch_scale = 1.4
+	voz_moneda.play()
+
+
 func _pintar_botin() -> void:
 	texto_botin.text = tr("Botín a bordo: %d") % jugador.botin
+	if modo == "libre":
+		texto_botin.text += "   " + tr("Bodega: %d/%d") % [comercio.bodega.size(), comercio.capacidad()]
 
 
 func soltar_cofre(punto: Vector2, monedas: int) -> void:
@@ -1142,18 +1506,45 @@ func soltar_cofre(punto: Vector2, monedas: int) -> void:
 	cofres.append(cofre)
 
 
+func soltar_tesoro(punto: Vector2, tipo: String) -> void:
+	var cofre := Cofre.new()
+	cofre.pos = punto
+	cofre.vel = Vector2.from_angle(randf() * TAU) * 20.0
+	cofre.tesoro = tipo
+	cofre.fase = randf() * TAU
+	cofre.nodo = tesoros.modelo(tipo)
+	cofre.nodo.scale = Vector3.ONE * 1.4
+	var aro := TorusMesh.new()
+	aro.inner_radius = 0.5
+	aro.outer_radius = 0.6
+	aro.rings = 32
+	aro.ring_segments = 4
+	var brillo := StandardMaterial3D.new()
+	brillo.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	brillo.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	brillo.albedo_color = Color(Tesoros.COLOR_MALDICION if tipo == "calavera" else COLOR_ORO, 0.85)
+	var anillo := MeshInstance3D.new()
+	anillo.mesh = aro
+	anillo.material_override = brillo
+	anillo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	anillo.name = "Aro"
+	cofre.nodo.add_child(anillo)
+	add_child(cofre.nodo)
+	cofres.append(cofre)
+
+
 func _crear_cofre(monedas: int) -> Node3D:
 	var nodo := Node3D.new()
 	var escala := 1.0 + minf(monedas, 10) * 0.06
 	var caja := BoxMesh.new()
 	caja.size = Vector3(0.7, 0.42, 0.48) * escala
-	_malla(nodo, caja, Color("6b4126"), Vector3(0, 0.21 * escala, 0))
+	_malla(nodo, caja, Color("6b4126"), Vector3(0, 0.21 * escala, 0), "madera")
 	var tapa := CylinderMesh.new()
 	tapa.top_radius = 0.24 * escala
 	tapa.bottom_radius = 0.24 * escala
 	tapa.height = 0.7 * escala
 	tapa.radial_segments = 10
-	var pieza_tapa := _malla(nodo, tapa, Color("7d4c2c"), Vector3(0, 0.42 * escala, 0))
+	var pieza_tapa := _malla(nodo, tapa, Color("7d4c2c"), Vector3(0, 0.42 * escala, 0), "madera")
 	pieza_tapa.rotation.z = PI / 2.0
 	pieza_tapa.scale = Vector3(1.0, 1.0, 0.55)
 	var fleje := BoxMesh.new()
@@ -1193,22 +1584,24 @@ func _crear_cofre(monedas: int) -> Node3D:
 	anillo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	anillo.name = "Aro"
 	nodo.add_child(anillo)
+	nodo.scale = Vector3.ONE * ESCALA_FLOTANTES
 	return nodo
 
 
 func _actualizar_cofres(delta: float) -> void:
 	for i in range(cofres.size() - 1, -1, -1):
 		var cofre: Cofre = cofres[i]
+		var vida := VIDA_COFRE if cofre.tesoro == "" else Tesoros.VIDA_FLOTANDO
 		if estado == Estado.JUGANDO:
 			cofre.edad += delta
-			if cofre.edad >= VIDA_COFRE:
+			if cofre.edad >= vida:
 				cofre.nodo.queue_free()
 				cofres.remove_at(i)
 				continue
 		cofre.pos += (peligros.arrastre(cofre.pos) + peligros.viento(cofre.pos) * 0.5 + cofre.vel) * delta
 		cofre.vel *= maxf(0.0, 1.0 - delta * 1.5)
 		var sitio := a_3d(cofre.pos)
-		var hundido := clampf((cofre.edad - VIDA_COFRE + 3.0) / 3.0, 0.0, 1.0)
+		var hundido := clampf((cofre.edad - vida + 3.0) / 3.0, 0.0, 1.0)
 		cofre.nodo.position = a_3d(cofre.pos, altura_mar(sitio.x, sitio.z) - 0.1 - hundido * 0.9)
 		cofre.nodo.rotation = Vector3(sin(tiempo * 1.6 + cofre.fase) * 0.12, cofre.nodo.rotation.y + delta * 0.4, cos(tiempo * 1.3 + cofre.fase) * 0.1)
 		var aro: Node3D = cofre.nodo.get_node("Aro")
@@ -1226,7 +1619,12 @@ func _recoger_cofres() -> void:
 		var cofre: Cofre = cofres[i]
 		for barco in barcos:
 			if barco.viva and barco.pos.distance_to(cofre.pos) < barco.radio + 22.0:
-				ganar_botin(barco, cofre.monedas, cofre.nodo.position + Vector3(0, 1.5, 0))
+				if cofre.tesoro != "":
+					tesoros.cargar(barco, cofre.tesoro)
+					if barco == jugador:
+						avisar_premio(cofre.nodo.position + Vector3(0, 1.5, 0), tr(Tesoros.TIPOS[cofre.tesoro]["nombre"]), COLOR_ORO)
+				else:
+					ganar_botin(barco, cofre.monedas, cofre.nodo.position + Vector3(0, 1.5, 0))
 				_brillo_reparacion(cofre.nodo.position + Vector3(0, 0.5, 0))
 				cofre.nodo.queue_free()
 				cofres.remove_at(i)
@@ -1261,7 +1659,19 @@ func al_hundirse(barco: Barco) -> void:
 		if verdugo == jugador:
 			hundidos += 1
 		ganar_botin(verdugo, MONEDAS_POR_HUNDIDO, barco.position + Vector3(0, 2.0, 0))
-	var cae := ceili(barco.botin / 2.0)
+	else:
+		verdugo = null
+	emotes.al_hundirse(barco, verdugo)
+	if modo == "libre":
+		libre.al_hundirse(barco, verdugo)
+	elif modo == "moba":
+		moba.al_hundirse(barco, verdugo)
+	tesoros.soltar_todos(barco)
+	if modo == "libre":
+		comercio.al_hundirse(barco)
+	# En el mar libre se pierde todo lo que va a bordo: queda flotando en un cofre. En el
+	# MOBA los barcos reaparecen y no sueltan nada.
+	var cae := barco.botin if modo == "libre" else (0 if modo == "moba" else ceili(barco.botin / 2.0))
 	if cae > 0:
 		barco.botin -= cae
 		if barco == jugador:
@@ -1292,16 +1702,29 @@ func _revisar_fin(delta: float) -> void:
 	if cierre > 0.0:
 		cierre -= delta
 		if cierre <= 0.0:
-			if resultado == "victoria":
-				titulo_final.text = "Victoria"
-				texto_final.text = "Tu barco quedó solo en el mar."
+			if modo == "moba":
+				if resultado == "victoria":
+					titulo_final.text = "[salto]%s[/salto]" % tr("Victoria")
+					texto_final.text = tr("Tu armada derribó el nexo enemigo.")
+				else:
+					titulo_final.text = tr("Derrota")
+					texto_final.text = tr("La armada rival derribó tu nexo.")
+			elif resultado == "victoria":
+				titulo_final.text = "[salto]%s[/salto]" % tr("Victoria")
+				texto_final.text = tr("Tu barco quedó solo en el mar.")
 			else:
-				titulo_final.text = "Hundido"
+				titulo_final.text = tr("Hundido")
 				texto_final.text = tr("La marea se quedó con tu barco. Terminaste en el puesto %d de %d.") % [puesto, TOTAL_BARCOS]
 			_repartir_premio()
 			_mostrar(Estado.FIN)
 		return
 
+	if modo == "moba":
+		if moba.ganador >= 0:
+			resultado = "victoria" if moba.ganador == 0 else "hundido"
+			puesto = 1 if moba.ganador == 0 else 25
+			cierre = 2.5
+		return
 	var vivos := _contar_vivos()
 	if not jugador.viva:
 		resultado = "hundido"
@@ -1315,16 +1738,26 @@ func _revisar_fin(delta: float) -> void:
 
 func _repartir_premio() -> void:
 	var botin := jugador.botin
+	var a_bordo := tesoros.valor(jugador) if jugador.viva else 0
+	tesoros.quitar(jugador)
 	var por_victoria := MONEDAS_VICTORIA if resultado == "victoria" else 0
 	var ganada := personalizacion.experiencia_por(puesto, hundidos, resultado == "retirada")
 	var antes := personalizacion.monedas
-	personalizacion.monedas += botin + por_victoria
+	personalizacion.monedas += botin + a_bordo + por_victoria
 	var rango := personalizacion.sumar_experiencia(ganada)
 	var desglose: Array = [[tr("Botín a bordo"), botin]]
+	if a_bordo > 0:
+		desglose.append([tr("Tesoros a bordo"), a_bordo])
+	if tesoros.vendidos > 0:
+		desglose.append([tr("Tesoros vendidos: +%d") % tesoros.vendidos, 0, COLOR_ORO])
 	if botin_perdido > 0:
 		desglose.append([tr("Botín perdido: -%d") % botin_perdido, 0, COLOR_PELIGRO])
 	if por_victoria > 0:
 		desglose.append([tr("Victoria"), por_victoria])
+	if misiones.completadas > 0:
+		desglose.append([tr("Misiones cumplidas: %d") % misiones.completadas, 0, COLOR_ORO])
+	if misiones.gemas > 0:
+		desglose.append([tr("Gemas encontradas: %d") % misiones.gemas, 0, Misiones.COLOR_GEMA])
 	if rango["subio"]:
 		var subida := tr("¡Subiste a %s!") % tr(personalizacion.nombre_nivel())
 		desglose.append([subida, rango["monedas"]] if rango["monedas"] > 0 else [subida, 0, COLOR_ORO])
@@ -1353,7 +1786,8 @@ func _animar_premio(desglose: Array, antes: int) -> void:
 	texto_tesoro.text = tr("Tu tesoro para la tienda: %d monedas") % antes
 	fila_final.modulate.a = 0.0
 	caja_final.modulate.a = 0.0
-	titulo_final.add_theme_color_override("font_color", COLOR_ORO if resultado == "victoria" else COLOR_TEXTO)
+	titulo_final.add_theme_color_override("default_color", COLOR_ORO if resultado == "victoria" else COLOR_TEXTO)
+	salto_titulo.reiniciar()
 	await get_tree().process_frame
 	caja_final.pivot_offset = caja_final.size / 2.0
 	texto_premio.pivot_offset = texto_premio.size / 2.0
@@ -1514,7 +1948,7 @@ func _brillo_reparacion(centro: Vector3) -> void:
 # Controles
 
 func direccion_jugador() -> Vector2:
-	if panel_partida.visible:
+	if panel_partida.visible or comercio.panel.visible:
 		return Vector2.ZERO
 	var teclas := Vector2.ZERO
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
@@ -1533,7 +1967,7 @@ func direccion_jugador() -> Vector2:
 # Teclado: Espacio dispara al frente, Q a la izquierda y E a la derecha.
 func armas_jugador() -> Array[String]:
 	var armas: Array[String] = []
-	if panel_partida.visible:
+	if panel_partida.visible or comercio.panel.visible:
 		return armas
 	for arma in BOTONES_FUEGO:
 		if _arma_pulsada(arma):
@@ -1546,15 +1980,16 @@ func _arma_pulsada(arma: String) -> bool:
 	return arma in dedos_fuego.values() or Input.is_key_pressed(tecla)
 
 
-# En la tienda: un dedo gira la cámara alrededor del barco, dos dedos o la rueda acercan.
+# En la tienda y al elegir capitán: un dedo gira la cámara alrededor del barco, dos dedos o la rueda acercan.
 func _unhandled_input(event: InputEvent) -> void:
-	if estado != Estado.ASTILLERO:
+	if estado not in [Estado.ASTILLERO, Estado.CAPITANES]:
 		return
+	var panel := panel_astillero if estado == Estado.ASTILLERO else moba.panel_capitanes
 	var toque := event as InputEventScreenTouch
 	if toque:
 		if not toque.pressed:
 			dedos_vitrina.erase(toque.index)
-		elif not panel_astillero.get_global_rect().has_point(toque.position):
+		elif not panel.get_global_rect().has_point(toque.position):
 			dedos_vitrina[toque.index] = toque.position
 		return
 	var arrastre := event as InputEventScreenDrag
@@ -1587,12 +2022,22 @@ func _input(event: InputEvent) -> void:
 	var escape := event as InputEventKey
 	if escape and escape.pressed and not escape.echo and escape.keycode == KEY_ESCAPE:
 		get_viewport().set_input_as_handled()
-		if panel_partida.visible:
+		if comercio.panel.visible:
+			comercio.cerrar()
+		elif moba.panel_tienda.visible:
+			moba.cerrar_tienda()
+		elif panel_partida.visible:
 			_cerrar_opciones_partida()
 		else:
 			_abrir_opciones_partida()
 		return
-	if panel_partida.visible:
+	if panel_partida.visible or comercio.panel.visible or moba.panel_tienda.visible:
+		return
+	if modo == "libre" and comercio.tecla(event):
+		get_viewport().set_input_as_handled()
+		return
+	if modo == "moba" and (moba.tecla(event) or moba.toque_habilidad(event)):
+		get_viewport().set_input_as_handled()
 		return
 
 	var toque := event as InputEventScreenTouch
@@ -1678,15 +2123,18 @@ func _crear_interfaz() -> void:
 
 	texto_vivos = Ui.etiqueta("A flote: 12", 18)
 	hud.add_child(texto_vivos)
-	texto_tormenta = Ui.etiqueta("Tormenta: 24s", 18)
+	texto_tormenta = Ui.etiqueta("Tormenta: 2:56", 18)
 	hud.add_child(texto_tormenta)
 	texto_botin = Ui.etiqueta("Botín a bordo: 0", 18)
 	texto_botin.add_theme_color_override("font_color", COLOR_ORO)
 	hud.add_child(texto_botin)
+	texto_mision = Ui.etiqueta("", 18)
+	texto_mision.add_theme_color_override("font_color", Color("ffe7a8"))
+	hud.add_child(texto_mision)
 
 	minimapa = Control.new()
 	minimapa.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	Ui.anclar(minimapa, Vector2(1, 0), Vector2(-188, 20), Vector2(168, 168))
+	Ui.anclar(minimapa, Vector2(1, 0), Vector2(-212, 16), Vector2(196, 196))
 	minimapa.draw.connect(_dibujar_minimapa)
 	capa.add_child(minimapa)
 
@@ -1697,6 +2145,11 @@ func _crear_interfaz() -> void:
 	_crear_busqueda(capa)
 	_crear_final(capa)
 	_crear_opciones_partida(capa)
+	libre.crear_interfaz(capa)
+	comercio.crear_interfaz(capa)
+	misiones.crear_interfaz(capa)
+	emotes.crear_interfaz(capa)
+	moba.crear_interfaz(capa)
 
 
 func _crear_logo() -> Control:
@@ -1756,13 +2209,26 @@ func _crear_menu(capa: CanvasLayer) -> void:
 	texto_monedas_menu = Ui.etiqueta_panel("", 28, COLOR_ORO)
 	texto_monedas_menu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tesoro.add_child(texto_monedas_menu)
+	tesoro.add_child(Ui.icono_gema(32))
+	texto_gemas_menu = Ui.etiqueta_panel("", 28, Misiones.COLOR_GEMA)
+	texto_gemas_menu.autowrap_mode = TextServer.AUTOWRAP_OFF
+	tesoro.add_child(texto_gemas_menu)
 	cuerpo.add_child(tesoro)
 	var tienda := Ui.boton("Tienda", false)
 	tienda.pressed.connect(_mostrar.bind(Estado.ASTILLERO))
 	cuerpo.add_child(tienda)
-	var buscar := Ui.boton("Buscar partida", true)
-	buscar.pressed.connect(_buscar_partida)
-	cuerpo.add_child(buscar)
+	var modos := HBoxContainer.new()
+	modos.add_theme_constant_override("separation", 10)
+	cuerpo.add_child(modos)
+	for nombre in ["tormenta", "libre", "moba"]:
+		var boton_modo := Ui.boton({"tormenta": "Tormenta", "libre": "Libre", "moba": "MOBA 5v5"}[nombre], true)
+		boton_modo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		boton_modo.add_theme_font_size_override("font_size", 24)
+		if nombre == "moba":
+			boton_modo.pressed.connect(func() -> void: moba.abrir_seleccion())
+		else:
+			boton_modo.pressed.connect(_buscar_partida.bind(nombre))
+		modos.add_child(boton_modo)
 
 	boton_ajustes = _boton_engranaje()
 	Ui.anclar(boton_ajustes, Vector2(0, 0), Vector2(28, 28), Vector2(80, 80))
@@ -1811,7 +2277,7 @@ func _boton_engranaje() -> Button:
 # Engranaje durante la partida: volumen y salir. La partida no se detiene.
 func _crear_opciones_partida(capa: CanvasLayer) -> void:
 	boton_partida = _boton_engranaje()
-	Ui.anclar(boton_partida, Vector2(1, 0), Vector2(-188 - 18 - 72, 28), Vector2(72, 72))
+	Ui.anclar(boton_partida, Vector2(1, 0), Vector2(-212 - 14 - 72, 28), Vector2(72, 72))
 	boton_partida.pressed.connect(_abrir_opciones_partida)
 	capa.add_child(boton_partida)
 
@@ -1844,7 +2310,7 @@ func _abrir_opciones_partida() -> void:
 	if estado != Estado.JUGANDO or cierre > 0.0:
 		return
 	panel_partida.visible = true
-	boton_salir.text = "Salir de la partida"
+	boton_salir.text = "Volver al puerto" if modo == "libre" else "Salir de la partida"
 	controles.visible = false
 	palanca_dedo = -1
 	dedos_fuego.clear()
@@ -1858,16 +2324,33 @@ func _cerrar_opciones_partida() -> void:
 
 
 func _salir_de_partida() -> void:
+	if modo == "moba" and moba.ensayo:
+		moba.terminar_ensayo()
+		return
+	# El mar libre sigue ahí: se guardan el barco, el botín a bordo y la base.
+	if modo == "libre":
+		libre.salir()
+		_al_puerto()
+		return
 	if boton_salir.text == "Salir de la partida":
-		boton_salir.text = "¿Seguro? Toca otra vez"
+		boton_salir.text = "Pierdes todo el botín. Toca otra vez"
 		return
 	personalizacion.guardar()
 	resultado = "retirada"
+	if modo == "moba":
+		puesto = 25
+		titulo_final.text = tr("Retirada")
+		texto_final.text = tr("Abandonaste a tu armada antes de que cayera un nexo.")
+		_repartir_premio()
+		_mostrar(Estado.FIN)
+		return
 	puesto = _contar_vivos()
 	if jugador.viva:
-		botin_perdido = ceili(jugador.botin / 2.0)
-		jugador.botin -= botin_perdido
-	titulo_final.text = "Retirada"
+		botin_perdido = jugador.botin + tesoros.valor(jugador)
+		jugador.botin = 0
+		tesoros.quitar(jugador)
+		_pintar_botin()
+	titulo_final.text = tr("Retirada")
 	texto_final.text = tr("Abandonaste la partida en el puesto %d de %d.") % [puesto, TOTAL_BARCOS]
 	_repartir_premio()
 	_mostrar(Estado.FIN)
@@ -2134,7 +2617,8 @@ func _crear_busqueda(capa: CanvasLayer) -> void:
 	var cuerpo := VBoxContainer.new()
 	cuerpo.add_theme_constant_override("separation", 16)
 	panel.add_child(cuerpo)
-	cuerpo.add_child(Ui.etiqueta_panel("TODOS CONTRA TODOS", 20, COLOR_ORO))
+	titulo_busqueda = Ui.etiqueta_panel("TODOS CONTRA TODOS", 20, COLOR_ORO)
+	cuerpo.add_child(titulo_busqueda)
 	texto_busqueda = Ui.etiqueta_panel("Buscando partida", 40, COLOR_TEXTO)
 	cuerpo.add_child(texto_busqueda)
 	texto_jugadores = Ui.etiqueta_panel("", 24, COLOR_TEXTO)
@@ -2144,7 +2628,9 @@ func _crear_busqueda(capa: CanvasLayer) -> void:
 	cuerpo.add_child(cancelar)
 
 
-func _buscar_partida() -> void:
+func _buscar_partida(nuevo_modo := "tormenta") -> void:
+	modo = nuevo_modo
+	titulo_busqueda.text = "MAR LIBRE" if modo == "libre" else ("5 CONTRA 5" if modo == "moba" else "TODOS CONTRA TODOS")
 	campo_nombre.release_focus()
 	tiempo_busqueda = 0.0
 	_mostrar(Estado.BUSCANDO)
@@ -2154,6 +2640,26 @@ func _buscar_partida() -> void:
 func _avanzar_busqueda(delta: float) -> void:
 	tiempo_busqueda += delta
 	var puntos := ".".repeat(1 + int(tiempo_busqueda * 2.0) % 3)
+	if modo == "libre":
+		if tiempo_busqueda < 1.2:
+			texto_busqueda.text = tr("Entrando al mar libre") + puntos
+			texto_jugadores.text = tr("Un mar enorme y abierto, para hasta 1000 capitanes")
+		elif tiempo_busqueda < 2.6:
+			texto_busqueda.text = tr("Zarpando") + puntos
+			texto_jugadores.text = tr("Aún no hay servidor en línea: compartes el mar con bots y piratas.")
+		else:
+			_zarpar()
+		return
+	if modo == "moba":
+		if tiempo_busqueda < 1.4:
+			texto_busqueda.text = tr("Formando las armadas") + puntos
+			texto_jugadores.text = tr("Tu armada azul contra la armada roja: cinco barcos por bando")
+		elif tiempo_busqueda < 3.0:
+			texto_busqueda.text = tr("Completando con bots") + puntos
+			texto_jugadores.text = tr("Derriba los fuertes de cada carril y luego el nexo enemigo para ganar.")
+		else:
+			_zarpar()
+		return
 	if tiempo_busqueda < ESPERA_BUSQUEDA:
 		texto_busqueda.text = tr("Buscando partida") + puntos
 		texto_jugadores.text = tr("Capitanes en el puerto: 1/%d\nEsperando %ds") % [TOTAL_BARCOS, int(tiempo_busqueda)]
@@ -2193,14 +2699,18 @@ func _crear_astillero(capa: CanvasLayer) -> void:
 	texto_monedas_tienda = Ui.etiqueta_panel("", 26, COLOR_ORO)
 	texto_monedas_tienda.autowrap_mode = TextServer.AUTOWRAP_OFF
 	cabecera.add_child(texto_monedas_tienda)
+	cabecera.add_child(Ui.icono_gema(26))
+	texto_gemas_tienda = Ui.etiqueta_panel("", 26, Misiones.COLOR_GEMA)
+	texto_gemas_tienda.autowrap_mode = TextServer.AUTOWRAP_OFF
+	cabecera.add_child(texto_gemas_tienda)
 	cuerpo.add_child(cabecera)
 
 	var pestanas := GridContainer.new()
-	pestanas.columns = 4
+	pestanas.columns = 5
 	pestanas.add_theme_constant_override("h_separation", 8)
 	pestanas.add_theme_constant_override("v_separation", 8)
-	for cat in Catalogo.CATEGORIAS:
-		var boton := Ui.boton(Catalogo.TITULOS[cat], false)
+	for cat in Catalogo.CATEGORIAS + [TESOROS]:
+		var boton := Ui.boton(Catalogo.TITULOS.get(cat, "Tesoros"), false)
 		boton.custom_minimum_size = Vector2(0, 38)
 		boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		boton.add_theme_font_size_override("font_size", 16)
@@ -2226,12 +2736,13 @@ func _crear_astillero(capa: CanvasLayer) -> void:
 	var fila := HBoxContainer.new()
 	fila.add_theme_constant_override("separation", 12)
 	cuerpo.add_child(fila)
-	var listo := Ui.boton("Listo", false)
-	listo.custom_minimum_size = Vector2(0, 54)
-	listo.add_theme_font_size_override("font_size", 22)
-	listo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	listo.pressed.connect(_cerrar_tienda)
-	fila.add_child(listo)
+	var volver := Ui.boton("Menú principal", false)
+	Ui.estilo_volver(volver)
+	volver.custom_minimum_size = Vector2(0, 54)
+	volver.add_theme_font_size_override("font_size", 22)
+	volver.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	volver.pressed.connect(_cerrar_tienda)
+	fila.add_child(volver)
 	boton_accion = Ui.boton("Comprar", true)
 	boton_accion.custom_minimum_size = Vector2(0, 54)
 	boton_accion.add_theme_font_size_override("font_size", 22)
@@ -2245,10 +2756,33 @@ func _crear_astillero(capa: CanvasLayer) -> void:
 
 func _abrir_categoria(nueva: String) -> void:
 	categoria = nueva
-	seleccion = personalizacion.elegidos[categoria]
+	if categoria == TESOROS:
+		seleccion = Catalogo.unicas()[0]["id"]
+	else:
+		seleccion = personalizacion.elegidos[categoria]
 	jugador.vestir(personalizacion)
 	_llenar_rejilla()
-	_refrescar_astillero()
+	if categoria == TESOROS:
+		_elegir_pieza(seleccion)
+	else:
+		_refrescar_astillero()
+
+
+func _piezas_tienda() -> Array:
+	return Catalogo.unicas() if categoria == TESOROS else Catalogo.lista(categoria)
+
+
+# En la pestaña de tesoros cada pieza pertenece a su propia categoría.
+func _categoria_de(pieza: Dictionary) -> String:
+	return pieza.get("categoria", categoria) if categoria == TESOROS else categoria
+
+
+func _pieza_tienda(id: String) -> Dictionary:
+	if categoria == TESOROS:
+		for pieza in Catalogo.unicas():
+			if pieza["id"] == id:
+				return pieza
+	return Catalogo.buscar(categoria, id)
 
 
 func _llenar_rejilla() -> void:
@@ -2256,7 +2790,7 @@ func _llenar_rejilla() -> void:
 		hijo.queue_free()
 	botones_pieza.clear()
 	miniaturas.cancelar()
-	for pieza in Catalogo.lista(categoria):
+	for pieza in _piezas_tienda():
 		var boton := _boton_pieza(pieza)
 		rejilla_piezas.add_child(boton)
 		botones_pieza[pieza["id"]] = boton
@@ -2266,17 +2800,18 @@ func _llenar_rejilla() -> void:
 func _elegir_pieza(id: String) -> void:
 	seleccion = id
 	var prueba := personalizacion.copia()
-	prueba.elegidos[categoria] = id
+	prueba.elegidos[_categoria_de(_pieza_tienda(id))] = id
 	jugador.vestir(prueba)
 	_refrescar_astillero()
 
 
 func _usar_pieza() -> void:
-	if personalizacion.tiene(categoria, seleccion):
-		personalizacion.elegidos[categoria] = seleccion
+	var cat := _categoria_de(_pieza_tienda(seleccion))
+	if personalizacion.tiene(cat, seleccion):
+		personalizacion.elegidos[cat] = seleccion
 		personalizacion.guardar()
 		voz_equipar.play()
-	elif personalizacion.comprar(categoria, seleccion):
+	elif personalizacion.comprar(cat, seleccion):
 		voz_monedas.play()
 		get_tree().create_timer(0.35).timeout.connect(voz_equipar.play)
 	else:
@@ -2293,21 +2828,25 @@ func _cerrar_tienda() -> void:
 
 func _refrescar_astillero() -> void:
 	texto_monedas_tienda.text = tr("%d monedas") % personalizacion.monedas
+	texto_gemas_tienda.text = str(personalizacion.gemas)
+	var pestanas: Array = Catalogo.CATEGORIAS + [TESOROS]
 	for i in botones_categoria.size():
-		Ui.estilo_boton(botones_categoria[i], Catalogo.CATEGORIAS[i] == categoria)
+		Ui.estilo_boton(botones_categoria[i], pestanas[i] == categoria)
 
 	var propias := 0
-	for pieza in Catalogo.lista(categoria):
-		if personalizacion.tiene(categoria, pieza["id"]):
+	for pieza in _piezas_tienda():
+		if personalizacion.tiene(_categoria_de(pieza), pieza["id"]):
 			propias += 1
 		_pintar_boton_pieza(botones_pieza[pieza["id"]], pieza)
 
-	var elegida := Catalogo.buscar(categoria, seleccion)
-	var propia := personalizacion.tiene(categoria, seleccion)
+	var elegida := _pieza_tienda(seleccion)
+	var cat := _categoria_de(elegida)
+	var propia := personalizacion.tiene(cat, seleccion)
+	var en_gemas: int = elegida.get("gemas", 0)
 	var info := tr(elegida.get("info", ""))
-	texto_pieza.text = "%s%s" % [tr(elegida["nombre"]), "  ·  " + info if info != "" else ""] + tr("\nTienes %d de %d") % [propias, Catalogo.lista(categoria).size()]
-	boton_accion.icon = null if propia else Ui.textura_moneda()
-	if personalizacion.elegidos[categoria] == seleccion:
+	texto_pieza.text = "%s%s" % [tr(elegida["nombre"]), "  ·  " + info if info != "" else ""] + tr("\nTienes %d de %d") % [propias, _piezas_tienda().size()]
+	boton_accion.icon = null if propia else (Ui.textura_gema() if en_gemas > 0 else Ui.textura_moneda())
+	if personalizacion.elegidos[cat] == seleccion:
 		boton_accion.text = "Equipado"
 		boton_accion.disabled = true
 		Ui.estilo_boton(boton_accion, false)
@@ -2315,6 +2854,11 @@ func _refrescar_astillero() -> void:
 		boton_accion.text = "Equipar"
 		boton_accion.disabled = false
 		Ui.estilo_boton(boton_accion, true)
+	elif en_gemas > 0:
+		var alcanza := personalizacion.gemas >= en_gemas
+		boton_accion.text = tr("Comprar · %d gemas") % en_gemas if alcanza else tr("Te faltan %d gemas") % (en_gemas - personalizacion.gemas)
+		boton_accion.disabled = not alcanza
+		Ui.estilo_boton(boton_accion, alcanza)
 	elif personalizacion.monedas >= elegida["precio"]:
 		boton_accion.text = tr("Comprar · %d monedas") % elegida["precio"]
 		boton_accion.disabled = false
@@ -2336,11 +2880,12 @@ func _boton_pieza(pieza: Dictionary) -> Button:
 	boton.custom_minimum_size = Vector2(0, 128)
 	boton.add_theme_constant_override("icon_max_width", 72)
 	boton.add_theme_font_size_override("font_size", 13)
-	if categoria in Catalogo.CON_DIBUJO:
+	var cat := _categoria_de(pieza)
+	if cat in Catalogo.CON_DIBUJO:
 		boton.icon = Dibujos.textura(pieza, 96, 64)
 	else:
 		boton.icon = _hueco_miniatura()
-		miniaturas.pedir(categoria, pieza, personalizacion, boton)
+		miniaturas.pedir(cat, pieza, personalizacion, boton)
 	boton.pressed.connect(_elegir_pieza.bind(pieza["id"]))
 	return boton
 
@@ -2357,8 +2902,10 @@ func _hueco_miniatura() -> ImageTexture:
 
 func _pintar_boton_pieza(boton: Button, pieza: Dictionary) -> void:
 	var id: String = pieza["id"]
-	var propia := personalizacion.tiene(categoria, id)
-	var equipada: bool = personalizacion.elegidos[categoria] == id
+	var cat := _categoria_de(pieza)
+	var propia := personalizacion.tiene(cat, id)
+	var equipada: bool = personalizacion.elegidos[cat] == id
+	var en_gemas: int = pieza.get("gemas", 0)
 	var estado_pieza := tr("Equipado") if equipada else tr("Tuyo")
 	# Sin comprar, el precio va aparte con su moneda; el renglón vacío le deja sitio.
 	boton.text = "%s\n%s" % [tr(pieza["nombre"]), estado_pieza if propia else " "]
@@ -2375,23 +2922,24 @@ func _pintar_boton_pieza(boton: Button, pieza: Dictionary) -> void:
 		precio.anchor_bottom = 1.0
 		precio.offset_top = -27.0
 		precio.offset_bottom = -7.0
-		precio.add_child(Ui.icono_moneda(16))
+		precio.add_child(Ui.icono_gema(16) if en_gemas > 0 else Ui.icono_moneda(16))
 		var cifra := Ui.etiqueta("", 14)
 		cifra.name = "Cifra"
-		cifra.add_theme_color_override("font_color", COLOR_ORO)
+		cifra.add_theme_color_override("font_color", Misiones.COLOR_GEMA if en_gemas > 0 else COLOR_ORO)
 		cifra.add_theme_constant_override("outline_size", 4)
 		precio.add_child(cifra)
 		boton.add_child(precio)
 	precio.visible = not propia
-	(precio.get_node("Cifra") as Label).text = str(pieza["precio"])
+	(precio.get_node("Cifra") as Label).text = str(en_gemas if en_gemas > 0 else pieza["precio"])
 
 	var estilo := StyleBoxFlat.new()
 	estilo.set_corner_radius_all(12)
 	estilo.set_content_margin_all(5)
-	estilo.bg_color = Color(0.11, 0.27, 0.33, 0.95)
+	estilo.bg_color = Color(0.25, 0.13, 0.36, 0.95) if en_gemas > 0 else Color(0.11, 0.27, 0.33, 0.95)
 	if not propia:
 		estilo.bg_color = estilo.bg_color.darkened(0.35)
-	estilo.border_color = Color.WHITE if id == seleccion else (COLOR_ORO if equipada else Color(1, 1, 1, 0.25))
+	var borde_normal := Color(Misiones.COLOR_GEMA, 0.6) if en_gemas > 0 else Color(1, 1, 1, 0.25)
+	estilo.border_color = Color.WHITE if id == seleccion else (COLOR_ORO if equipada else borde_normal)
 	estilo.set_border_width_all(4 if id == seleccion else (3 if equipada else 1))
 	for nombre in ["normal", "hover", "pressed"]:
 		boton.add_theme_stylebox_override(nombre, estilo)
@@ -2421,7 +2969,18 @@ func _crear_final(capa: CanvasLayer) -> void:
 	cuerpo.add_theme_constant_override("separation", 14)
 	panel.add_child(cuerpo)
 	cuerpo.add_child(Ui.etiqueta_panel("MAREA CERRADA", 20, COLOR_ORO))
-	titulo_final = Ui.etiqueta_panel("Victoria", 60, COLOR_TEXTO)
+	titulo_final = RichTextLabel.new()
+	titulo_final.bbcode_enabled = true
+	titulo_final.fit_content = true
+	titulo_final.scroll_active = false
+	titulo_final.autowrap_mode = TextServer.AUTOWRAP_OFF
+	titulo_final.clip_contents = false
+	titulo_final.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# El texto ya llega traducido y con las etiquetas del efecto.
+	titulo_final.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	titulo_final.add_theme_font_size_override("normal_font_size", 60)
+	titulo_final.add_theme_color_override("default_color", COLOR_TEXTO)
+	titulo_final.install_effect(salto_titulo)
 	cuerpo.add_child(titulo_final)
 	texto_final = Ui.etiqueta_panel("Tu barco quedó solo en el mar.", 26, COLOR_TEXTO)
 	cuerpo.add_child(texto_final)
@@ -2448,7 +3007,12 @@ func _crear_final(capa: CanvasLayer) -> void:
 	fila.add_child(puerto)
 	var otra := Ui.boton("Otra partida", true)
 	otra.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	otra.pressed.connect(_buscar_partida)
+	otra.pressed.connect(func() -> void:
+		if modo == "moba":
+			_preparar_puerto()
+			moba.abrir_seleccion()
+		else:
+			_buscar_partida(modo))
 	fila.add_child(otra)
 
 
@@ -2467,8 +3031,14 @@ func _mostrar(nuevo: Estado) -> void:
 	marcadores.visible = en_juego
 	controles.visible = estado == Estado.JUGANDO
 	texto_monedas_menu.text = tr("Tesoro: %d monedas") % personalizacion.monedas
+	texto_gemas_menu.text = str(personalizacion.gemas)
 	_pintar_nivel_menu()
 	panel_niveles.visible = estado == Estado.NIVELES
+	moba.panel_capitanes.visible = estado == Estado.CAPITANES
+	if estado != Estado.CAPITANES:
+		moba.quitar_del_muelle()
+	if estado in [Estado.MENU, Estado.ASTILLERO, Estado.AJUSTES, Estado.NIVELES]:
+		moba.restaurar_puerto()
 	if estado == Estado.NIVELES:
 		_llenar_niveles()
 	campo_nombre.text = personalizacion.nombre
@@ -2478,6 +3048,10 @@ func _mostrar(nuevo: Estado) -> void:
 	boton_idioma.visible = estado == Estado.MENU
 	boton_partida.visible = estado == Estado.JUGANDO
 	panel_partida.visible = false
+	libre.boton_base.visible = false
+	comercio.ocultar()
+	moba.ocultar()
+	misiones.cerrar_mapa()
 	if estado == Estado.ASTILLERO:
 		_abrir_categoria(categoria)
 	match estado:
@@ -2500,15 +3074,30 @@ func _zarpar() -> void:
 
 
 func _al_puerto() -> void:
-	_preparar_mar()
+	_preparar_puerto()
 	_mostrar(Estado.MENU)
 
 
 func _pintar_hud() -> void:
-	texto_vivos.text = tr("A flote: %d") % _contar_vivos()
 	_pintar_botin()
+	texto_botin.visible = modo != "moba"
 	var ultima := DURACION_FASES.size() - 1
+	texto_mision.text = misiones.texto_hud()
 	var peligro := peligros.aviso(jugador) if jugador.viva else ""
+	if peligro == "" and jugador.viva:
+		peligro = tiburones.aviso(jugador)
+	if peligro == "" and jugador.viva:
+		peligro = barriles.aviso(jugador)
+	if modo == "libre":
+		texto_vivos.text = tr("Mar libre · Tesoro: %d") % personalizacion.monedas
+		texto_tormenta.text = peligro if peligro != "" else libre.texto_estado()
+		return
+	if modo == "moba":
+		texto_vivos.text = moba.texto_estado()
+		texto_tormenta.text = moba.texto_aviso()
+		texto_mision.text = moba.texto_marcador()
+		return
+	texto_vivos.text = tr("A flote: %d") % _contar_vivos()
 	if peligro != "":
 		texto_tormenta.text = peligro
 	elif jugador.pos.distance_to(zona_centro) > zona_radio:
@@ -2516,8 +3105,8 @@ func _pintar_hud() -> void:
 	elif fase == ultima and edad_fase >= DURACION_FASES[ultima]:
 		texto_tormenta.text = "Círculo final"
 	else:
-		var restante: float = DURACION_FASES[fase] - edad_fase
-		texto_tormenta.text = tr("Tormenta: %ds") % ceili(restante)
+		var restante := ceili(DURACION_FASES[fase] - edad_fase)
+		texto_tormenta.text = tr("Tormenta: %d:%02d") % [floori(restante / 60.0), restante % 60]
 
 
 # Dibujo sobre la pantalla: marcadores, minimapa y controles
@@ -2532,23 +3121,36 @@ func _dibujar_marcadores() -> void:
 		var pantalla := camara.unproject_position(punto)
 		var ancho := 76.0
 		marcadores.draw_rect(Rect2(pantalla + Vector2(-ancho / 2.0, -6.0), Vector2(ancho, 12.0)), Color(0, 0, 0, 0.5))
-		var color := Color("3dde7a") if barco.es_jugador else Color("e23d3d")
+		var color := Color("3dde7a") if barco.es_jugador else (Moba.COLORES[barco.equipo] if barco.equipo >= 0 else Color("e23d3d"))
 		var lleno := (ancho - 4.0) * barco.vida / barco.vida_max
 		marcadores.draw_rect(Rect2(pantalla + Vector2(-ancho / 2.0 + 2.0, -4.0), Vector2(lleno, 8.0)), color)
 		var fuente := ThemeDB.fallback_font
 		var tam := 18
 		var ancho_nombre := fuente.get_string_size(barco.nombre, HORIZONTAL_ALIGNMENT_LEFT, -1, tam).x
 		var sitio := pantalla + Vector2(-ancho_nombre / 2.0, -12.0)
-		var tinta := Color("c9ffd9") if barco.es_jugador else COLOR_TEXTO
+		var tinta := Color("c9ffd9") if barco.es_jugador else moba.tinta(barco) if barco.equipo >= 0 else (Niebla.COLOR_FANTASMA if barco.fantasma else Recompensas.COLOR_OBJETIVO if recompensas.objetivo_activo(barco) else Persecucion.COLOR_LEGENDARIO if barco.legendario else (Persecucion.COLOR_CAZADOR if barco.cazador else (COLOR_PELIGRO if barco.es_pirata else COLOR_TEXTO)))
 		marcadores.draw_string_outline(fuente, sitio, barco.nombre, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, 5, Color(0, 0, 0, 0.7))
 		marcadores.draw_string(fuente, sitio, barco.nombre, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, tinta)
+		if barco.es_pirata and barco.recompensa > 0:
+			var cartel := tr("Recompensa: %d") % barco.recompensa
+			var ancho_cartel := fuente.get_string_size(cartel, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+			var arriba := pantalla + Vector2(-ancho_cartel / 2.0, -32.0)
+			marcadores.draw_string_outline(fuente, arriba, cartel, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, 4, Color(0, 0, 0, 0.7))
+			marcadores.draw_string(fuente, arriba, cartel, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, COLOR_ORO)
 		if barco.botin > 0 and barco.es_bot:
 			var cifra := str(barco.botin)
 			var moneda := pantalla + Vector2(ancho / 2.0 + 12.0, 0.0)
 			_dibujar_moneda(moneda, 8.0)
 			marcadores.draw_string_outline(fuente, moneda + Vector2(11.0, 6.0), cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 4, Color(0, 0, 0, 0.7))
 			marcadores.draw_string(fuente, moneda + Vector2(11.0, 6.0), cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, COLOR_ORO)
-	peligros.dibujar_vidas(marcadores, camara)
+	emotes.dibujar(marcadores, camara)
+	misiones.dibujar(marcadores, camara)
+	if modo == "moba":
+		moba.dibujar(marcadores, camara)
+	if modo == "libre":
+		libre.dibujar(marcadores, camara)
+		comercio.dibujar(marcadores, camara)
+		persecucion.dibujar(marcadores)
 	var fuente_cofre := ThemeDB.fallback_font
 	for cofre in cofres:
 		var arriba: Vector3 = cofre.nodo.position + Vector3(0, 1.4, 0)
@@ -2576,13 +3178,28 @@ func _dibujar_moneda(centro: Vector2, radio: float) -> void:
 
 
 func _dibujar_minimapa() -> void:
-	var radio := minimapa.size.x / 2.0
+	var exterior := minimapa.size.x / 2.0
+	var radio := exterior - ANCHO_BRUJULA
 	var centro := minimapa.size / 2.0
 	var escala := radio / RADIO_MUNDO
-	minimapa.draw_circle(centro, radio, Color("0e2f38"))
-	minimapa.draw_circle(centro + zona_centro * escala, maxf(3.0, zona_radio * escala), Color("1f7f86"))
-	minimapa.draw_arc(centro + zona_centro * escala, maxf(3.0, zona_radio * escala), 0.0, TAU, 64, Color(1.0, 0.96, 0.84), 2.0, true)
+	_dibujar_brujula(centro, exterior, radio)
+	if modo == "libre":
+		# Radar alrededor del barco: el mapa se desplaza y el barco queda en el centro.
+		escala = radio / MarLibre.RADAR
+		minimapa.draw_circle(centro, radio, Color("1f7f86"))
+		if jugador != null:
+			centro -= jugador.pos * escala
+			_dibujar_borde_libre(centro, escala, radio)
+	elif modo == "moba":
+		escala = radio / Moba.RADIO_MAPA
+		minimapa.draw_circle(centro, radio, Color("1f7f86"))
+	else:
+		minimapa.draw_circle(centro, radio, Color("0e2f38"))
+		minimapa.draw_circle(centro + zona_centro * escala, maxf(3.0, zona_radio * escala), Color("1f7f86"))
+		minimapa.draw_arc(centro + zona_centro * escala, maxf(3.0, zona_radio * escala), 0.0, TAU, 64, Color(1.0, 0.96, 0.84), 2.0, true)
 	for isla in islotes:
+		if not en_mapa(isla.pos):
+			continue
 		var tono := Islas.COLOR_ROCA if isla.radio <= Islas.RADIO_ROCAS else Islas.COLOR_ARENA
 		if isla.lobulos.is_empty():
 			minimapa.draw_circle(centro + isla.pos * escala, maxf(1.5, isla.radio * escala), tono)
@@ -2592,20 +3209,81 @@ func _dibujar_minimapa() -> void:
 			minimapa.draw_circle(centro + sitio * escala, maxf(1.0, lobulo.z * isla.radio * escala), tono)
 	peligros.dibujar_minimapa(minimapa, centro, escala)
 	for tabla in tablas:
-		minimapa.draw_circle(centro + tabla.pos * escala, 2.5, Color("ffd36b"))
-	for cofre in cofres:
-		var punto_cofre: Vector2 = centro + cofre.pos * escala
-		minimapa.draw_rect(Rect2(punto_cofre - Vector2(3.5, 3.0), Vector2(7, 6)), Color("ffb83a"))
-		minimapa.draw_rect(Rect2(punto_cofre - Vector2(3.5, 3.0), Vector2(7, 6)), Color("5a3418"), false, 1.0)
-	for barco in barcos:
-		if not barco.viva:
+		if en_mapa(tabla.pos):
+			minimapa.draw_circle(centro + tabla.pos * escala, 2.5, Color("ffd36b"))
+	misiones.dibujar_minimapa(minimapa, centro, escala)
+	if modo == "libre":
+		libre.dibujar_minimapa(minimapa, centro, escala)
+		comercio.dibujar_minimapa(minimapa, centro, escala)
+		persecucion.dibujar_minimapa(minimapa, centro, escala)
+		recompensas.dibujar_minimapa(minimapa, centro, escala)
+	elif modo == "moba":
+		moba.dibujar_minimapa(minimapa, centro, escala)
+	# Los cofres tampoco: hay que encontrarlos navegando.
+	# Los rivales no salen en el mapa: solo tu barco, con una flecha hacia donde mira la proa.
+	if jugador != null and jugador.viva:
+		var punto := centro + jugador.pos * escala
+		var proa := jugador.proa()
+		var lado := proa.orthogonal()
+		var flecha := PackedVector2Array([punto + proa * 8.0, punto - proa * 5.0 + lado * 5.5, punto - proa * 2.5, punto - proa * 5.0 - lado * 5.5])
+		minimapa.draw_colored_polygon(flecha, Color("7dffb2"))
+		flecha.append(flecha[0])
+		minimapa.draw_polyline(flecha, Color("0b3a2a"), 1.5, true)
+	var medio := minimapa.size / 2.0
+	if modo == "libre":
+		niebla.dibujar_minimapa(minimapa, medio, radio)
+	minimapa.draw_arc(medio, radio, 0.0, TAU, 64, COLOR_ORO, 2.5, true)
+	misiones.dibujar_brujula(minimapa, medio, exterior, radio)
+	if modo == "libre":
+		libre.dibujar_brujula(minimapa, medio, exterior, radio)
+		comercio.dibujar_brujula(minimapa, medio, exterior, radio)
+		persecucion.dibujar_brujula(minimapa, medio, exterior, radio)
+		recompensas.dibujar_brujula(minimapa, medio, exterior, radio)
+
+
+# Tramo del borde de la tormenta que cae dentro del radar del mar libre.
+func _dibujar_borde_libre(centro: Vector2, escala: float, radio: float) -> void:
+	if jugador.pos.length() < MarLibre.RADIO - MarLibre.RADAR:
+		return
+	var medio := minimapa.size / 2.0
+	var hacia := jugador.pos.angle()
+	var abre := MarLibre.RADAR * 1.2 / MarLibre.RADIO
+	var puntos := PackedVector2Array()
+	for k in 41:
+		var punto := centro + Vector2.from_angle(hacia + lerpf(-abre, abre, k / 40.0)) * MarLibre.RADIO * escala
+		if punto.distance_to(medio) < radio - 1.0:
+			puntos.append(punto)
+	if puntos.size() > 1:
+		minimapa.draw_polyline(puntos, Color(1.0, 0.96, 0.84), 2.0, true)
+
+
+# Bisel de brújula alrededor del mapa: marcas cada 15° y los cuatro puntos cardinales.
+# El norte es arriba, igual que el rumbo 0 de los barcos.
+func _dibujar_brujula(centro: Vector2, exterior: float, interior: float) -> void:
+	minimapa.draw_circle(centro + Vector2(0, 3), exterior, Color(0, 0, 0, 0.25))
+	minimapa.draw_circle(centro, exterior, Color("13262c"))
+	minimapa.draw_arc(centro, exterior - 1.5, 0.0, TAU, 72, COLOR_ORO, 3.0, true)
+	for k in 24:
+		var angulo := TAU * k / 24.0
+		if k % 6 == 0:
 			continue
-		var punto := centro + barco.pos * escala
-		if barco.es_jugador:
-			minimapa.draw_circle(punto, 5.0, Color("7dffb2"))
-		else:
-			minimapa.draw_rect(Rect2(punto - Vector2(3, 3), Vector2(6, 6)), Color("ff9b8a"))
-	minimapa.draw_arc(centro, radio, 0.0, TAU, 64, Color(1, 0.97, 0.9, 0.95), 4.0, true)
+		var dir := Vector2.from_angle(angulo)
+		var largo := 7.0 if k % 3 == 0 else 4.0
+		minimapa.draw_line(centro + dir * (exterior - 4.0), centro + dir * (exterior - 4.0 - largo), Color(COLOR_TEXTO, 0.7), 1.5, true)
+	var fuente := ThemeDB.fallback_font
+	var cardinales := [["N", -PI / 2.0], ["E", 0.0], ["S", PI / 2.0], ["O", PI]]
+	for cardinal in cardinales:
+		var dir := Vector2.from_angle(cardinal[1])
+		var punto := centro + dir * (interior + ANCHO_BRUJULA * 0.5)
+		var letra: String = tr(cardinal[0])
+		var tam := 17 if cardinal[0] == "N" else 14
+		var medida := fuente.get_string_size(letra, HORIZONTAL_ALIGNMENT_LEFT, -1, tam)
+		var base := punto + Vector2(-medida.x / 2.0, medida.y * 0.3)
+		minimapa.draw_string_outline(fuente, base, letra, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, 4, Color("08161c"))
+		minimapa.draw_string(fuente, base, letra, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, COLOR_PELIGRO if cardinal[0] == "N" else COLOR_TEXTO)
+	# Aguja del norte apuntando hacia fuera, sobre el borde.
+	var tope := centro + Vector2(0, -exterior)
+	minimapa.draw_colored_polygon(PackedVector2Array([tope + Vector2(0, -7), tope + Vector2(-6, 3), tope + Vector2(6, 3)]), COLOR_PELIGRO)
 
 
 func _dibujar_controles() -> void:
@@ -2629,7 +3307,7 @@ func _dibujar_controles() -> void:
 	for arma in BOTONES_FUEGO:
 		var radio: float = BOTONES_FUEGO[arma][1]
 		var texto: String = BOTONES_FUEGO[arma][2]
-		var carga: float = 1.0 - jugador.recargas[arma] / RECARGAS[arma]
+		var carga: float = 1.0 - jugador.recargas[arma] / (RECARGAS[arma] * jugador.factor_recarga)
 		var lista := carga >= 1.0
 		var pulsado := _arma_pulsada(arma)
 		var centro := _posicion_fuego(arma) + (Vector2(0, 2) if pulsado else Vector2.ZERO)

@@ -41,9 +41,11 @@ func _crear_estudio() -> Estudio:
 	var ambiente := Environment.new()
 	ambiente.background_mode = Environment.BG_CLEAR_COLOR
 	ambiente.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	ambiente.ambient_light_color = Color(0.75, 0.82, 0.9)
+	ambiente.ambient_light_color = Paleta.AMBIENTE
 	ambiente.ambient_light_energy = 0.55
 	ambiente.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	ambiente.adjustment_enabled = true
+	ambiente.adjustment_saturation = Paleta.SATURACION
 	var mundo := WorldEnvironment.new()
 	mundo.environment = ambiente
 	estudio.vista.add_child(mundo)
@@ -51,7 +53,7 @@ func _crear_estudio() -> Estudio:
 	var sol := DirectionalLight3D.new()
 	sol.rotation_degrees = Vector3(-42.0, 35.0, 0.0)
 	sol.light_energy = 1.15
-	sol.light_color = Color("fff1d6")
+	sol.light_color = Paleta.SOL
 	estudio.vista.add_child(sol)
 	var relleno := DirectionalLight3D.new()
 	relleno.rotation_degrees = Vector3(-20.0, -140.0, 0.0)

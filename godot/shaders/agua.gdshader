@@ -1,16 +1,21 @@
 shader_type spatial;
-render_mode specular_schlick_ggx;
+render_mode specular_schlick_ggx, blend_mix, depth_draw_always;
 
 uniform vec4 color_hondo : source_color = vec4(0.02, 0.15, 0.23, 1.0);
 uniform vec4 color_claro : source_color = vec4(0.05, 0.36, 0.40, 1.0);
 uniform vec4 color_cielo : source_color = vec4(0.55, 0.76, 0.82, 1.0);
 uniform vec4 color_tormenta : source_color = vec4(0.04, 0.05, 0.09, 1.0);
+uniform vec4 color_bajio : source_color = vec4(0.1, 0.58, 0.58, 1.0);
+uniform vec4 color_espuma : source_color = vec4(0.9, 0.96, 0.98, 1.0);
 uniform vec2 zona_centro = vec2(0.0);
 uniform float zona_radio = 80.0;
 uniform float relampago = 0.0;
 uniform float tiempo = 0.0;
 // Remolinos cercanos: x, z, radio y profundidad del embudo (metros). Radio 0 = vacío.
 uniform vec4 remolinos[6];
+// Bajíos de las islas cercanas (Islas.BAJIOS): x, z, radio donde el agua es más clara
+// y radio donde vuelve a ser opaca (metros). Radio 0 = vacío.
+uniform vec4 bajios[8];
 
 varying vec3 pos_mundo;
 varying float altura;
@@ -103,10 +108,10 @@ void fragment() {
 
 	float manchas = ruido(p * 0.9 + vec2(t * 0.12, -t * 0.08)) * ruido(p * 2.3 - vec2(t * 0.2, t * 0.1));
 	float espuma_calma = smoothstep(0.21, 0.3, altura) * smoothstep(0.35, 0.7, manchas);
-	color = mix(color, vec3(0.85, 0.93, 0.95), espuma_calma * 0.4);
+	color = mix(color, color_espuma.rgb * 0.94, espuma_calma * 0.4);
 	// Crestitas blancas en las olas pequeñas.
 	float cresta = smoothstep(0.06, 0.1, h0 - altura) * smoothstep(0.62, 0.85, ruido(p * 4.0 + vec2(t * 0.25, -t * 0.18)));
-	color = mix(color, vec3(0.9, 0.96, 0.98), cresta * 0.25);
+	color = mix(color, color_espuma.rgb, cresta * 0.25);
 	color *= 0.95 + 0.1 * clamp((h0 - altura) * 8.0, -0.5, 0.5);
 
 	float d = length(p - zona_centro);
@@ -118,8 +123,20 @@ void fragment() {
 	color += vec3(0.55, 0.6, 0.8) * relampago * fuera_color * 0.3;
 	float borde = 1.0 - smoothstep(0.0, 0.45, abs(d - zona_radio));
 
+	// Sobre el fondo de las islas el agua se aclara y deja ver corales y peces.
+	float claro = 0.0;
+	for (int i = 0; i < 8; i++) {
+		vec4 b = bajios[i];
+		if (b.w > 0.0) {
+			claro = max(claro, 1.0 - smoothstep(b.z, b.w, length(p - b.xy)));
+		}
+	}
+	claro *= 1.0 - fuera_color;
+	color = mix(color, color_bajio.rgb, claro * 0.35);
+
 	ALBEDO = color;
-	EMISSION = vec3(1.0, 0.95, 0.8) * borde * 0.9;
+	ALPHA = mix(1.0, 0.32, claro);
+	EMISSION = color_espuma.rgb * borde * 0.9;
 	ROUGHNESS = mix(0.18, 0.3, fuera_color);
 	SPECULAR = 0.45;
 }

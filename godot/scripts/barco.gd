@@ -36,6 +36,7 @@ var altura := 5.4
 # Segundos que le faltan a cada arma: "proa", "babor" (izquierda) y "estribor" (derecha).
 var recargas := {"proa": 0.0, "babor": 0.0, "estribor": 0.0}
 var espera_roca := 0.0
+var espera_choque := 0.0
 var viva := true
 var hundimiento := 0.0
 var deriva := 0.0
@@ -46,9 +47,33 @@ var escora_ola := 0.0
 var fase_proa := 0.0
 # Monedas que lleva en la bodega durante la partida; al hundirse cae la mitad en un cofre.
 var botin := 0
+# Tesoros a la vista en la cubierta ("cofre", "calavera"); se venden en los puertos.
+var tesoros: Array[String] = []
 # Solo a los bots se les muestra el botín encima: el de las personas queda en secreto.
 var es_bot := false
+# Modo libre: los piratas atacan a todos y dan recompensa; los agresivos atacan a quien pase.
+var es_pirata := false
+var agresivo := false
+var recompensa := 0
+var destino_libre := Vector2.INF
+# Segundos que le quedan con las velas rotas (bala encadenada) y ardiendo (bala de fuego).
+var frenado := 0.0
+var quemadura := 0.0
+var quemador: Barco
+# Mar libre: cazadores que persiguen al jugador buscado y barcos legendarios (jefes).
+var cazador := false
+var legendario := false
+var fantasma := false
+# Mar libre: nombre del encargo del tablón de recompensas que lleva este pirata.
+var objetivo := ""
+# Armada en el modo MOBA (0 azul, 1 roja); -1 fuera de ese modo.
+var equipo := -1
+var factor_defensa := 1.0
+# Mejoras (mar libre) o refuerzos de jefe: multiplican el daño de sus balas y la recarga.
+var factor_danio := 1.0
+var factor_recarga := 1.0
 var modelo: Node3D
+var desgaste: Desgaste
 var aro: MeshInstance3D
 
 
@@ -68,6 +93,12 @@ func vestir(aspecto: Personalizacion) -> void:
 	var datos: Dictionary = TIPOS[tipo]
 	vida_max = datos["vida"]
 	vida = vida_max
+	frenado = 0.0
+	quemadura = 0.0
+	quemador = null
+	factor_danio = 1.0
+	factor_recarga = 1.0
+	factor_defensa = 1.0
 	vel_max = datos["velocidad"]
 	giro_max = datos["giro"]
 	radio = datos["radio"]
@@ -76,6 +107,11 @@ func vestir(aspecto: Personalizacion) -> void:
 		modelo.queue_free()
 	modelo = ModeloBarco.crear(aspecto)
 	add_child(modelo)
+	if desgaste != null:
+		desgaste.queue_free()
+	desgaste = Desgaste.new()
+	add_child(desgaste)
+	desgaste.preparar(mundo, tipo)
 	if es_jugador:
 		_crear_aro()
 
@@ -120,13 +156,23 @@ func actualizar(delta: float) -> void:
 			_pilotar_rival(delta)
 
 	velocidad += (acelerador * vel_max - velocidad) * minf(1.0, delta * 0.5)
+	if frenado > 0.0:
+		frenado -= delta
+		velocidad = minf(velocidad, vel_max * Comercio.FRENO)
+	if quemadura > 0.0:
+		quemadura -= delta
+		recibir_danio(Comercio.DANIO_FUEGO * delta, false, quemador)
+		if not viva:
+			return
 	rumbo = wrapf(rumbo + vel_giro * delta, -PI, PI)
 	pos += proa() * velocidad * delta
 
-	if pos.length() > Principal.RADIO_MUNDO:
-		pos = pos.limit_length(Principal.RADIO_MUNDO)
+	var limite := mundo.radio_mundo()
+	if pos.length() > limite:
+		pos = pos.limit_length(limite)
 
 	espera_roca = maxf(0.0, espera_roca - delta)
+	espera_choque = maxf(0.0, espera_choque - delta)
 	for isla in mundo.islotes:
 		var separacion: Vector2 = pos - isla.pos
 		var minimo: float = isla.borde(pos) + radio * 0.7
@@ -195,18 +241,21 @@ func colocar(delta: float) -> void:
 	var escora := escora_ola + vel_giro * 0.18 * marcha
 	position = Vector3(centro.x, flotacion + vaiven * 0.06 * marcha - hundimiento * 2.6, centro.y)
 	rotation = Vector3(cabeceo + hundimiento * 0.35, -rumbo, escora + hundimiento * 0.8)
+	desgaste.actualizar(delta, 1.0 - vida / vida_max, hundimiento)
 	if aro != null:
-		aro.visible = viva
+		aro.visible = viva and not mundo.en_puerto()
 		aro.global_position = Vector3(position.x, h_centro + 0.14, position.z)
 
 
 func recibir_danio(cantidad: float, de_bala := false, atacante: Barco = null) -> void:
 	if not viva:
 		return
-	vida -= cantidad
+	vida -= cantidad * factor_defensa
 	if atacante != null:
 		ultimo_atacante = atacante
 		hora_ataque = Time.get_ticks_msec()
+		if atacante == mundo.jugador and mundo.modo == "libre":
+			mundo.persecucion.al_golpear(self, cantidad)
 	if de_bala:
 		mundo.astillas(position + Vector3(0, 0.9, 0))
 	if vida <= 0.0:
@@ -227,6 +276,18 @@ func _chocar_roca(fuerza: float) -> void:
 		mundo.golpe = maxf(mundo.golpe, 0.15)
 
 
+# Choque contra otro barco, con la misma escala de daño que las rocas. "fuerza" va de 0
+# (roce) a 1 (embestida a toda vela); quien embiste también sufre.
+func chocar_barco(fuerza: float, otro: Barco) -> void:
+	if espera_choque > 0.0 or fuerza < 0.25:
+		return
+	espera_choque = 1.0
+	recibir_danio(lerpf(1.5, 4.0, clampf((fuerza - 0.25) / 0.75, 0.0, 1.0)), false, otro)
+	mundo.astillas(position + Vector3(0, 0.5, 0))
+	if es_jugador:
+		mundo.golpe = maxf(mundo.golpe, 0.15)
+
+
 func _pilotar(direccion: Vector2, armas: Array[String], delta: float) -> void:
 	if direccion != Vector2.ZERO:
 		_girar_hacia(atan2(direccion.x, -direccion.y), 1.0, delta)
@@ -239,7 +300,10 @@ func _pilotar(direccion: Vector2, armas: Array[String], delta: float) -> void:
 
 
 func _pilotar_rival(delta: float) -> void:
-	var destino := mundo.zona_centro
+	if mundo.modo == "moba":
+		mundo.moba.pilotar(self, delta)
+		return
+	var destino := mundo.destino_bot(self)
 	var blanco: Barco = null
 
 	var cofre = mundo.cofre_cercano(self, 520.0)
@@ -252,9 +316,9 @@ func _pilotar_rival(delta: float) -> void:
 		if tabla != null:
 			destino = tabla
 		else:
-			blanco = mundo.rival_mas_cercano(self)
+			blanco = mundo.rival_de(self)
 	else:
-		blanco = mundo.rival_mas_cercano(self)
+		blanco = mundo.rival_de(self)
 
 	var rumbo_deseado := _angulo_hacia(destino)
 	if blanco != null:
@@ -277,7 +341,7 @@ func _pilotar_rival(delta: float) -> void:
 			if absf(angulo + PI / 2.0) < 0.3:
 				mundo.disparar(self, "babor")
 
-	var huida := mundo.peligros.evitar(self)
+	var huida := mundo.peligros.evitar(self) + mundo.barriles.evitar(self)
 	if huida != Vector2.ZERO:
 		rumbo_deseado = _angulo_hacia(pos + huida)
 	_girar_hacia(rumbo_deseado + sin(deriva) * 0.15, 1.0, delta)

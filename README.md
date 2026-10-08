@@ -1,6 +1,6 @@
 # Última Marea
 
-Battle royale de barcos en 3D para móvil, en horizontal. Doce barcos entran al mar, la tormenta va cerrando el círculo y gana el último que siga a flote.
+Batallas de barcos en 3D para móvil, en horizontal. Doce barcos entran al mar, la tormenta va cerrando el círculo y gana el último que siga a flote.
 
 ## Cómo jugarlo en la computadora
 

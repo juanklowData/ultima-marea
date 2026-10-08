@@ -99,6 +99,44 @@ static func canon() -> AudioStreamWAV:
 	return a_wav(tono)
 
 
+# Barril de pólvora que revienta: chasquido seco, golpe grave que baja de tono y un retumbo
+# con astillas que caen al agua.
+static func explosion() -> AudioStreamWAV:
+	var muestras := int(FRECUENCIA * 2.2)
+	var golpe := PackedFloat32Array()
+	var retumbo := PackedFloat32Array()
+	var chasquido := PackedFloat32Array()
+	golpe.resize(muestras)
+	retumbo.resize(muestras)
+	chasquido.resize(muestras)
+	var a_grave := paso_grave(220.0)
+	var a_medio := paso_grave(1600.0)
+	var grave_1 := 0.0
+	var grave_2 := 0.0
+	var medio := 0.0
+	var fase := 0.0
+	for i in muestras:
+		var t := float(i) / FRECUENCIA
+		var blanco := randf_range(-1.0, 1.0)
+		grave_1 += a_grave * (blanco - grave_1)
+		grave_2 += a_grave * (grave_1 - grave_2)
+		medio += a_medio * (blanco - medio)
+		fase += TAU * (34.0 + 90.0 * exp(-t * 7.0)) / FRECUENCIA
+		var ataque := 1.0 - exp(-t * 900.0)
+		golpe[i] = sin(fase) * exp(-t * 3.2) * ataque
+		retumbo[i] = grave_2 * exp(-t * 1.6) * ataque
+		var astillas := 0.0
+		if t > 0.15 and randf() < 0.0012 * exp(-t * 1.5):
+			astillas = randf_range(0.5, 1.0)
+		chasquido[i] = medio * exp(-t * 30.0) + astillas
+	golpe = normalizar(golpe)
+	retumbo = normalizar(retumbo)
+	chasquido = normalizar(chasquido)
+	for i in muestras:
+		golpe[i] = golpe[i] + retumbo[i] * 0.9 + chasquido[i] * 0.35
+	return a_wav(golpe)
+
+
 static func monedas(choques: Array = [0.0, 0.07, 0.15, 0.21, 0.3, 0.36, 0.47]) -> AudioStreamWAV:
 	var muestras := int(FRECUENCIA * (choques.back() + 0.43))
 	var valores := PackedFloat32Array()
@@ -179,6 +217,162 @@ static func equipar() -> AudioStreamWAV:
 	return a_wav(valores)
 
 
+# Olas suaves que llegan y se retiran, en bucle sin corte. Se parte de ruido rosa (más grave
+# y suave que el blanco, como el agua de verdad); cada ola abre un poco el filtro al romper
+# y deja detrás una espuma fina que se apaga despacio.
+static func olas() -> AudioStreamWAV:
+	var largo := FRECUENCIA * 16
+	var cruce := int(FRECUENCIA * 2.0)
+	var total := largo + cruce
+	var cuerpo := PackedFloat32Array()
+	cuerpo.resize(total)
+	var resaca := PackedFloat32Array()
+	resaca.resize(total)
+	var inicio := 0.0
+	while inicio < 18.0:
+		var desde := int(inicio * FRECUENCIA)
+		var sube := randf_range(0.8, 1.4)
+		var baja := randf_range(1.6, 2.6)
+		var fuerza := randf_range(0.5, 1.0)
+		for i in range(desde, mini(total, desde + int((sube + baja + 1.5) * FRECUENCIA))):
+			var t := float(i - desde) / FRECUENCIA
+			cuerpo[i] += smoothstep(0.0, sube, t) * (1.0 - smoothstep(sube, sube + baja, t)) * fuerza
+			resaca[i] += smoothstep(sube * 0.8, sube + 0.4, t) * (1.0 - smoothstep(sube + 0.4, sube + baja + 1.5, t)) * fuerza
+		inicio += randf_range(3.0, 5.0)
+	var a_bajo := paso_grave(80.0)
+	var a_cerrado := paso_grave(350.0)
+	var a_abierto := paso_grave(1300.0)
+	var a_espuma := paso_grave(2500.0)
+	var b0 := 0.0
+	var b1 := 0.0
+	var b2 := 0.0
+	var bajo := 0.0
+	var agua_1 := 0.0
+	var agua_2 := 0.0
+	var espuma_1 := 0.0
+	var crudo := PackedFloat32Array()
+	crudo.resize(total)
+	for i in total:
+		var blanco := randf_range(-1.0, 1.0)
+		b0 = 0.99765 * b0 + blanco * 0.099046
+		b1 = 0.963 * b1 + blanco * 0.2965164
+		b2 = 0.57 * b2 + blanco * 1.0526913
+		var rosa := (b0 + b1 + b2 + blanco * 0.1848) * 0.2
+		bajo += a_bajo * (rosa - bajo)
+		rosa -= bajo
+		var ola := minf(cuerpo[i], 1.0)
+		var corte := lerpf(a_cerrado, a_abierto, ola * ola)
+		agua_1 += corte * (rosa - agua_1)
+		agua_2 += corte * (agua_1 - agua_2)
+		espuma_1 += a_espuma * (blanco - espuma_1)
+		var fina := (blanco - espuma_1) * 0.06 * minf(resaca[i], 1.0)
+		crudo[i] = agua_2 * (0.25 + ola * 0.9) + fina
+	var valores := PackedFloat32Array()
+	valores.resize(largo)
+	for i in largo:
+		valores[i] = crudo[i]
+	for i in cruce:
+		var mezcla := float(i) / cruce
+		valores[i] = crudo[i] * mezcla + crudo[largo + i] * (1.0 - mezcla)
+	return a_wav(valores, true)
+
+# Agua que corre por el casco mientras se navega, en bucle sin corte. Tres capas sobre ruido
+# rosa: un rumor grave que sube y baja con el cabeceo, el «shhh» de la proa al cortar cada ola
+# (el filtro se abre y se cierra) y la espuma fina que queda burbujeando detrás.
+static func agua_casco() -> AudioStreamWAV:
+	var largo := FRECUENCIA * 8
+	var cruce := int(FRECUENCIA * 1.0)
+	var total := largo + cruce
+	var corte_ola := PackedFloat32Array()
+	corte_ola.resize(total)
+	var inicio := randf_range(0.0, 0.4)
+	while inicio < float(total) / FRECUENCIA:
+		var sube := randf_range(0.25, 0.4)
+		var baja := randf_range(0.7, 1.1)
+		var fuerza := randf_range(0.55, 1.0)
+		var desde := int(inicio * FRECUENCIA)
+		for i in range(desde, mini(total, desde + int((sube + baja) * FRECUENCIA))):
+			var t := float(i - desde) / FRECUENCIA
+			corte_ola[i] += smoothstep(0.0, sube, t) * (1.0 - smoothstep(sube, sube + baja, t)) * fuerza
+		inicio += randf_range(1.1, 1.7)
+	var a_bajo := paso_grave(60.0)
+	var a_rumor := paso_grave(420.0)
+	var a_espuma := paso_grave(3200.0)
+	var b0 := 0.0
+	var b1 := 0.0
+	var b2 := 0.0
+	var bajo := 0.0
+	var rumor_1 := 0.0
+	var rumor_2 := 0.0
+	var proa_1 := 0.0
+	var proa_2 := 0.0
+	var espuma := 0.0
+	var resto := 0.0
+	var crudo := PackedFloat32Array()
+	crudo.resize(total)
+	for i in total:
+		var t := float(i) / FRECUENCIA
+		var blanco := randf_range(-1.0, 1.0)
+		b0 = 0.99765 * b0 + blanco * 0.099046
+		b1 = 0.963 * b1 + blanco * 0.2965164
+		b2 = 0.57 * b2 + blanco * 1.0526913
+		var rosa := (b0 + b1 + b2 + blanco * 0.1848) * 0.2
+		bajo += a_bajo * (rosa - bajo)
+		rosa -= bajo
+		rumor_1 += a_rumor * (rosa - rumor_1)
+		rumor_2 += a_rumor * (rumor_1 - rumor_2)
+		var cabeceo := 0.8 + 0.2 * sin(TAU * t / 4.0) * sin(TAU * t / 2.0 + 0.7)
+		var ola := minf(corte_ola[i], 1.0)
+		var a_proa := paso_grave(lerpf(500.0, 1900.0, ola * ola))
+		proa_1 += a_proa * (rosa - proa_1)
+		proa_2 += a_proa * (proa_1 - proa_2)
+		resto = maxf(resto * 0.99995, ola)
+		espuma += a_espuma * (blanco - espuma)
+		var fina := (blanco - espuma) * 0.035 * resto * (0.6 + 0.4 * randf())
+		crudo[i] = rumor_2 * cabeceo * 0.9 + proa_2 * ola * 0.8 + fina
+	for _b in 14:
+		var desde := randi_range(0, total - int(FRECUENCIA * 0.1))
+		var tono := randf_range(260.0, 620.0)
+		var fase := 0.0
+		for i in range(desde, desde + int(FRECUENCIA * 0.07)):
+			var t := float(i - desde) / FRECUENCIA
+			fase += TAU * tono * (1.0 + t * 5.0) / FRECUENCIA
+			crudo[i] += sin(fase) * (1.0 - exp(-t * 400.0)) * exp(-t * 50.0) * 0.025
+	var valores := PackedFloat32Array()
+	valores.resize(largo)
+	for i in largo:
+		valores[i] = crudo[i]
+	for i in cruce:
+		var mezcla := float(i) / cruce
+		valores[i] = crudo[i] * mezcla + crudo[largo + i] * (1.0 - mezcla)
+	return a_wav(valores, true)
+
+
+# Golpecito de una ola pequeña contra el casco, con unas gotas al final.
+static func chapoteo() -> AudioStreamWAV:
+	var muestras := int(FRECUENCIA * 0.9)
+	var valores := PackedFloat32Array()
+	valores.resize(muestras)
+	var agua_1 := 0.0
+	var agua_2 := 0.0
+	for i in muestras:
+		var t := float(i) / FRECUENCIA
+		var blanco := randf_range(-1.0, 1.0)
+		var corte := paso_grave(lerpf(1700.0, 280.0, minf(1.0, t / 0.45)))
+		agua_1 += corte * (blanco - agua_1)
+		agua_2 += corte * (agua_1 - agua_2)
+		valores[i] = agua_2 * (1.0 - exp(-t * 55.0)) * exp(-t * 6.5)
+	for _g in 4:
+		var desde := int(randf_range(0.08, 0.45) * FRECUENCIA)
+		var tono := randf_range(520.0, 1100.0)
+		var fase := 0.0
+		for i in range(desde, mini(muestras, desde + int(FRECUENCIA * 0.06))):
+			var t := float(i - desde) / FRECUENCIA
+			fase += TAU * tono * (1.0 + t * 6.0) / FRECUENCIA
+			valores[i] += sin(fase) * (1.0 - exp(-t * 500.0)) * exp(-t * 60.0) * 0.06
+	return a_wav(valores)
+
+
 # Rumor grave del remolino, en bucle sin corte.
 static func rumor_remolino() -> AudioStreamWAV:
 	var frecuencia := FRECUENCIA
@@ -203,6 +397,39 @@ static func rumor_remolino() -> AudioStreamWAV:
 		var oleaje := 0.7 + 0.3 * sin(TAU * t / 1.5)
 		var remolino := 0.5 + 0.5 * sin(TAU * t / 3.0 + 1.0)
 		crudo[i] = grave_2 * oleaje + suave_2 * 0.35 * remolino
+	var valores := PackedFloat32Array()
+	valores.resize(largo)
+	for i in largo:
+		valores[i] = crudo[i]
+	for i in cruce:
+		var mezcla := float(i) / cruce
+		valores[i] = crudo[i] * mezcla + crudo[largo + i] * (1.0 - mezcla)
+	return a_wav(valores, true)
+
+# Aullido de viento que gira: ruido por un filtro resonante cuya nota sube y baja, sobre un rugido grave.
+static func viento_tornado() -> AudioStreamWAV:
+	var frecuencia := FRECUENCIA
+	var largo := frecuencia * 4
+	var cruce := int(frecuencia * 0.5)
+	var crudo := PackedFloat32Array()
+	crudo.resize(largo + cruce)
+	var a_grave := paso_grave(160.0)
+	var grave_1 := 0.0
+	var grave_2 := 0.0
+	var bajo := 0.0
+	var banda := 0.0
+	for i in crudo.size():
+		var t := float(i) / frecuencia
+		var blanco := randf_range(-1.0, 1.0)
+		grave_1 += a_grave * (blanco - grave_1)
+		grave_2 += a_grave * (grave_1 - grave_2)
+		var nota := 420.0 + 160.0 * sin(TAU * t / 4.0) + 70.0 * sin(TAU * t / 1.0 + 0.7)
+		var f := 2.0 * sin(PI * nota / frecuencia)
+		bajo += f * banda
+		var alto := blanco - bajo - 0.12 * banda
+		banda += f * alto
+		var rafaga := 0.6 + 0.4 * sin(TAU * t / 2.0 + 1.3)
+		crudo[i] = grave_2 * 2.2 + banda * 0.05 * rafaga
 	var valores := PackedFloat32Array()
 	valores.resize(largo)
 	for i in largo:

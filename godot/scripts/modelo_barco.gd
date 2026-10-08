@@ -21,15 +21,17 @@ const PERFILES := {
 	"panzudo": {"arrufo": 0.25, "popa": 1.0, "proa": 0.8, "llenura": 0.3, "espejo": 0.34, "quilla": 1.1},
 }
 
-const COLOR_CUBIERTA := Color("b98a5a")
-const COLOR_MADERA := Color("4a3222")
-const COLOR_FONDO := Color("5e2a22")
-const COLOR_ADORNO := Color("d9b46a")
-const COLOR_HIERRO := Color("26292c")
-const COLOR_VENTANA := Color("ffd27a")
+const COLOR_CUBIERTA := Paleta.MADERA_MIEL
+const COLOR_MADERA := Paleta.MADERA_OSCURA
+const COLOR_FONDO := Paleta.CASCO_FONDO
+const COLOR_ADORNO := Paleta.ORO
+const COLOR_HIERRO := Paleta.HIERRO
+const COLOR_VENTANA := Paleta.FAROL
 const SHADER_TELA := preload("res://shaders/tela.gdshader")
 const SECCIONES := 24
 const ANILLO := 8
+# Escala de un tripulante (FiguraCapitan mide ~1 a escala 1) por metro de eslora: el timón se mide con él.
+const TALLA := 0.144
 
 static var _materiales := {}
 static var _perfil: Dictionary = PERFILES["clasico"]
@@ -75,6 +77,8 @@ static func crear(aspecto: Personalizacion) -> Node3D:
 	var inclinacion: float = forma.get("inclinacion", 0.0)
 	var textura_vela := Dibujos.textura(velas, 96, 96)
 	var mastiles := _mastiles(tipo, medidas, forma, largo)
+	if raiz.get_node_or_null("Timon") == null:
+		_poner_timon(raiz, largo, alto, mastiles, adorno)
 	var mas_alto := 0.0
 	for datos in mastiles:
 		mas_alto = maxf(mas_alto, datos.y)
@@ -114,7 +118,63 @@ static func crear(aspecto: Personalizacion) -> Node3D:
 
 	_izar_bandera(palo_bandera, base_asta, punta_asta, adorno, aspecto.pieza("bandera"))
 	_adornar(raiz, aspecto.pieza("adorno"), largo, ancho, alto, forma.get("castillo", false), punta, cimas)
+	for categoria in Catalogo.CATEGORIAS:
+		var tesoro := aspecto.pieza(categoria)
+		if tesoro.has("aura"):
+			raiz.add_child(_aura(tesoro["aura"], largo, ancho, alto))
+			break
 	return raiz
+
+
+# Chispas de luz que suben alrededor del casco de los barcos con piezas de tesoro.
+static func _aura(color: Color, largo: float, ancho: float, alto: float) -> CPUParticles3D:
+	var clave := "aura|%s" % color.to_html()
+	if not _materiales.has(clave):
+		var degradado := Gradient.new()
+		degradado.set_color(0, Color(1, 1, 1, 1))
+		degradado.set_color(1, Color(1, 1, 1, 0))
+		var mancha := GradientTexture2D.new()
+		mancha.gradient = degradado
+		mancha.fill = GradientTexture2D.FILL_RADIAL
+		mancha.fill_from = Vector2(0.5, 0.5)
+		mancha.fill_to = Vector2(0.5, 0.0)
+		mancha.width = 32
+		mancha.height = 32
+		var materia := StandardMaterial3D.new()
+		materia.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		materia.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		materia.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		materia.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		materia.vertex_color_use_as_albedo = true
+		materia.albedo_texture = mancha
+		materia.albedo_color = color
+		materia.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		_materiales[clave] = materia
+	var plano := QuadMesh.new()
+	plano.size = Vector2.ONE * 0.22
+	plano.material = _materiales[clave]
+	var rampa := Gradient.new()
+	rampa.set_color(0, Color(1, 1, 1, 0))
+	rampa.set_color(1, Color(1, 1, 1, 0))
+	rampa.add_point(0.2, Color(1, 1, 1, 1))
+	var chispas := CPUParticles3D.new()
+	chispas.mesh = plano
+	chispas.amount = 26
+	chispas.lifetime = 1.8
+	chispas.local_coords = false
+	chispas.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	chispas.emission_box_extents = Vector3(ancho * 0.6, 0.1, largo * 0.5)
+	chispas.position = Vector3(0, alto * 0.6, 0)
+	chispas.direction = Vector3.UP
+	chispas.spread = 25.0
+	chispas.gravity = Vector3(0, 0.4, 0)
+	chispas.initial_velocity_min = 0.3
+	chispas.initial_velocity_max = 0.7
+	chispas.scale_amount_min = 0.6
+	chispas.scale_amount_max = 1.3
+	chispas.color_ramp = rampa
+	chispas.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return chispas
 
 
 # Un cañón de caza en la proa y una fila de cañones asomando por cada costado.
@@ -553,24 +613,55 @@ static func _camarote_timonera(raiz: Node3D, cam: Camarote) -> void:
 	for lado in [-1.0, 1.0]:
 		_pieza(raiz, _caja(Vector3(0.03, 0.14, cam.fondo * 1.1)), cam.adorno, Vector3(lado * cam.w * 0.55, suelo + 0.07, cam.z))
 	_pieza(raiz, _caja(Vector3(cam.w * 1.1, 0.14, 0.03)), cam.adorno, Vector3(0, suelo + 0.07, cam.z + cam.fondo * 0.55))
-	var rueda := Node3D.new()
-	rueda.position = Vector3(0, suelo + 0.36, cam.z - cam.fondo * 0.15)
-	rueda.rotation.x = PI / 2.0
-	raiz.add_child(rueda)
-	var aro := TorusMesh.new()
-	aro.inner_radius = 0.15
-	aro.outer_radius = 0.19
-	_pieza(rueda, aro, COLOR_MADERA, Vector3.ZERO)
-	_pieza(rueda, _cilindro(0.04, 0.04, 0.06), cam.adorno, Vector3.ZERO)
-	for k in 8:
-		_pieza(rueda, _cilindro(0.012, 0.012, 0.5), COLOR_MADERA, Vector3.ZERO).rotation = Vector3(PI / 2.0, k * PI / 4.0, 0.0)
-	_pieza(raiz, _caja(Vector3(0.08, 0.3, 0.08)), COLOR_MADERA, Vector3(0, suelo + 0.15, cam.z - cam.fondo * 0.15 + 0.06))
+	var timon := _timon(cam.adorno, cam.largo * TALLA)
+	timon.position = Vector3(0, suelo, cam.z + cam.fondo * 0.3)
+	raiz.add_child(timon)
 	var alto_toldo := 0.85 + cam.h * 0.3
 	for esquina in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
 		_pieza(raiz, _cilindro(0.022, 0.022, alto_toldo), COLOR_MADERA, Vector3(esquina.x * cam.w * 0.5, suelo + alto_toldo / 2.0, cam.z + esquina.y * cam.fondo * 0.5))
 	for i in 5:
 		var tira := _pieza(raiz, _caja(Vector3(cam.w * 1.08 / 5.0, 0.03, cam.fondo * 1.1)), cam.adorno if i % 2 == 0 else Color("f3ecdf"), Vector3((i - 2) * cam.w * 1.08 / 5.0, suelo + alto_toldo + 0.02, cam.z))
 		tira.rotation.x = 0.08
+
+
+# Timón delante del camarote de popa. El origen es donde pisa el timonel, mirando a proa;
+# si un mástil estorba, timonel y rueda se adelantan hasta quedar delante de él.
+static func _poner_timon(raiz: Node3D, largo: float, alto: float, mastiles: Array[Vector3], adorno: Color) -> void:
+	var talla := largo * TALLA
+	var z := largo * 0.23 - 0.1 * talla
+	for datos in mastiles:
+		if datos.x > z - 0.34 * talla - 0.09 and datos.x < z + 0.1 * talla + 0.09:
+			z = minf(z, datos.x - 0.09 - 0.1 * talla)
+	var timon := _timon(adorno, talla)
+	timon.position = Vector3(0, altura_cubierta(_t_de_z(z, largo), alto) - 0.02, z)
+	raiz.add_child(timon)
+
+
+# Medido para un timonel de escala 1: rueda a la altura de sus manos con los brazos al frente.
+static func _timon(adorno: Color, talla: float) -> Node3D:
+	var timon := Node3D.new()
+	timon.name = "Timon"
+	timon.scale = Vector3.ONE * talla
+	_pieza(timon, _caja(Vector3(0.18, 0.05, 0.18)), COLOR_MADERA, Vector3(0, 0.025, -0.31))
+	_pieza(timon, _caja(Vector3(0.09, 0.5, 0.09)), COLOR_MADERA, Vector3(0, 0.25, -0.31))
+	_pieza(timon, _caja(Vector3(0.12, 0.04, 0.12)), adorno, Vector3(0, 0.52, -0.31))
+	_pieza(timon, _cilindro(0.018, 0.018, 0.08), COLOR_HIERRO, Vector3(0, 0.5, -0.27)).rotation.x = PI / 2.0
+	var rueda := Node3D.new()
+	rueda.name = "Rueda"
+	rueda.position = Vector3(0, 0.5, -0.235)
+	timon.add_child(rueda)
+	var aro := TorusMesh.new()
+	aro.inner_radius = 0.165
+	aro.outer_radius = 0.2
+	aro.rings = 24
+	_pieza(rueda, aro, COLOR_MADERA, Vector3.ZERO).rotation.x = PI / 2.0
+	var cubo := _pieza(rueda, _cilindro(0.04, 0.04, 0.05), adorno, Vector3.ZERO)
+	cubo.rotation.x = PI / 2.0
+	for k in 8:
+		var giro := k * PI / 4.0
+		_pieza(rueda, _cilindro(0.013, 0.013, 0.2), COLOR_MADERA, Vector3(sin(giro), cos(giro), 0) * 0.1).rotation.z = -giro
+		_pieza(rueda, _cilindro(0.016, 0.02, 0.07), COLOR_MADERA, Vector3(sin(giro), cos(giro), 0) * 0.235).rotation.z = -giro
+	return timon
 
 
 static func _camarote_cupula(raiz: Node3D, cam: Camarote) -> void:
@@ -892,12 +983,15 @@ static func _material(color: Color, brilla := false) -> StandardMaterial3D:
 	var clave := "solido|%s|%s" % [color.to_html(), brilla]
 	if not _materiales.has(clave):
 		var material := StandardMaterial3D.new()
-		material.albedo_color = color
-		material.roughness = 0.8
+		material.albedo_color = Paleta.armonizar(color)
+		material.roughness = 0.7
 		if brilla:
 			material.emission_enabled = true
 			material.emission = color
 			material.emission_energy_multiplier = 1.4
+		else:
+			var marron := color.h < 0.13 and color.s > 0.2 and color.v < 0.75
+			Texturas.aplicar(material, "madera" if marron else "general")
 		_materiales[clave] = material
 	return _materiales[clave]
 
@@ -920,5 +1014,6 @@ static func _material_vertices() -> StandardMaterial3D:
 		material.vertex_color_is_srgb = true
 		material.roughness = 0.75
 		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		Texturas.aplicar(material, "madera")
 		_materiales["vertices"] = material
 	return _materiales["vertices"]

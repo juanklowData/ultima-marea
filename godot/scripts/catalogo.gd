@@ -82,6 +82,39 @@ const BASICAS := {
 	],
 }
 
+# Tesoros: piezas únicas que solo se compran con gemas y rodean el barco de un aura.
+# No salen en las pestañas normales ni las llevan los bots.
+const UNICAS := [
+	{"categoria": "tipo", "id": "u_leviatan", "nombre": "Galeón Leviatán", "gemas": 8, "base": "galeon", "aura": Color("6fe6ff"),
+		"forma": {"aparejo": "mixto", "perfil": "media_luna", "mastiles": 4, "castillo": false, "cofa": true, "foques": 2,
+			"baupres": 1.4, "inclinacion": 0.06, "largo": 1.15, "ancho": 1.05, "alto": 1.2, "mastil": 1.2, "vela": 1.15},
+		"info": "Galeón de cuatro mástiles con casco de media luna, el más grande del mar."},
+	{"categoria": "tipo", "id": "u_espectro", "nombre": "Balandro Espectral", "gemas": 6, "base": "balandro", "aura": Color("7dffb2"),
+		"forma": {"aparejo": "latino", "perfil": "plano", "mastiles": 2, "castillo": false, "cofa": false, "foques": 2,
+			"baupres": 1.4, "inclinacion": 0.18, "largo": 1.1, "ancho": 0.9, "alto": 0.9, "mastil": 1.15, "vela": 1.15},
+		"info": "Balandro bajo y afilado con dos velas latinas, rápido como un fantasma."},
+	{"categoria": "casco", "id": "u_amatista_real", "nombre": "Amatista Real", "gemas": 4, "color": Color("5b2a86"), "franja": Color("f0c85a"), "aura": Color("c77dff"),
+		"info": "Casco de amatista con franja de oro y destellos violetas."},
+	{"categoria": "casco", "id": "u_abisal", "nombre": "Abisal", "gemas": 4, "color": Color("0f1d2e"), "franja": Color("3fe0d0"), "aura": Color("3fe0d0"),
+		"info": "Casco negro de las profundidades con franja luminosa."},
+	{"categoria": "velas", "id": "u_aurora", "nombre": "Aurora", "gemas": 3, "color": Color("1f3a6b"), "color2": Color("6fe6ff"), "diseno": "estrella", "aura": Color("6fe6ff"),
+		"info": "Velas de noche con una estrella de hielo."},
+	{"categoria": "velas", "id": "u_kraken", "nombre": "Velas del Kraken", "gemas": 3, "color": Color("3a1450"), "color2": Color("ff8ad8"), "diseno": "calavera", "aura": Color("ff8ad8"),
+		"info": "Velas púrpura con la calavera de los que vencieron al kraken."},
+	{"categoria": "bandera", "id": "u_estandarte", "nombre": "Estandarte de Gemas", "gemas": 2, "color": Color("5b2a86"), "color2": Color("f0c85a"), "diseno": "sol", "aura": Color("c77dff"),
+		"info": "Bandera de amatista con un sol de oro."},
+	{"categoria": "proa", "id": "u_kraken_oro", "nombre": "Kraken de oro", "gemas": 5, "color": Color("f0c85a"), "estilo": "pulpo", "aura": Color("ffd36b"),
+		"info": "Mascarón de kraken de oro macizo."},
+	{"categoria": "proa", "id": "u_hipocampo_cristal", "nombre": "Hipocampo de cristal", "gemas": 5, "color": Color("9cf0ff"), "estilo": "hipocampo", "aura": Color("9cf0ff"),
+		"info": "Mascarón de hipocampo tallado en cristal marino."},
+	{"categoria": "popa", "id": "u_faro_cristal", "nombre": "Faro de cristal", "gemas": 4, "color": Color("d8f4ff"), "estilo": "torre", "luz": Color("6fe6ff"), "aura": Color("6fe6ff"),
+		"info": "Torre de cristal con una linterna azul que nunca se apaga."},
+	{"categoria": "canones", "id": "u_dragon_jade", "nombre": "Dragón de jade", "gemas": 3, "color": Color("2fbf7f"), "estilo": "dragon", "aura": Color("7dffb2"),
+		"info": "Cañones con boca de dragón tallados en jade."},
+	{"categoria": "adorno", "id": "u_faroles_gema", "nombre": "Faroles de gema", "gemas": 2, "color": Color("c77dff"), "estilo": "faroles", "aura": Color("c77dff"),
+		"info": "Faroles de amatista encendidos sobre la borda."},
+]
+
 # [id, nombre, color]. Los nombres funcionan solos y detrás de "de".
 const PALETA := [
 	["rubi", "Rubí", "c62f2f"], ["granate", "Granate", "7a1f2a"], ["vino", "Vino", "5a1830"],
@@ -174,6 +207,7 @@ const PRECIO_MAX := 25
 
 static var _piezas := {}
 static var _indice := {}
+static var _unicas: Array = []
 
 
 static func lista(categoria: String) -> Array:
@@ -189,6 +223,11 @@ static func buscar(categoria: String, id: String) -> Dictionary:
 static func existe(categoria: String, id: String) -> bool:
 	_preparar()
 	return _indice[categoria].has(id)
+
+
+static func unicas() -> Array:
+	_preparar()
+	return _unicas
 
 
 static func inicial(categoria: String) -> String:
@@ -216,6 +255,11 @@ static func _preparar() -> void:
 			return ("orden/" + a["id"]).hash() < ("orden/" + b["id"]).hash())
 		_piezas[categoria] = unicas
 		_indice[categoria] = vistos
+	for pieza in UNICAS:
+		var tesoro: Dictionary = pieza.duplicate(true)
+		tesoro["precio"] = 0
+		_indice[tesoro["categoria"]][tesoro["id"]] = tesoro
+		_unicas.append(tesoro)
 
 
 static func _generar(categoria: String) -> Array:

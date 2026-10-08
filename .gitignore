@@ -3,6 +3,10 @@
 godot/android/
 *.apk
 *.aab
+web/
+android_builds/
+*.keystore
+*.jks
 
 # Descargas en bruto y copias de seguridad locales
 descargas_musica/

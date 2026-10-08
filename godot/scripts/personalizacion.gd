@@ -6,7 +6,7 @@ const MONEDAS_INICIALES := 10
 const LARGO_NOMBRE := 16
 const NOMBRE_INICIAL := "Mi barco"
 # Al subir este número se descarta el volumen de música guardado y vuelve al inicial.
-const VERSION_AJUSTES := 2
+const VERSION_AJUSTES := 4
 # [nombre, experiencia mínima, monedas al llegar]. Las monedas se pagan solo la primera vez.
 const NIVELES := [
 	["Grumete", 0, 0], ["Marinero", 150, 20], ["Corsario", 450, 35],
@@ -21,6 +21,7 @@ const PARTIDAS_PROTEGIDAS := 3
 
 var elegidos := {}
 var monedas := MONEDAS_INICIALES
+var gemas := 0
 var comprados: Array[String] = []
 var nombre := NOMBRE_INICIAL
 var volumen_musica := 0.1
@@ -66,14 +67,20 @@ func pieza(categoria: String) -> Dictionary:
 
 func tiene(categoria: String, id: String) -> bool:
 	return Catalogo.buscar(categoria, id)["precio"] == 0 or comprados.has(categoria + "/" + id)
+	var pieza := Catalogo.buscar(categoria, id)
+	if comprados.has(categoria + "/" + id):
+		return true
+	return pieza["precio"] == 0 and pieza.get("gemas", 0) == 0
 
 
 func comprar(categoria: String, id: String) -> bool:
-	var precio: int = Catalogo.buscar(categoria, id)["precio"]
-	if tiene(categoria, id) or monedas < precio:
+	var pieza := Catalogo.buscar(categoria, id)
+	var precio: int = pieza["precio"]
+	var en_gemas: int = pieza.get("gemas", 0)
+	if tiene(categoria, id) or monedas < precio or gemas < en_gemas:
 		return false
 	monedas -= precio
-	comprados.append(categoria + "/" + id)
+	gemas -= en_gemas
 	elegidos[categoria] = id
 	guardar()
 	return true
@@ -150,6 +157,7 @@ func cargar() -> void:
 	elif archivo.has_section_key("tesoro", "oro"):
 		monedas = ceili(int(archivo.get_value("tesoro", "oro", 0)) / 10.0)
 	nombre = str(archivo.get_value("capitan", "nombre", NOMBRE_INICIAL)).left(LARGO_NOMBRE)
+	gemas = maxi(0, int(archivo.get_value("tesoro", "gemas", 0)))
 	if int(archivo.get_value("ajustes", "version", 0)) >= VERSION_AJUSTES:
 		volumen_musica = clampf(float(archivo.get_value("ajustes", "musica", volumen_musica)), 0.0, 1.0)
 	volumen_efectos = clampf(float(archivo.get_value("ajustes", "efectos", volumen_efectos)), 0.0, 1.0)
@@ -174,6 +182,7 @@ func guardar() -> void:
 	var archivo := ConfigFile.new()
 	archivo.set_value("tesoro", "monedas", monedas)
 	archivo.set_value("tesoro", "comprados", comprados)
+	archivo.set_value("tesoro", "gemas", gemas)
 	archivo.set_value("capitan", "nombre", nombre)
 	archivo.set_value("rango", "experiencia", experiencia)
 	archivo.set_value("rango", "nivel_premiado", nivel_premiado)

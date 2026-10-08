@@ -1,4 +1,4 @@
-// Última Marea: prototipo de battle royale naval.
+// Última Marea: prototipo de batallas de barcos.
 // Un archivo, sin motor. Abre index.html en el navegador.
 
 const TIPOS = {

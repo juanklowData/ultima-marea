@@ -5,6 +5,7 @@ extends RefCounted
 # estilo del juego. No guardan estado de la partida.
 
 static var _moneda: ImageTexture
+static var _gema: ImageTexture
 
 
 static func etiqueta(texto: String, tam: int) -> Label:
@@ -43,10 +44,10 @@ static func estilo_boton(objetivo: Button, activo: bool) -> void:
 	normal.set_corner_radius_all(18)
 	normal.set_content_margin_all(10)
 	if activo:
-		normal.bg_color = Color("e0a15a")
+		normal.bg_color = Paleta.BOTON
 	else:
-		normal.bg_color = Color(1, 1, 1, 0.08)
-		normal.border_color = Color(1, 1, 1, 0.3)
+		normal.bg_color = Paleta.BOTON_CRISTAL
+		normal.border_color = Paleta.BOTON_BORDE
 		normal.set_border_width_all(2)
 	var presionado := normal.duplicate() as StyleBoxFlat
 	presionado.bg_color = normal.bg_color.darkened(0.15)
@@ -54,9 +55,26 @@ static func estilo_boton(objetivo: Button, activo: bool) -> void:
 	objetivo.add_theme_stylebox_override("hover", normal)
 	objetivo.add_theme_stylebox_override("pressed", presionado)
 	objetivo.add_theme_stylebox_override("disabled", normal)
-	var texto := Color("2a1c10") if activo else Principal.COLOR_TEXTO
+	var texto := Paleta.TEXTO_OSCURO if activo else Principal.COLOR_TEXTO
 	for nombre in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
 		objetivo.add_theme_color_override(nombre, texto)
+
+
+# Relleno turquesa con texto claro: para volver atrás, que no se confunda con comprar.
+static func estilo_volver(objetivo: Button) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.set_corner_radius_all(18)
+	normal.set_content_margin_all(10)
+	normal.bg_color = Paleta.VOLVER
+	normal.border_color = Paleta.VOLVER_BORDE
+	normal.set_border_width_all(2)
+	var presionado := normal.duplicate() as StyleBoxFlat
+	presionado.bg_color = normal.bg_color.darkened(0.2)
+	for estado in ["normal", "hover", "disabled"]:
+		objetivo.add_theme_stylebox_override(estado, normal)
+	objetivo.add_theme_stylebox_override("pressed", presionado)
+	for nombre in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
+		objetivo.add_theme_color_override(nombre, Principal.COLOR_TEXTO)
 
 
 # Coloca un control de tamaño fijo a partir de un punto de anclaje de la pantalla.
@@ -73,8 +91,8 @@ static func anclar(control: Control, ancla: Vector2, desde: Vector2, tam: Vector
 
 static func estilo_panel() -> StyleBoxFlat:
 	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color(0.05, 0.16, 0.2, 0.9)
-	estilo.border_color = Color(0.95, 0.88, 0.73, 0.3)
+	estilo.bg_color = Paleta.PANEL
+	estilo.border_color = Paleta.PANEL_BORDE
 	estilo.set_border_width_all(2)
 	estilo.set_corner_radius_all(26)
 	estilo.set_content_margin_all(30)
@@ -161,6 +179,47 @@ static func textura_moneda() -> ImageTexture:
 			imagen.set_pixel(x, y, color)
 	_moneda = ImageTexture.create_from_image(imagen)
 	return _moneda
+
+
+# Gema tallada: corona ancha arriba y punta abajo, con facetas claras y oscuras.
+static func textura_gema() -> ImageTexture:
+	if _gema != null:
+		return _gema
+	var lado := 64
+	var imagen := Image.create_empty(lado, lado, false, Image.FORMAT_RGBA8)
+	var corona := 24.0
+	for y in lado:
+		for x in lado:
+			var px := x + 0.5 - lado / 2.0
+			var py := y + 0.5
+			var mitad := 0.0
+			if py >= 8.0 and py < corona:
+				mitad = lerpf(18.0, 30.0, (py - 8.0) / (corona - 8.0))
+			elif py >= corona and py < 60.0:
+				mitad = 30.0 * (60.0 - py) / (60.0 - corona)
+			var dentro := absf(px) < mitad
+			if not dentro:
+				continue
+			var borde := clampf(mitad - absf(px), 0.0, 1.0)
+			var color := Color("8f4fd6")
+			if py < corona:
+				color = Color("e2b8ff") if absf(px) < mitad * 0.45 else Color("b57cf0")
+			elif px < 0.0:
+				color = Color("a565ea") if px > -mitad * 0.5 else Color("6b2fb0")
+			else:
+				color = Color("7a3cc4")
+			if mitad - absf(px) < 2.0 or absf(py - corona) < 1.2:
+				color = Color("3a1460")
+			color.a = borde
+			imagen.set_pixel(x, y, color)
+	_gema = ImageTexture.create_from_image(imagen)
+	return _gema
+
+
+static func icono_gema(tam: float) -> TextureRect:
+	var icono := icono_moneda(tam)
+	icono.texture = textura_gema()
+	return icono
 
 
 static func icono_moneda(tam: float) -> TextureRect:
