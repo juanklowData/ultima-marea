@@ -1,15 +1,16 @@
 class_name Moba
 extends Node3D
 
-# Modo MOBA 1 contra 1: dos armadas, cada una con su nexo en una esquina del mapa y tres
-# carriles (arriba, medio y abajo) defendidos por dos torres. Cada medio minuto salen botes
-# por los carriles. Los barcos ganan oro y experiencia, suben de nivel, compran mejoras en la
+# Modo MOBA 1 contra 1: dos armadas, cada una con su nexo en una esquina del mapa y un solo
+# carril (el del medio) defendido por dos torres de cada bando. Cada medio minuto salen botes
+# por el carril. Los barcos ganan oro y experiencia, suben de nivel, compran mejoras en la
 # base y tienen una habilidad según su casco. Gana la armada que derribe el nexo rival.
 
 const RADIO_MAPA := 1900.0
 const BASES: Array[Vector2] = [Vector2(-1200.0, 1200.0), Vector2(1200.0, -1200.0)]
 const ESQUINAS := {"arriba": Vector2(-1200.0, -1200.0), "abajo": Vector2(1200.0, 1200.0)}
-const CARRILES: Array[String] = ["arriba", "medio", "abajo"]
+# En el 1 contra 1 solo hay un carril, el del medio (la diagonal entre las dos bases).
+const CARRILES: Array[String] = ["medio"]
 const COLORES: Array[Color] = [Color("4fa8ff"), Color("ff5a4f")]
 const COLOR_NOMBRE_ALIADO := Color("a8d4ff")
 const POR_EQUIPO := 1
