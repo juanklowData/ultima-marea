@@ -27,8 +27,8 @@ const GUARIDA_KRAKEN := Vector2(620.0, 620.0)
 const TIPOS := {
 	"tiburon": {"nombre": "Tiburón", "vida": 110.0, "danio": 6.0, "oro": 18, "xp": 12, "escala": 0.75, "radio": 22.0,
 		"ataque": "morder", "alcance": 30.0, "recarga": 1.3, "corro": 35.0, "caza": 90.0, "barra": 1.6, "ancho": 36.0},
-	"serpiente": {"nombre": "Serpiente marina", "vida": 320.0, "danio": 9.0, "oro": 50, "xp": 40, "escala": 1.0, "radio": 30.0,
-		"ataque": "escupir", "alcance": 210.0, "recarga": 1.6, "corro": 45.0, "caza": 70.0, "barra": 2.4, "ancho": 52.0},
+	"serpiente": {"nombre": "Serpiente marina", "vida": 320.0, "danio": 5.0, "oro": 50, "xp": 40, "escala": 1.0, "radio": 30.0,
+		"ataque": "escupir", "alcance": 210.0, "recarga": 2.0, "corro": 45.0, "caza": 70.0, "barra": 2.4, "ancho": 52.0},
 	"cangrejo": {"nombre": "Cangrejo gigante", "vida": 1400.0, "danio": 16.0, "oro": 150, "xp": 120, "escala": 1.0, "radio": 60.0,
 		"ataque": "pinzas", "alcance": 150.0, "recarga": 1.6, "corro": 0.0, "caza": 55.0, "barra": 3.6, "ancho": 110.0,
 		"jefe": true, "contra_fuerte": 45.0},
