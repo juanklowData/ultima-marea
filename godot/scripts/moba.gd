@@ -2964,7 +2964,7 @@ func _dibujar_cancelar(lienzo: Control) -> void:
 
 
 # Cañones: el dedo sobre el botón y arrastrado apunta; al soltarlo dispara el cañón que mira
-# hacia ahí. Un toque sin arrastrar apunta solo al enemigo más cercano.
+# hacia ahí. Un toque sin arrastrar dispara el cañón de proa al frente.
 func toque_canones(evento: InputEvent) -> bool:
 	var toque := evento as InputEventScreenTouch
 	if toque:
@@ -3012,7 +3012,7 @@ func _disparar_canones() -> void:
 		return
 	var barco := heroe.barco
 	if hacia == Vector2.ZERO:
-		hacia = _apuntar_solo(heroe)
+		hacia = barco.proa()
 	var arma := canon_hacia(barco, hacia)
 	mundo.disparar(barco, arma, _direccion_canon(barco, arma, hacia))
 
@@ -3032,44 +3032,6 @@ func _direccion_canon(barco: Barco, arma: String, hacia: Vector2) -> Vector2:
 	var costado := barco.rumbo + (PI / 2.0 if arma == "estribor" else -PI / 2.0)
 	var desvio := clampf(angle_difference(costado, atan2(hacia.x, -hacia.y)), -ANGULO_PROA, ANGULO_PROA)
 	return Vector2.UP.rotated(costado + desvio)
-
-
-# Hacia el capitán rival más cercano a tiro (con adelanto); si no hay, un bote, un monstruo
-# o un fuerte atacable; sin nada cerca, al frente.
-func _apuntar_solo(heroe: Heroe) -> Vector2:
-	var barco := heroe.barco
-	var alcance := ALCANCE_CANON + 30.0
-	var mejor := Vector2.INF
-	var menor := alcance
-	for otro in heroes:
-		var rival := otro.barco
-		if otro.equipo == heroe.equipo or not rival.viva or escondido(rival):
-			continue
-		var d := rival.pos.distance_to(barco.pos)
-		if d < menor:
-			menor = d
-			mejor = rival.pos + rival.proa() * rival.velocidad * d / Principal.VEL_BALA * 0.85
-	if mejor == Vector2.INF:
-		for bote in botes:
-			var d := bote.pos.distance_to(barco.pos)
-			if bote.equipo != heroe.equipo and d < menor:
-				menor = d
-				mejor = bote.pos
-	if mejor == Vector2.INF:
-		for monstruo in monstruos.vivos_cerca(barco.pos, alcance, heroe.equipo):
-			var d := monstruo.pos.distance_to(barco.pos)
-			if d < menor:
-				menor = d
-				mejor = monstruo.pos
-	if mejor == Vector2.INF:
-		for torre in torres:
-			var d := torre.pos.distance_to(barco.pos) - torre.isla.radio
-			if torre.viva and torre.equipo != heroe.equipo and vulnerable(torre) and d < menor:
-				menor = d
-				mejor = torre.pos
-	if mejor == Vector2.INF or mejor.distance_to(barco.pos) < 1.0:
-		return barco.proa()
-	return (mejor - barco.pos).normalized()
 
 
 func apuntando_canones() -> bool:
