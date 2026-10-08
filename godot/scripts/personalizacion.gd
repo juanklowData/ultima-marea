@@ -33,7 +33,7 @@ var efectos := {}
 # -1 según el nivel de gráficos; 0 plano, 1 suave, 2 con olas, 3 detallado.
 var calidad_mar := -1
 # Multiplica el tamaño automático de los controles táctiles de la partida (0,7 a 1,5).
-var tam_botones := 1.0
+var tam_botones := 0.5
 var experiencia := 0
 var nivel_premiado := 0
 var proteccion := 0
@@ -170,7 +170,7 @@ func cargar() -> void:
 		volumen_musica = clampf(float(archivo.get_value("ajustes", "musica", volumen_musica)), 0.0, 1.0)
 	volumen_efectos = clampf(float(archivo.get_value("ajustes", "efectos", volumen_efectos)), 0.0, 1.0)
 	graficos = clampi(int(archivo.get_value("ajustes", "calidad", graficos)), -1, 3)
-	tam_botones = clampf(float(archivo.get_value("ajustes", "botones", tam_botones)), 0.7, 1.5)
+	tam_botones = clampf(float(archivo.get_value("ajustes", "botones", tam_botones)), 0.5, 1.5)
 	calidad_mar = clampi(int(archivo.get_value("ajustes", "mar", calidad_mar)), -1, 3)
 	if archivo.has_section("efectos"):
 		for clave in archivo.get_section_keys("efectos"):

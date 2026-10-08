@@ -1018,6 +1018,11 @@ func _crear_buses() -> void:
 			var indice := AudioServer.bus_count - 1
 			AudioServer.set_bus_name(indice, nombre)
 			AudioServer.set_bus_send(indice, "Master")
+	# Varios cañones y explosiones a la vez sumados saturan; el limitador los mantiene limpios.
+	if AudioServer.get_bus_effect_count(0) == 0:
+		var limitador := AudioEffectHardLimiter.new()
+		limitador.ceiling_db = -1.0
+		AudioServer.add_bus_effect(0, limitador)
 	_aplicar_volumen()
 
 
@@ -1043,9 +1048,11 @@ func _crear_sonidos() -> void:
 	for _i in 3:
 		voces_explosion.append(_nueva_voz(explosion))
 	voz_monedas = _nueva_voz(Sonidos.monedas(), -16.0)
+	voz_monedas.max_polyphony = 2
 	voz_moneda = _nueva_voz(Sonidos.monedas([0.0]), -22.0)
 	voz_moneda.max_polyphony = 4
 	voz_equipar = _nueva_voz(Sonidos.equipar(), -13.0)
+	voz_equipar.max_polyphony = 3
 	var ambiente := AmbientePuerto.new()
 	add_child(ambiente)
 	ambiente.preparar(self)
@@ -2516,7 +2523,7 @@ func _escala_automatica() -> float:
 
 
 func aplicar_tamano_controles() -> void:
-	escala_controles = clampf(_escala_automatica() * personalizacion.tam_botones, 0.7, 2.0)
+	escala_controles = clampf(_escala_automatica() * personalizacion.tam_botones, 0.5, 2.0)
 	for control: Control in get_tree().get_nodes_in_group("control_tactil"):
 		Ui.escalar_desde_ancla(control, escala_controles)
 	if controles != null:
@@ -2997,13 +3004,13 @@ func _lista_desplazable(cuerpo: VBoxContainer) -> VBoxContainer:
 	return Ui.lista_desplazable(cuerpo)
 
 
-# Del 70 % al 150 % del tamaño automático de los botones de la partida.
+# Del 50 % al 150 % del tamaño automático de los botones de la partida.
 func _deslizador_botones(cuerpo: VBoxContainer) -> void:
 	var deslizador := _deslizador_volumen(cuerpo, "Tamaño de botones", personalizacion.tam_botones, func(valor: float) -> void:
 		personalizacion.tam_botones = valor
 		aplicar_tamano_controles())
 	deslizador.max_value = 150.0
-	deslizador.min_value = 70.0
+	deslizador.min_value = 50.0
 	deslizador.value = personalizacion.tam_botones * 100.0
 
 

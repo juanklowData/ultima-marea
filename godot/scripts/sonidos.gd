@@ -19,8 +19,25 @@ static func normalizar(valores: PackedFloat32Array, pico_deseado := 1.0) -> Pack
 	return valores
 
 
+# Quita lo que hay por debajo de `corte` Hz: los altavoces del móvil no lo reproducen y,
+# si llega con fuerza, zumban y distorsionan. En los bucles se filtra dos vueltas para que
+# el filtro llegue al final con el mismo estado con que empieza y no haya chasquido al repetir.
+static func quitar_graves(valores: PackedFloat32Array, corte: float, bucle: bool) -> PackedFloat32Array:
+	var a := paso_grave(corte)
+	var bajo_1 := 0.0
+	var bajo_2 := 0.0
+	for vuelta in (2 if bucle else 1):
+		for i in valores.size():
+			var v := valores[i]
+			bajo_1 += a * (v - bajo_1)
+			bajo_2 += a * (v - bajo_1 - bajo_2)
+			if vuelta == (1 if bucle else 0):
+				valores[i] = v - bajo_1 - bajo_2
+	return valores
+
+
 static func a_wav(valores: PackedFloat32Array, bucle := false) -> AudioStreamWAV:
-	valores = normalizar(valores, 0.8)
+	valores = normalizar(quitar_graves(valores, 90.0, bucle), 0.8)
 	var datos := PackedByteArray()
 	datos.resize(valores.size() * 2)
 	for i in valores.size():
@@ -43,7 +60,7 @@ static func trueno() -> AudioStreamWAV:
 	var chasquido := PackedFloat32Array()
 	retumbo.resize(muestras)
 	chasquido.resize(muestras)
-	var a_grave := paso_grave(110.0)
+	var a_grave := paso_grave(170.0)
 	var a_medio := paso_grave(700.0)
 	var grave_1 := 0.0
 	var grave_2 := 0.0
@@ -87,7 +104,7 @@ static func canon() -> AudioStreamWAV:
 		var blanco := randf_range(-1.0, 1.0)
 		grave += a_grave * (blanco - grave)
 		agudo += a_agudo * (blanco - agudo)
-		fase_tono += TAU * (42.0 + 70.0 * exp(-t * 9.0)) / FRECUENCIA
+		fase_tono += TAU * (75.0 + 85.0 * exp(-t * 9.0)) / FRECUENCIA
 		var ataque := 1.0 - exp(-t * 600.0)
 		tono[i] = sin(fase_tono) * exp(-t * 5.0) * ataque
 		estruendo[i] = grave * exp(-t * 6.0) * ataque
@@ -122,7 +139,7 @@ static func explosion() -> AudioStreamWAV:
 		grave_1 += a_grave * (blanco - grave_1)
 		grave_2 += a_grave * (grave_1 - grave_2)
 		medio += a_medio * (blanco - medio)
-		fase += TAU * (34.0 + 90.0 * exp(-t * 7.0)) / FRECUENCIA
+		fase += TAU * (60.0 + 100.0 * exp(-t * 7.0)) / FRECUENCIA
 		var ataque := 1.0 - exp(-t * 900.0)
 		golpe[i] = sin(fase) * exp(-t * 3.2) * ataque
 		retumbo[i] = grave_2 * exp(-t * 1.6) * ataque
@@ -414,7 +431,7 @@ static func viento_tornado() -> AudioStreamWAV:
 	var cruce := int(frecuencia * 0.5)
 	var crudo := PackedFloat32Array()
 	crudo.resize(largo + cruce)
-	var a_grave := paso_grave(160.0)
+	var a_grave := paso_grave(230.0)
 	var grave_1 := 0.0
 	var grave_2 := 0.0
 	var bajo := 0.0
