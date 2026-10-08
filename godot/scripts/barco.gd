@@ -74,6 +74,8 @@ var factor_defensa := 1.0
 # Mejoras (mar libre) o refuerzos de jefe: multiplican el daño de sus balas y la recarga.
 var factor_danio := 1.0
 var factor_recarga := 1.0
+# MOBA: acelera, frena y responde al timón más rápido.
+var agil := false
 var modelo: Node3D
 var desgaste: Desgaste
 var aro: MeshInstance3D
@@ -101,6 +103,7 @@ func vestir(aspecto: Personalizacion) -> void:
 	factor_danio = 1.0
 	factor_recarga = 1.0
 	factor_defensa = 1.0
+	agil = false
 	vel_max = datos["velocidad"]
 	giro_max = datos["giro"]
 	radio = datos["radio"]
@@ -151,13 +154,20 @@ func actualizar(delta: float) -> void:
 
 	match mando:
 		Mando.LOCAL:
-			_pilotar(mundo.direccion_jugador(), mundo.armas_jugador(), delta)
+			# En el MOBA, con el piloto automático navega como un bot hasta que se toca la palanca.
+			var direccion := mundo.direccion_jugador()
+			if mundo.modo == "moba" and mundo.moba.auto and direccion != Vector2.ZERO:
+				mundo.moba.cambiar_auto()
+			if mundo.modo == "moba" and mundo.moba.auto:
+				mundo.moba.pilotar(self, delta)
+			else:
+				_pilotar(direccion, mundo.armas_jugador(), delta)
 		Mando.REMOTO:
 			_pilotar(entrada_direccion, entrada_fuego, delta)
 		_:
 			_pilotar_rival(delta)
 
-	velocidad += (acelerador * vel_max - velocidad) * minf(1.0, delta * 0.5)
+	velocidad += (acelerador * vel_max - velocidad) * minf(1.0, delta * (1.4 if agil else 0.5))
 	if frenado > 0.0:
 		frenado -= delta
 		velocidad = minf(velocidad, vel_max * Comercio.FRENO)
@@ -361,6 +371,6 @@ func _angulo_hacia(punto: Vector2) -> float:
 
 func _girar_hacia(angulo: float, fuerza: float, delta: float) -> void:
 	var diferencia := angle_difference(rumbo, angulo)
-	var marcha := 0.45 + 0.55 * clampf(velocidad / vel_max, 0.0, 1.0)
-	var objetivo := clampf(diferencia * 2.0, -giro_max, giro_max) * fuerza * marcha
-	vel_giro = lerpf(vel_giro, objetivo, minf(1.0, delta * 1.8))
+	var marcha := (0.7 if agil else 0.45) + (0.3 if agil else 0.55) * clampf(velocidad / vel_max, 0.0, 1.0)
+	var objetivo := clampf(diferencia * (3.0 if agil else 2.0), -giro_max, giro_max) * fuerza * marcha
+	vel_giro = lerpf(vel_giro, objetivo, minf(1.0, delta * (4.0 if agil else 1.8)))

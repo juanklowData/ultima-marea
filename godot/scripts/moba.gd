@@ -1,7 +1,7 @@
 class_name Moba
 extends Node3D
 
-# Modo MOBA 5 contra 5: dos armadas, cada una con su nexo en una esquina del mapa y tres
+# Modo MOBA 1 contra 1: dos armadas, cada una con su nexo en una esquina del mapa y tres
 # carriles (arriba, medio y abajo) defendidos por dos torres. Cada medio minuto salen botes
 # por los carriles. Los barcos ganan oro y experiencia, suben de nivel, compran mejoras en la
 # base y tienen una habilidad según su casco. Gana la armada que derribe el nexo rival.
@@ -12,9 +12,9 @@ const ESQUINAS := {"arriba": Vector2(-1200.0, -1200.0), "abajo": Vector2(1200.0,
 const CARRILES: Array[String] = ["arriba", "medio", "abajo"]
 const COLORES: Array[Color] = [Color("4fa8ff"), Color("ff5a4f")]
 const COLOR_NOMBRE_ALIADO := Color("a8d4ff")
-const POR_EQUIPO := 5
+const POR_EQUIPO := 1
 # Carril de cada capitán: el jugador (primero de la armada azul) va donde quiera.
-const REPARTO: Array[String] = ["arriba", "medio", "abajo", "abajo", "arriba"]
+const REPARTO: Array[String] = ["medio"]
 # Dónde va cada torre, en fracción del carril desde la propia base: exterior e interior.
 const FRACCIONES_TORRE: Array[float] = [0.41, 0.23]
 const RADIO_TORRE := 52.0
@@ -52,7 +52,16 @@ const RADIO_BOTE := 18.0
 const LARGO_BOTE := 2.0
 const ANCHO_BOTE := 0.8
 const ALTO_BOTE := 0.32
-const VEL_HEROE := 1.25
+const VEL_HEROE := 1.45
+# Los capitanes giran más rápido que los barcos del resto de modos.
+const GIRO_HEROE := 1.5
+# Botón único de cañones: se arrastra para apuntar y, según hacia dónde quede el tiro respecto
+# a la proa, dispara el cañón de proa o la andanada de un costado.
+const BOTON_CANONES := Vector2(-140.0, -122.0)
+const RADIO_CANONES := 44.0
+const ALCANCE_CANON := Principal.VEL_BALA * Principal.VIDA_BALA
+const ANGULO_PROA := PI / 4.0
+const RADIO_AUTO := 20.0
 const ORO_INICIAL := 150.0
 const ORO_POR_SEGUNDO := 1.5
 const ORO_BOTE := 8
@@ -319,6 +328,15 @@ var dedo_sitio := Vector2.ZERO
 var apunte := Vector2.ZERO
 var apunte_largo := 1.0
 var tiempo_apunte := 0.0
+var boton_canones: Button
+var dedo_canon := -1
+var tecla_canon := false
+var centro_canon := Vector2.ZERO
+var apunte_canon := Vector2.ZERO
+var tiempo_canon := 0.0
+# Piloto automático del jugador: su barco navega y dispara como un bot.
+var auto := false
+var dedo_auto := -1
 var boton_tienda: Button
 var panel_tienda: PanelContainer
 var lista_tienda: VBoxContainer
@@ -466,12 +484,17 @@ func vaciar() -> void:
 	torres.clear()
 	ganador = -1
 	anuncio_vida = 0.0
+	auto = false
+	dedo_auto = -1
+	dedo_canon = -1
+	tecla_canon = false
+	apunte_canon = Vector2.ZERO
 	cerrar_tienda()
 
 
 func _crear_heroes() -> void:
 	for equipo in 2:
-		# Cada armada lleva cinco capitanes distintos; el jugador, el que eligió.
+		# Un capitán por armada; el jugador lleva el que eligió y el rival, otro al azar.
 		var reparto := CAPITANES.duplicate()
 		reparto.shuffle()
 		if equipo == 0:
@@ -605,7 +628,7 @@ static func crear_figura(datos: Dictionary) -> FiguraCapitan:
 # Salidas en arco frente al nexo, todas dentro de la fuente para poder comprar al aparecer.
 func _salida(equipo: int, k: int) -> Vector2:
 	var hacia := -BASES[equipo].normalized()
-	return BASES[equipo] + hacia.rotated((k - 2) * 0.36) * DISTANCIA_SALIDA
+	return BASES[equipo] + hacia.rotated((k - (POR_EQUIPO - 1) / 2.0) * 0.36) * DISTANCIA_SALIDA
 
 
 func _rumbo_hacia(desde: Vector2, hacia: Vector2) -> float:
@@ -888,6 +911,7 @@ func vulnerable(torre: Torre) -> bool:
 
 func actualizar(delta: float) -> void:
 	_seguir_apunte(delta)
+	_seguir_canones(delta)
 	_animar_lanzados(delta)
 	_actualizar_zonas(delta)
 	anuncio_vida = maxf(0.0, anuncio_vida - delta)
@@ -1025,7 +1049,8 @@ func _ganar_oro(heroe: Heroe, cantidad: int, punto: Vector3) -> void:
 func _aplicar(heroe: Heroe) -> void:
 	var barco := heroe.barco
 	var datos := heroe.capitan
-	barco.giro_max = datos["giro"]
+	barco.giro_max = datos["giro"] * GIRO_HEROE
+	barco.agil = true
 	var proporcion := barco.vida / barco.vida_max if barco.vida_max > 0.0 else 1.0
 	var nivel := heroe.nivel - 1
 	barco.vida_max = datos["vida"] * (1.0 + 0.08 * nivel) * (1.0 + 0.2 * heroe.objetos["casco"])
@@ -1413,7 +1438,7 @@ func pilotar(barco: Barco, delta: float) -> void:
 		if barco.vida >= barco.vida_max * 0.95:
 			heroe.retirada = false
 		else:
-			if heroe.capitan["habilidad"] in ["impulso", "escudo", "reparar", "niebla", "minas"] and heroe.habilidad <= 0.0 and rival_de(barco) != null:
+			if barco.es_bot and heroe.capitan["habilidad"] in ["impulso", "escudo", "reparar", "niebla", "minas"] and heroe.habilidad <= 0.0 and rival_de(barco) != null:
 				usar_habilidad(heroe)
 			_navegar(barco, BASES[heroe.equipo] if avance < 350.0 else _punto_en(puntos, avance - 300.0), delta)
 			return
@@ -1423,7 +1448,8 @@ func pilotar(barco: Barco, delta: float) -> void:
 		heroe.blanco = _elegir_blanco(heroe)
 	var datos := _datos_blanco(heroe.blanco, heroe.equipo)
 	if not datos.is_empty():
-		_usar_habilidad_bot(heroe, datos)
+		if barco.es_bot:
+			_usar_habilidad_bot(heroe, datos)
 		_combatir(barco, datos[0], datos[1], datos[2], delta)
 		return
 	_navegar(barco, _puesto_en_carril(heroe, puntos), delta)
@@ -2365,11 +2391,25 @@ func _anunciar(texto: String, color: Color) -> void:
 	anuncio_vida = DURACION_ANUNCIO
 
 
-# Teclado: R usa la habilidad y B abre la tienda en la base. La Q no, que dispara a babor.
+# Teclado: Espacio apunta los cañones con el ratón (al soltar, disparan), R usa la habilidad,
+# T activa el piloto automático y B abre la tienda en la base.
 func tecla(evento: InputEvent) -> bool:
 	var pulsada := evento as InputEventKey
 	if pulsada == null or pulsada.echo:
 		return false
+	if pulsada.keycode == KEY_SPACE:
+		if pulsada.pressed and boton_canones.visible and dedo_canon == -1 and not tecla_canon:
+			tecla_canon = true
+			tiempo_canon = 0.0
+			apunte_canon = Vector2.ZERO
+		elif not pulsada.pressed and tecla_canon:
+			tecla_canon = false
+			_disparar_canones()
+		return true
+	if pulsada.keycode == KEY_T:
+		if pulsada.pressed and boton_canones.visible and not ensayo:
+			cambiar_auto()
+		return true
 	if pulsada.keycode == KEY_R and apuntable():
 		if pulsada.pressed and _lista_para_apuntar():
 			_empezar_apunte()
@@ -2401,6 +2441,10 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 	var comercio := mundo.comercio
 	boton_habilidad = comercio._boton_redondo(Comercio.BOTON_MUNICION, _dibujar_habilidad, _usar_jugador)
 	capa.add_child(boton_habilidad)
+	boton_canones = comercio._boton_redondo(BOTON_CANONES, _dibujar_canones, func() -> void: pass)
+	var lado := (RADIO_CANONES + 8.0) * 2.0
+	Ui.anclar(boton_canones, Vector2(1, 1), BOTON_CANONES - Vector2.ONE * lado / 2.0, Vector2.ONE * lado)
+	capa.add_child(boton_canones)
 	boton_tienda = comercio.boton_lugar(func() -> void:
 		comercio.dibujar_boton_lugar(boton_tienda, Objetos.icono_mejora("canones"), tr("Tienda")), abrir_tienda)
 	capa.add_child(boton_tienda)
@@ -2896,6 +2940,227 @@ func _dibujar_cancelar(lienzo: Control) -> void:
 	lienzo.draw_string(fuente, base, texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, trazo)
 
 
+# Cañones: el dedo sobre el botón y arrastrado apunta; al soltarlo dispara el cañón que mira
+# hacia ahí. Un toque sin arrastrar apunta solo al enemigo más cercano.
+func toque_canones(evento: InputEvent) -> bool:
+	var toque := evento as InputEventScreenTouch
+	if toque:
+		if toque.pressed:
+			if boton_canones.visible and dedo_canon == -1 and not tecla_canon \
+					and boton_canones.get_global_rect().grow(10.0).has_point(toque.position):
+				dedo_canon = toque.index
+				centro_canon = boton_canones.get_global_rect().get_center()
+				apunte_canon = Vector2.ZERO
+				return true
+		elif toque.index == dedo_canon:
+			dedo_canon = -1
+			_disparar_canones()
+			return true
+		return false
+	var arrastre := evento as InputEventScreenDrag
+	if arrastre and arrastre.index == dedo_canon:
+		var tiron := arrastre.position - centro_canon
+		apunte_canon = _direccion_en_mar(tiron) if tiron.length() > ZONA_APUNTE else Vector2.ZERO
+		return true
+	return false
+
+
+func _seguir_canones(delta: float) -> void:
+	if dedo_canon == -1 and not tecla_canon:
+		return
+	var heroe := heroe_jugador()
+	if heroe == null or not heroe.barco.viva or mundo.panel_partida.visible:
+		dedo_canon = -1
+		tecla_canon = false
+		apunte_canon = Vector2.ZERO
+		return
+	tiempo_canon += delta
+	if tecla_canon and tiempo_canon >= ESPERA_APUNTE:
+		var hacia := _suelo(mundo.get_viewport().get_mouse_position()) - heroe.barco.pos
+		if hacia.length() > 1.0:
+			apunte_canon = hacia.normalized()
+
+
+func _disparar_canones() -> void:
+	var heroe := heroe_jugador()
+	var hacia := apunte_canon
+	apunte_canon = Vector2.ZERO
+	if heroe == null or not heroe.barco.viva:
+		return
+	var barco := heroe.barco
+	if hacia == Vector2.ZERO:
+		hacia = _apuntar_solo(heroe)
+	var arma := canon_hacia(barco, hacia)
+	mundo.disparar(barco, arma, _direccion_canon(barco, arma, hacia))
+
+
+# "proa" si el tiro queda a menos de 45° de la proa; si no, el costado de ese lado.
+func canon_hacia(barco: Barco, hacia: Vector2) -> String:
+	var angulo := angle_difference(barco.rumbo, atan2(hacia.x, -hacia.y))
+	if absf(angulo) <= ANGULO_PROA:
+		return "proa"
+	return "estribor" if angulo > 0.0 else "babor"
+
+
+# Las andanadas salen como mucho 45° desviadas de la perpendicular de su costado.
+func _direccion_canon(barco: Barco, arma: String, hacia: Vector2) -> Vector2:
+	if arma == "proa":
+		return hacia
+	var costado := barco.rumbo + (PI / 2.0 if arma == "estribor" else -PI / 2.0)
+	var desvio := clampf(angle_difference(costado, atan2(hacia.x, -hacia.y)), -ANGULO_PROA, ANGULO_PROA)
+	return Vector2.UP.rotated(costado + desvio)
+
+
+# Hacia el capitán rival más cercano a tiro (con adelanto); si no hay, un bote, un monstruo
+# o un fuerte atacable; sin nada cerca, al frente.
+func _apuntar_solo(heroe: Heroe) -> Vector2:
+	var barco := heroe.barco
+	var alcance := ALCANCE_CANON + 30.0
+	var mejor := Vector2.INF
+	var menor := alcance
+	for otro in heroes:
+		var rival := otro.barco
+		if otro.equipo == heroe.equipo or not rival.viva or escondido(rival):
+			continue
+		var d := rival.pos.distance_to(barco.pos)
+		if d < menor:
+			menor = d
+			mejor = rival.pos + rival.proa() * rival.velocidad * d / Principal.VEL_BALA * 0.85
+	if mejor == Vector2.INF:
+		for bote in botes:
+			var d := bote.pos.distance_to(barco.pos)
+			if bote.equipo != heroe.equipo and d < menor:
+				menor = d
+				mejor = bote.pos
+	if mejor == Vector2.INF:
+		for monstruo in monstruos.vivos_cerca(barco.pos, alcance, heroe.equipo):
+			var d := monstruo.pos.distance_to(barco.pos)
+			if d < menor:
+				menor = d
+				mejor = monstruo.pos
+	if mejor == Vector2.INF:
+		for torre in torres:
+			var d := torre.pos.distance_to(barco.pos) - torre.isla.radio
+			if torre.viva and torre.equipo != heroe.equipo and vulnerable(torre) and d < menor:
+				menor = d
+				mejor = torre.pos
+	if mejor == Vector2.INF or mejor.distance_to(barco.pos) < 1.0:
+		return barco.proa()
+	return (mejor - barco.pos).normalized()
+
+
+func apuntando_canones() -> bool:
+	return (dedo_canon != -1 and apunte_canon != Vector2.ZERO) or (tecla_canon and tiempo_canon >= ESPERA_APUNTE)
+
+
+# Línea de tiro sobre el agua con el nombre del cañón que disparará.
+func _dibujar_apunte_canon(lienzo: Control, camara: Camera3D) -> void:
+	var barco := mundo.jugador
+	var hacia := apunte_canon if apunte_canon != Vector2.ZERO else barco.proa()
+	var arma := canon_hacia(barco, hacia)
+	var direccion := _direccion_canon(barco, arma, hacia)
+	var listo: bool = barco.recargas[arma] <= 0.0
+	var puntos := PackedVector2Array()
+	for k in 13:
+		var sitio := mundo.a_3d(barco.pos + direccion * lerpf(barco.radio, ALCANCE_CANON, k / 12.0), 0.3)
+		if camara.is_position_behind(sitio):
+			return
+		puntos.append(camara.unproject_position(sitio))
+	var color := Principal.COLOR_ORO if listo else Color(0.6, 0.6, 0.6)
+	lienzo.draw_polyline(puntos, Color(color, 0.25), 22.0, true)
+	lienzo.draw_polyline(puntos, Color(color, 0.9), 3.0, true)
+	var fin := puntos[-1]
+	lienzo.draw_arc(fin, 18.0, 0.0, TAU, 32, Color(color, 0.8), 2.5, true)
+	var texto: String = tr({"proa": "Frente", "babor": "Izq.", "estribor": "Der."}[arma])
+	if not listo:
+		texto += " · %.1f s" % barco.recargas[arma]
+	var fuente := ThemeDB.fallback_font
+	var ancho := fuente.get_string_size(texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+	var base := fin + Vector2(-ancho / 2.0, -26.0)
+	lienzo.draw_string_outline(fuente, base, texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 5, Color(0, 0, 0, 0.8))
+	lienzo.draw_string(fuente, base, texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, color)
+
+
+# Botón de cañones: una bala en el centro y tres marcas (frente, izquierda y derecha) que se
+# llenan según la recarga de cada cañón.
+func _dibujar_canones() -> void:
+	var barco := mundo.jugador
+	if barco == null:
+		return
+	var c := boton_canones.size / 2.0
+	var r := RADIO_CANONES
+	var pulsado := dedo_canon != -1 or tecla_canon
+	if pulsado:
+		c.y += 2.0
+	boton_canones.draw_circle(c + Vector2(0, 4), r + 3.0, Color(0, 0, 0, 0.3))
+	boton_canones.draw_circle(c, r + 3.0, Principal.COLOR_ORO)
+	boton_canones.draw_circle(c, r, Color("16384a"))
+	boton_canones.draw_circle(c + Vector2(0, -r * 0.28), r * 0.68, Color(1, 1, 1, 0.07))
+	boton_canones.draw_circle(c + Vector2(0, -4), 11.0, Color("1d2024"))
+	boton_canones.draw_circle(c + Vector2(-3, -7), 3.5, Color(1, 1, 1, 0.35))
+	for arma: String in ["proa", "babor", "estribor"]:
+		var giro: float = {"proa": 0.0, "babor": -PI / 2.0, "estribor": PI / 2.0}[arma]
+		var carga: float = 1.0 - barco.recargas[arma] / (Principal.RECARGAS[arma] * barco.factor_recarga)
+		var centro := -PI / 2.0 + giro
+		var abierto := 0.5
+		boton_canones.draw_arc(c, r - 6.0, centro - abierto, centro + abierto, 12, Color(0, 0, 0, 0.45), 6.0, true)
+		boton_canones.draw_arc(c, r - 6.0, centro - abierto, centro - abierto + abierto * 2.0 * clampf(carga, 0.0, 1.0), 12,
+				Principal.COLOR_ORO if carga >= 1.0 else Color(Principal.COLOR_ORO, 0.5), 6.0, true)
+	var texto := tr("Cañones")
+	var fuente := ThemeDB.fallback_font
+	var ancho := fuente.get_string_size(texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+	boton_canones.draw_string_outline(fuente, c + Vector2(-ancho / 2.0, 22), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.8))
+	boton_canones.draw_string(fuente, c + Vector2(-ancho / 2.0, 22), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("fff3dc"))
+
+
+func cambiar_auto() -> void:
+	auto = not auto
+	if not auto and mundo.jugador != null:
+		mundo.jugador.acelerador = 0.0
+	_anunciar(tr("Piloto automático") if auto else tr("Piloto manual"), COLOR_NOMBRE_ALIADO)
+
+
+# Botón pequeño «Auto» arriba a la derecha de la palanca de mover el barco.
+func _boton_auto() -> Array:
+	var escala := mundo.escala_controles
+	return [mundo._posicion_palanca_reposo() + Vector2(98.0, -78.0) * escala, RADIO_AUTO * escala]
+
+
+func toque_auto(evento: InputEvent) -> bool:
+	if not boton_canones.visible or ensayo:
+		return false
+	var toque := evento as InputEventScreenTouch
+	if toque == null:
+		return false
+	var boton := _boton_auto()
+	if toque.pressed and dedo_auto == -1 and toque.position.distance_to(boton[0]) <= boton[1] + 8.0:
+		dedo_auto = toque.index
+		return true
+	if not toque.pressed and toque.index == dedo_auto:
+		dedo_auto = -1
+		if toque.position.distance_to(boton[0]) <= boton[1] + 14.0:
+			cambiar_auto()
+		return true
+	return false
+
+
+func _dibujar_auto(lienzo: Control) -> void:
+	var boton := _boton_auto()
+	var c: Vector2 = boton[0]
+	var r: float = boton[1]
+	var latido := 0.5 + 0.5 * sin(mundo.tiempo * 4.0)
+	if auto:
+		lienzo.draw_circle(c, r + 4.0 + 3.0 * latido, Color(Color("7dffb2"), 0.25))
+	lienzo.draw_circle(c + Vector2(0, 2), r + 2.0, Color(0, 0, 0, 0.3))
+	lienzo.draw_circle(c, r, Color("1f6b4a") if auto else Color(0.05, 0.16, 0.22, 0.85))
+	lienzo.draw_arc(c, r, 0.0, TAU, 32, Color("7dffb2") if auto else Color(Principal.COLOR_ORO, 0.8), 2.0, true)
+	var texto := "AUTO"
+	var tam := int(round(11.0 * mundo.escala_controles))
+	var fuente := ThemeDB.fallback_font
+	var ancho := fuente.get_string_size(texto, HORIZONTAL_ALIGNMENT_LEFT, -1, tam).x
+	lienzo.draw_string(fuente, c + Vector2(-ancho / 2.0, tam * 0.36), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, Color.WHITE if auto else Color("fff3dc"))
+
+
 # Punto del mar bajo un punto de la pantalla.
 func _suelo(pantalla: Vector2) -> Vector2:
 	var origen := mundo.camara.project_ray_origin(pantalla)
@@ -2956,6 +3221,10 @@ func _actualizar_interfaz() -> void:
 	var heroe := heroe_jugador()
 	var jugando := heroe != null and heroe.barco.viva and mundo.estado == Principal.Estado.JUGANDO and not mundo.panel_partida.visible
 	boton_habilidad.visible = jugando
+	boton_canones.visible = jugando
+	boton_canones.queue_redraw()
+	if mundo.estado != Principal.Estado.JUGANDO or ensayo:
+		auto = false
 	boton_terminar.visible = ensayo and mundo.estado == Principal.Estado.JUGANDO and not mundo.panel_partida.visible
 	boton_habilidad.queue_redraw()
 	boton_tienda.queue_redraw()
@@ -3064,6 +3333,10 @@ func dibujar(lienzo: Control, camara: Camera3D) -> void:
 	if mostrando_apunte():
 		_dibujar_apunte(lienzo, camara)
 		_dibujar_cancelar(lienzo)
+	if apuntando_canones() and mundo.jugador != null and mundo.jugador.viva:
+		_dibujar_apunte_canon(lienzo, camara)
+	if boton_canones.visible and not ensayo:
+		_dibujar_auto(lienzo)
 	var fuente := ThemeDB.fallback_font
 	for torre in torres:
 		if not torre.viva:

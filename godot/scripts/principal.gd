@@ -1660,7 +1660,8 @@ func _mas_cercanos(p1: Vector2, q1: Vector2, p2: Vector2, q2: Vector2) -> Array[
 
 
 # "proa" dispara un cañón hacia delante; "babor" y "estribor", andanadas de tres por cada costado.
-func disparar(barco: Barco, arma: String) -> void:
+# Con "hacia" (MOBA, apuntado) las balas salen en esa dirección desde los mismos cañones.
+func disparar(barco: Barco, arma: String, hacia := Vector2.ZERO) -> void:
 	if not barco.viva or barco.recargas[arma] > 0.0:
 		return
 	# En el mar libre las balas del jugador se acaban: se recogen en cajas o se compran.
@@ -1683,6 +1684,8 @@ func disparar(barco: Barco, arma: String) -> void:
 		direccion = proa.orthogonal() * (1.0 if arma == "babor" else -1.0)
 		for k: int in [0, -1, 1]:
 			salidas.append(barco.pos + direccion * barco.radio * 0.6 + proa * k * barco.radio * 0.4)
+	if hacia != Vector2.ZERO:
+		direccion = hacia.normalized()
 	salidas = salidas.slice(0, cuantas)
 	for k in salidas.size():
 		var bala := Bala.new()
@@ -2319,7 +2322,7 @@ func direccion_jugador() -> Vector2:
 # Teclado: Espacio dispara al frente, Q a la izquierda y E a la derecha.
 func armas_jugador() -> Array[String]:
 	var armas: Array[String] = []
-	if panel_partida.visible or comercio.panel.visible:
+	if panel_partida.visible or comercio.panel.visible or modo == "moba":
 		return armas
 	for arma in BOTONES_FUEGO:
 		if _arma_pulsada(arma):
@@ -2390,7 +2393,7 @@ func _input(event: InputEvent) -> void:
 	if modo == "libre" and comercio.tecla(event):
 		get_viewport().set_input_as_handled()
 		return
-	if modo == "moba" and (moba.tecla(event) or moba.toque_habilidad(event)):
+	if modo == "moba" and (moba.tecla(event) or moba.toque_habilidad(event) or moba.toque_canones(event) or moba.toque_auto(event)):
 		get_viewport().set_input_as_handled()
 		return
 
@@ -2457,6 +2460,8 @@ func aplicar_tamano_controles() -> void:
 # El botón más cercano al dedo, con algo de margen alrededor de cada círculo.
 func _boton_fuego_en(punto: Vector2) -> String:
 	var elegido := ""
+	if modo == "moba":
+		return elegido
 	var mejor := INF
 	for arma in BOTONES_FUEGO:
 		var distancia := punto.distance_to(_posicion_fuego(arma))
@@ -2625,7 +2630,7 @@ func _crear_menu(capa: CanvasLayer) -> void:
 	modos.add_theme_constant_override("separation", 10)
 	cuerpo.add_child(modos)
 	for nombre in ["tormenta", "libre", "moba"]:
-		var boton_modo := Ui.boton({"tormenta": "Tormenta", "libre": "Libre", "moba": "MOBA 5v5"}[nombre], true)
+		var boton_modo := Ui.boton({"tormenta": "Tormenta", "libre": "Libre", "moba": "MOBA 1v1"}[nombre], true)
 		boton_modo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		boton_modo.add_theme_font_size_override("font_size", 24)
 		if nombre == "moba":
@@ -3086,7 +3091,7 @@ func _crear_busqueda(capa: CanvasLayer) -> void:
 
 func _buscar_partida(nuevo_modo := "tormenta") -> void:
 	modo = nuevo_modo
-	titulo_busqueda.text = "MAR LIBRE" if modo == "libre" else ("5 CONTRA 5" if modo == "moba" else "TODOS CONTRA TODOS")
+	titulo_busqueda.text = "MAR LIBRE" if modo == "libre" else ("1 CONTRA 1" if modo == "moba" else "TODOS CONTRA TODOS")
 	campo_nombre.release_focus()
 	tiempo_busqueda = 0.0
 	_mostrar(Estado.BUSCANDO)
@@ -3109,7 +3114,7 @@ func _avanzar_busqueda(delta: float) -> void:
 	if modo == "moba":
 		if tiempo_busqueda < 1.4:
 			texto_busqueda.text = tr("Formando las armadas") + puntos
-			texto_jugadores.text = tr("Tu armada azul contra la armada roja: cinco barcos por bando")
+			texto_jugadores.text = tr("Tu barco azul contra el barco rojo: un capitán por bando")
 		elif tiempo_busqueda < 3.0:
 			texto_busqueda.text = tr("Completando con bots") + puntos
 			texto_jugadores.text = tr("Derriba los fuertes de cada carril y luego el nexo enemigo para ganar.")
@@ -3590,7 +3595,7 @@ func _zarpar() -> void:
 	await _cerrar_carga(carga)
 
 
-# Con elegir_capitan se vuelve a la elección de capitán del 5 contra 5 en vez de al menú.
+# Con elegir_capitan se vuelve a la elección de capitán del 1 contra 1 en vez de al menú.
 func _al_puerto(elegir_capitan := false) -> void:
 	if cargando:
 		return
@@ -3884,7 +3889,7 @@ func _dibujar_controles() -> void:
 	controles.draw_circle(perilla + Vector2(-6, -7), 6.0, Color(1, 1, 1, 0.7))
 
 	var fuente := ThemeDB.fallback_font
-	for arma in BOTONES_FUEGO:
+	for arma in (BOTONES_FUEGO if modo != "moba" else {}):
 		var radio: float = BOTONES_FUEGO[arma][1]
 		var texto: String = BOTONES_FUEGO[arma][2]
 		var carga: float = 1.0 - jugador.recargas[arma] / (RECARGAS[arma] * jugador.factor_recarga)
