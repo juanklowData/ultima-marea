@@ -172,7 +172,7 @@ const INGLES := {
 	"Todos los capitanes la tienen: tu tripulación clava tablas nuevas y repara un 25% del barco.": "Every captain has it: your crew nails on new planks and repairs 25% of the ship.",
 	"Ensayar habilidades": "Practice abilities",
 	"Recarga: %d s": "Cooldown: %d s",
-	"Ensayo: prueba tus habilidades (Q, E, R y F para reparar); mantén las de apuntar y suelta": "Practice: try your abilities (Q, E, R and F to repair); hold the aimed ones and release",
+	"Ensayo: prueba tus habilidades; mantén pulsadas las de apuntar y suelta": "Practice: try your abilities; hold the aimed ones and release",
 	"Cada capitán tiene su barco y tres habilidades propias; todos pueden reparar el barco": "Each captain has a ship and three abilities of their own; all of them can repair the ship",
 	"Volviendo a la base": "Returning to base",
 	"Regreso cancelado": "Return cancelled",

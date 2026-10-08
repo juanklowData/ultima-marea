@@ -192,14 +192,14 @@ func _dibujar_fondo() -> void:
 		var brillo := 0.35 + 0.65 * (0.5 + 0.5 * sin(tiempo * 2.0 + estrella.z))
 		fondo.draw_circle(Vector2(estrella.x * tam.x, estrella.y * horizonte), 1.0 + brillo * 0.8, Color(1, 1, 0.92, brillo * 0.8))
 	var luna := Vector2(tam.x * 0.82, tam.y * 0.17)
-	for k in 5:
-		fondo.draw_circle(luna, 46.0 + k * 22.0, Color(1.0, 0.92, 0.7, 0.05))
+	for k in 14:
+		fondo.draw_circle(luna, 40.0 + k * 9.0, Color(1.0, 0.92, 0.7, 0.018))
 	fondo.draw_circle(luna, 34.0, Color("fdf1cf"))
 	fondo.draw_circle(luna + Vector2(-9, -6), 6.0, Color("ead9ad"))
 	fondo.draw_circle(luna + Vector2(10, 9), 4.0, Color("ead9ad"))
 	var halo := emblema.get_global_rect().get_center()
-	for k in 6:
-		fondo.draw_circle(halo, 90.0 + k * 26.0 + sin(tiempo * 1.8) * 4.0, Color(Principal.COLOR_ORO, 0.035))
+	for k in 18:
+		fondo.draw_circle(halo, 90.0 + k * 9.0 + sin(tiempo * 1.8) * 4.0, Color(Principal.COLOR_ORO, 0.012))
 	for k in 4:
 		var paso_nube := fmod(tiempo * (8.0 + k * 3.0) + k * 340.0, tam.x + 400.0) - 200.0
 		var nube := Vector2(paso_nube, tam.y * (0.12 + k * 0.08))

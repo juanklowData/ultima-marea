@@ -2489,7 +2489,7 @@ func texto_aviso() -> String:
 	if heroe != null and not heroe.barco.viva:
 		return ""
 	if ensayo:
-		return tr("Ensayo: prueba tus habilidades (Q, E, R y F para reparar); mantén las de apuntar y suelta")
+		return tr("Ensayo: prueba tus habilidades; mantén pulsadas las de apuntar y suelta")
 	return tr("Fuertes: %d contra %d") % [torres_en_pie(0), torres_en_pie(1)]
 
 
@@ -3628,11 +3628,6 @@ func _dibujar_habilidad(ranura: int) -> void:
 	var ancho := fuente.get_string_size(texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
 	boton.draw_string_outline(fuente, c + Vector2(-ancho / 2.0, 22), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.8))
 	boton.draw_string(fuente, c + Vector2(-ancho / 2.0, 22), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, trazo)
-	if not OS.has_feature("mobile"):
-		var letra := OS.get_keycode_string(TECLAS_HABILIDAD[ranura])
-		var esquina := c + Vector2(Comercio.RADIO_BOTON * 0.62, -Comercio.RADIO_BOTON * 0.62)
-		boton.draw_circle(esquina, 9.0, Color(0.05, 0.12, 0.16, 0.95))
-		boton.draw_string(fuente, esquina + Vector2(-4.5, 4.5), letra, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Principal.COLOR_ORO)
 
 
 # Barras de vida de torres y botes, nivel de cada capitán, escudos y el anuncio.
