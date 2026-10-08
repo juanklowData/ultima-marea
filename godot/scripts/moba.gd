@@ -3068,11 +3068,11 @@ func dibujar(lienzo: Control, camara: Camera3D) -> void:
 	for torre in torres:
 		if not torre.viva:
 			continue
-		var punto := mundo.a_3d(torre.pos, 7.5 if torre.orden == 2 else 5.5)
+		var punto := mundo.a_3d(torre.pos, 6.4 if torre.orden == 2 else 5.5)
 		if camara.is_position_behind(punto) or punto.distance_to(mundo.foco) > Principal.DISTANCIA_VISIBLE:
 			continue
 		var pantalla := camara.unproject_position(punto)
-		var ancho := 110.0 if torre.orden == 2 else 84.0
+		var ancho := 130.0 if torre.orden == 2 else 84.0
 		_barra(lienzo, pantalla, ancho, torre.vida / torre.vida_max, COLORES[torre.equipo], torre.destello)
 		if not vulnerable(torre):
 			var candado := pantalla + Vector2(ancho / 2.0 + 12.0, 0.0)
@@ -3114,6 +3114,8 @@ func dibujar(lienzo: Control, camara: Camera3D) -> void:
 			lienzo.draw_arc(centro, 46.0, 0.0, TAU, 40, Color(Principal.COLOR_ORO, 0.8), 4.0, true)
 	monstruos.dibujar(lienzo, camara)
 	var propio := heroe_jugador()
+	if not ensayo:
+		_dibujar_nexos(lienzo, fuente, propio.equipo if propio != null else 0)
 	if propio != null and not propio.barco.viva:
 		_dibujar_regreso(lienzo, fuente, ceili(propio.reaparece))
 	if anuncio_vida > 0.0:
@@ -3123,6 +3125,39 @@ func dibujar(lienzo: Control, camara: Camera3D) -> void:
 		var sitio := Vector2(lienzo.size.x / 2.0 - ancho / 2.0, 230.0 if propio != null and not propio.barco.viva else 190.0)
 		lienzo.draw_string_outline(fuente, sitio, anuncio, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, 8, Color(0, 0, 0, 0.7 * alfa))
 		lienzo.draw_string(fuente, sitio, anuncio, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, Color(anuncio_color, alfa))
+
+
+# Vida de los dos nexos arriba en el centro: el propio a la izquierda y el rival a la derecha.
+func _dibujar_nexos(lienzo: Control, fuente: Font, equipo: int) -> void:
+	var largo := 150.0
+	var mitad := lienzo.size.x / 2.0
+	for lado in 2:
+		var bando := equipo if lado == 0 else 1 - equipo
+		var nexo: Torre = null
+		for torre in torres:
+			if torre.orden == 2 and torre.equipo == bando:
+				nexo = torre
+		if nexo == null:
+			continue
+		var parte := nexo.vida / nexo.vida_max if nexo.viva else 0.0
+		var x := mitad - 18.0 - largo if lado == 0 else mitad + 18.0
+		var fondo := Rect2(x - 34.0, 14.0, largo + 40.0, 34.0)
+		lienzo.draw_rect(fondo, Color(0.03, 0.09, 0.12, 0.75))
+		lienzo.draw_rect(fondo, COLORES[bando], false, 2.0)
+		var icono := Vector2(x - 17.0, 31.0)
+		var piedra := COLORES[bando].lerp(Color.WHITE, 0.25)
+		lienzo.draw_rect(Rect2(icono + Vector2(-9, -3), Vector2(18, 11)), piedra)
+		lienzo.draw_rect(Rect2(icono + Vector2(-4, -10), Vector2(8, 8)), piedra)
+		for k in 3:
+			lienzo.draw_rect(Rect2(icono + Vector2(-9 + k * 7, -6), Vector2(4, 3)), piedra)
+		lienzo.draw_rect(Rect2(x, 24.0, largo, 14.0), Color(0, 0, 0, 0.6))
+		var relleno := COLORES[bando].lerp(Color.WHITE, nexo.destello * 0.6)
+		lienzo.draw_rect(Rect2(x + 2.0, 26.0, (largo - 4.0) * clampf(parte, 0.0, 1.0), 10.0), relleno)
+		var cifra := "%d%%" % ceili(parte * 100.0)
+		var ancho := fuente.get_string_size(cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		var sitio := Vector2(x + largo / 2.0 - ancho / 2.0, 36.0)
+		lienzo.draw_string_outline(fuente, sitio, cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 4, Color(0, 0, 0, 0.8))
+		lienzo.draw_string(fuente, sitio, cifra, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color.WHITE)
 
 
 func _dibujar_regreso(lienzo: Control, fuente: Font, segundos: int) -> void:
