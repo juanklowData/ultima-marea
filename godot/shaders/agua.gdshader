@@ -1,6 +1,6 @@
 shader_type spatial;
-// Mar estilizado y ligero: dos ondas largas mueven la malla y unas ondulaciones finas solo
-// cambian la luz. La normal es suave (calculada de las ondas), así no hay facetas que parpadeen.
+// Mar tropical cristalino y ligero: dos ondas largas mueven la malla y unas ondulaciones finas
+// solo cambian la luz. La normal es suave (calculada de las ondas), así no hay facetas que parpadeen.
 render_mode unshaded, cull_back, depth_draw_opaque;
 
 uniform vec4 color_hondo : source_color = vec4(0.02, 0.15, 0.23, 1.0);
@@ -59,6 +59,14 @@ float con_remolinos(vec2 p, float h) {
 	return h * (1.0 - 0.6 * smoothstep(0.0, 1.0, calma)) - hundido;
 }
 
+// Red de líneas onduladas como la luz reflejada en el fondo (0..1).
+float causticas(vec2 p, float t) {
+	vec2 q = p * 1.1;
+	float a = sin(q.x + sin(q.y * 0.8 + t * 0.6) * 1.6);
+	float b = sin(q.y * 1.1 + sin(q.x * 0.7 - t * 0.5) * 1.6);
+	return smoothstep(0.82, 1.0, 1.0 - abs(a + b) * 0.5);
+}
+
 void vertex() {
 	vec3 mundo = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	float h = con_remolinos(mundo.xz, mar(mundo.xz, tiempo, fuera_de_zona(mundo.xz)).x);
@@ -80,15 +88,16 @@ void fragment() {
 	vec3 vista = normalize(CAMERA_POSITION_WORLD - pos_mundo);
 	float luz = clamp(dot(n, SOL), 0.0, 1.0);
 
-	vec3 color = mix(color_hondo.rgb, color_claro.rgb, clamp(0.6 + altura * 2.5, 0.0, 1.0));
-	color *= 0.8 + 0.3 * luz;
+	// Agua tropical clara con los reflejos de luz del fondo moviéndose.
+	vec3 color = mix(vec3(0.06, 0.48, 0.62), vec3(0.2, 0.78, 0.82), clamp(0.55 + altura * 2.5, 0.0, 1.0));
+	color *= 0.85 + 0.25 * luz;
+	color += vec3(0.55, 0.9, 0.9) * causticas(p, tiempo * 0.7) * 0.22;
 	// A lo lejos el agua refleja más el cielo.
 	float reflejo = pow(1.0 - clamp(dot(n, vista), 0.0, 1.0), 3.0);
-	color = mix(color, color_cielo.rgb, 0.12 + reflejo * 0.45);
+	color = mix(color, vec3(0.8, 0.94, 0.98), reflejo * 0.35);
 	// Brillos del sol y espuma suave en lo alto de las ondas.
-	float brillo = pow(clamp(dot(reflect(-SOL, n), vista), 0.0, 1.0), 48.0);
-	color += vec3(1.0, 0.97, 0.88) * brillo * 0.35;
-	color = mix(color, color_espuma.rgb, smoothstep(0.1, 0.16, altura) * 0.3);
+	color += vec3(1.0) * pow(clamp(dot(reflect(-SOL, n), vista), 0.0, 1.0), 64.0) * 0.4;
+	color = mix(color, vec3(1.0), smoothstep(0.12, 0.16, altura) * 0.35);
 
 	vec3 bravo = mix(color_tormenta.rgb, vec3(0.08, 0.12, 0.16), clamp(0.5 + altura, 0.0, 1.0)) * (0.8 + 0.3 * luz)
 		+ smoothstep(0.3, 0.4, altura) * vec3(0.3, 0.33, 0.37);
