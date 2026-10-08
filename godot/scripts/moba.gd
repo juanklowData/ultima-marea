@@ -56,6 +56,10 @@ const DANIO_CAPITAN_A_BOTE := 2.5
 const PUNTERIA_BOTE := 0.6
 const DESVIO_BOTE := 0.1
 const RADIO_BOTE := 18.0
+# Formación en punta de flecha: el primero al centro y los demás escalonados a babor y estribor.
+const HUECO_LATERAL := 34.0
+const HUECO_FILA := 56.0
+const ESPACIO_BOTES := 52.0
 const LARGO_BOTE := 2.0
 const ANCHO_BOTE := 0.8
 const ALTO_BOTE := 0.32
@@ -257,6 +261,7 @@ class Bote:
 	var equipo := 0
 	var carril := ""
 	var paso := 1
+	var lado := 0.0
 	var vida := VIDA_BOTE
 	var vida_max := VIDA_BOTE
 	var danio := DANIO_BOTE
@@ -1124,7 +1129,9 @@ func _soltar_oleada() -> void:
 				var bote := Bote.new()
 				bote.equipo = equipo
 				bote.carril = carril
-				bote.pos = salida - hacia * k * 40.0 + hacia.orthogonal() * (k - 1) * 18.0
+				var fila := (k + 1) / 2
+				bote.lado = HUECO_LATERAL * fila * (1.0 if k % 2 == 0 else -1.0)
+				bote.pos = salida - hacia * fila * HUECO_FILA + hacia.orthogonal() * bote.lado
 				bote.rumbo = _rumbo_hacia(bote.pos, bote.pos + hacia)
 				bote.recarga = randf() * RECARGA_BOTE
 				bote.vida_max = VIDA_BOTE * fuerza
@@ -1207,16 +1214,26 @@ func _mover_bote(bote: Bote, delta: float) -> void:
 	var destino := Vector2.INF
 	if not parado:
 		if not blanco.is_empty():
-			destino = blanco[0]
+			var punto: Vector2 = blanco[0]
+			destino = punto + (punto - bote.pos).normalized().orthogonal() * bote.lado
 		else:
 			var puntos := camino(bote.carril, bote.equipo)
-			if bote.paso < puntos.size() and bote.pos.distance_to(puntos[bote.paso]) < 60.0:
-				bote.paso = mini(bote.paso + 1, puntos.size() - 1)
-			destino = puntos[bote.paso]
-	# Sin derrapes: el casco gira hacia donde quiere ir (rodeando islas) y solo avanza por la
-	# proa; si lleva un compañero justo delante, frena en vez de apartarse de lado.
+			destino = _puesto_bote(puntos, bote.paso, bote.lado)
+			if bote.paso < puntos.size() - 1 and bote.pos.distance_to(destino) < 60.0:
+				bote.paso += 1
+				destino = _puesto_bote(puntos, bote.paso, bote.lado)
+	# Sin derrapes: el casco gira hacia donde quiere ir (rodeando islas y abriéndose de los
+	# compañeros) y solo avanza por la proa; si lleva uno justo delante, frena.
 	if destino != Vector2.INF:
 		var deseo := (destino - bote.pos).normalized()
+		for otro in botes:
+			if otro == bote or otro.equipo != bote.equipo:
+				continue
+			var sep := bote.pos - otro.pos
+			var d := sep.length()
+			if d < ESPACIO_BOTES and d > 0.0:
+				deseo += sep / d * (1.0 - d / ESPACIO_BOTES) * 1.6
+		deseo = deseo.normalized()
 		for isla in mundo.islas.cerca(bote.pos, RADIO_BOTE + 50.0):
 			var sep: Vector2 = bote.pos - isla.pos
 			var limite: float = isla.radio + RADIO_BOTE + 50.0
@@ -1234,11 +1251,25 @@ func _mover_bote(bote: Bote, delta: float) -> void:
 			if d < RADIO_BOTE * 2.6 and d > 0.0 and proa.dot(hacia / d) > 0.3:
 				marcha = minf(marcha, clampf((d - RADIO_BOTE * 1.4) / (RADIO_BOTE * 1.2), 0.0, 1.0))
 		bote.pos += proa * VEL_BOTE * marcha * delta
+	var pegado := RADIO_BOTE * 1.7
+	for otro in botes:
+		if otro == bote or otro.equipo != bote.equipo:
+			continue
+		var sep := bote.pos - otro.pos
+		var d := sep.length()
+		if d < pegado and d > 0.0:
+			bote.pos += sep / d * (pegado - d) * minf(1.0, delta * 2.0)
 	for isla in mundo.islas.cerca(bote.pos, RADIO_BOTE):
 		var sep: Vector2 = bote.pos - isla.pos
 		var minimo: float = isla.borde(bote.pos) + RADIO_BOTE
 		if sep.length() < minimo and sep != Vector2.ZERO:
 			bote.pos = isla.pos + sep.normalized() * minimo
+
+
+# Punto del carril que le toca a un bote según su sitio en la formación.
+func _puesto_bote(puntos: PackedVector2Array, paso: int, lado: float) -> Vector2:
+	var hacia := (puntos[paso] - puntos[paso - 1]).normalized()
+	return puntos[paso] + hacia.orthogonal() * lado
 
 
 # [punto, velocidad, radio] del blanco más cercano: primero otros botes, luego torres y barcos
