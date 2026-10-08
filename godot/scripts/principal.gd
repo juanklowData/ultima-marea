@@ -690,6 +690,8 @@ func _process(delta: float) -> void:
 		comercio.animar(delta)
 	elif modo == "moba":
 		comercio.animar_llamas(delta)
+	else:
+		moba.canones_tormenta(delta)
 	fauna.animar(delta)
 	emotes.actualizar(delta)
 	# En puerto la cámara mira al horizonte y las islas se ven más lejos.
@@ -1440,6 +1442,8 @@ func _preparar_mar(carga: PantallaCarga) -> void:
 		if i % 8 == 0:
 			carga.paso(tr("Llamando a los piratas..."), lerpf(0.6, 0.85, float(i) / TOTAL_BARCOS))
 			await get_tree().process_frame
+	for barco in barcos:
+		Moba.ritmo_heroe(barco)
 	peligros.apartar_krakens()
 	await _avanzar_carga(carga, "Soltando tiburones y barriles...", 0.88)
 	for _i in TOTAL_TABLAS:
@@ -2377,7 +2381,7 @@ func direccion_jugador() -> Vector2:
 # Teclado: Espacio dispara al frente, Q a la izquierda y E a la derecha.
 func armas_jugador() -> Array[String]:
 	var armas: Array[String] = []
-	if panel_partida.visible or comercio.panel.visible or modo == "moba":
+	if panel_partida.visible or comercio.panel.visible or modo != "libre":
 		return armas
 	for arma in BOTONES_FUEGO:
 		if _arma_pulsada(arma):
@@ -2449,6 +2453,9 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if modo == "moba" and (moba.tecla(event) or moba.toque_habilidad(event) or moba.toque_canones(event) or moba.toque_auto(event)):
+		get_viewport().set_input_as_handled()
+		return
+	if modo == "tormenta" and (moba.tecla_canones(event) or moba.toque_canones(event)):
 		get_viewport().set_input_as_handled()
 		return
 
@@ -2533,7 +2540,7 @@ func aplicar_tamano_controles() -> void:
 # El botón más cercano al dedo, con algo de margen alrededor de cada círculo.
 func _boton_fuego_en(punto: Vector2) -> String:
 	var elegido := ""
-	if modo == "moba":
+	if modo != "libre":
 		return elegido
 	var mejor := INF
 	for arma in BOTONES_FUEGO:
@@ -2715,7 +2722,7 @@ func _crear_menu(capa: CanvasLayer) -> void:
 	var modos := HBoxContainer.new()
 	modos.add_theme_constant_override("separation", 10)
 	cuerpo.add_child(modos)
-	for nombre in ["tormenta", "libre", "moba"]:
+	for nombre in ["tormenta", "moba"]:
 		var boton_modo := _tarjeta_modo(nombre)
 		if nombre == "moba":
 			boton_modo.pressed.connect(func() -> void: moba.abrir_seleccion())
@@ -3851,6 +3858,8 @@ func _dibujar_marcadores() -> void:
 	misiones.dibujar(marcadores, camara)
 	if modo == "moba":
 		moba.dibujar(marcadores, camara)
+	elif modo == "tormenta":
+		moba.dibujar_apunte_tormenta(marcadores, camara)
 	if modo == "libre":
 		libre.dibujar(marcadores, camara)
 		comercio.dibujar(marcadores, camara)
@@ -4050,7 +4059,7 @@ func _dibujar_controles() -> void:
 	controles.draw_circle(perilla + Vector2(-6, -7), 6.0, Color(1, 1, 1, 0.7))
 
 	var fuente := ThemeDB.fallback_font
-	for arma in (BOTONES_FUEGO if modo != "moba" else {}):
+	for arma in (BOTONES_FUEGO if modo == "libre" else {}):
 		var radio: float = BOTONES_FUEGO[arma][1]
 		var texto: String = BOTONES_FUEGO[arma][2]
 		var carga: float = 1.0 - jugador.recargas[arma] / (RECARGAS[arma] * jugador.factor_recarga)

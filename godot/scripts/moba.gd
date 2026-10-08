@@ -2913,14 +2913,7 @@ func tecla(evento: InputEvent) -> bool:
 	var pulsada := evento as InputEventKey
 	if pulsada == null or pulsada.echo:
 		return false
-	if pulsada.keycode == KEY_SPACE:
-		if pulsada.pressed and boton_canones.visible and dedo_canon == -1 and not tecla_canon:
-			tecla_canon = true
-			tiempo_canon = 0.0
-			apunte_canon = Vector2.ZERO
-		elif not pulsada.pressed and tecla_canon:
-			tecla_canon = false
-			_disparar_canones()
+	if tecla_canones(evento):
 		return true
 	if pulsada.keycode == KEY_T:
 		if pulsada.pressed and boton_canones.visible and not ensayo:
@@ -3623,29 +3616,64 @@ func toque_canones(evento: InputEvent) -> bool:
 	return false
 
 
+# Espacio apunta los cañones con el ratón; al soltarlo disparan.
+func tecla_canones(evento: InputEvent) -> bool:
+	var pulsada := evento as InputEventKey
+	if pulsada == null or pulsada.echo or pulsada.keycode != KEY_SPACE:
+		return false
+	if pulsada.pressed and boton_canones.visible and dedo_canon == -1 and not tecla_canon:
+		tecla_canon = true
+		tiempo_canon = 0.0
+		apunte_canon = Vector2.ZERO
+	elif not pulsada.pressed and tecla_canon:
+		tecla_canon = false
+		_disparar_canones()
+	return true
+
+
+# Tormenta: el mismo botón de cañones que en el 1 contra 1, sin habilidades ni tienda.
+func canones_tormenta(delta: float) -> void:
+	var barco := mundo.jugador
+	boton_canones.visible = barco != null and barco.viva and mundo.estado == Principal.Estado.JUGANDO \
+			and not mundo.panel_partida.visible
+	boton_canones.queue_redraw()
+	_seguir_canones(delta)
+
+
+func dibujar_apunte_tormenta(lienzo: Control, camara: Camera3D) -> void:
+	if apuntando_canones() and mundo.jugador != null and mundo.jugador.viva:
+		_dibujar_apunte_canon(lienzo, camara)
+
+
+# El mismo ritmo de barco que en el 1 contra 1: más rápido y con giro ágil.
+static func ritmo_heroe(barco: Barco) -> void:
+	barco.agil = true
+	barco.vel_max *= VEL_HEROE
+	barco.giro_max *= GIRO_HEROE
+
+
 func _seguir_canones(delta: float) -> void:
 	if dedo_canon == -1 and not tecla_canon:
 		return
-	var heroe := heroe_jugador()
-	if heroe == null or not heroe.barco.viva or mundo.panel_partida.visible:
+	var barco := mundo.jugador
+	if barco == null or not barco.viva or mundo.panel_partida.visible:
 		dedo_canon = -1
 		tecla_canon = false
 		apunte_canon = Vector2.ZERO
 		return
 	tiempo_canon += delta
 	if tecla_canon and tiempo_canon >= ESPERA_APUNTE:
-		var hacia := _suelo(mundo.get_viewport().get_mouse_position()) - heroe.barco.pos
+		var hacia := _suelo(mundo.get_viewport().get_mouse_position()) - barco.pos
 		if hacia.length() > 1.0:
 			apunte_canon = hacia.normalized()
 
 
 func _disparar_canones() -> void:
-	var heroe := heroe_jugador()
+	var barco := mundo.jugador
 	var hacia := apunte_canon
 	apunte_canon = Vector2.ZERO
-	if heroe == null or not heroe.barco.viva:
+	if barco == null or not barco.viva:
 		return
-	var barco := heroe.barco
 	if hacia == Vector2.ZERO:
 		hacia = barco.proa()
 	var arma := canon_hacia(barco, hacia)
