@@ -22,6 +22,8 @@ const SHADER_PALMERA := preload("res://shaders/palmera.gdshader")
 const SHADER_ALGA := preload("res://shaders/alga.gdshader")
 # Islas cuyo bajío deja ver el fondo a la vez (debe coincidir con agua.gdshader).
 const BAJIOS := 8
+# El agua retro es opaca: el lecho con corales y los peces de debajo no se crean.
+const FONDO_VISIBLE := false
 const VARIANTES_ALGA := 5
 const COLORES_CORAL: Array[Color] = [Color("ff6f91"), Color("ff9a4d"), Color("b06cff"), Color("ffd24d"), Color("4fd1c5"), Color("ff4f5e"), Color("f2a7d8")]
 const COLORES_ESTRELLA: Array[Color] = [Color("ff7a2f"), Color("e8433b"), Color("9b59d0"), Color("f5c542")]
@@ -446,7 +448,10 @@ static func hondura_fondo(t: float) -> float:
 
 
 # Lecho de arena que baja desde la orilla, con corales, algas, anémonas y estrellas.
+# Con el agua opaca del estilo retro no se vería: no se crea.
 func _fondo(nodo: Node3D, r: float, isla: Circulo, cantidad: int) -> void:
+	if not FONDO_VISIBLE:
+		return
 	if material_fondo == null:
 		_preparar_fondo()
 	var ancho := alcance_fondo(r)

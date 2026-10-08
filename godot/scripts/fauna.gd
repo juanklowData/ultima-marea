@@ -257,8 +257,10 @@ func poblar(nodo: Node3D, radio: float, chica: bool, palmeras: Array[Node3D], fo
 			isla.delfines.append(_delfin(nodo, radio, k))
 	isla.pez = _pez(nodo)
 	isla.espera_pez = randf_range(1.0, 6.0)
-	for _i in (1 if chica else randi_range(2, 3)):
-		isla.bancos.append(_banco(nodo))
+	# Los bancos de peces nadan bajo el agua, que en el estilo retro es opaca.
+	if Islas.FONDO_VISIBLE:
+		for _i in (1 if chica else randi_range(2, 3)):
+			isla.bancos.append(_banco(nodo))
 	islas.append(isla)
 
 

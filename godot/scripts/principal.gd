@@ -52,7 +52,7 @@ const GIRO_VITRINA := 0.12
 # Segundos sin girar solo después de que el jugador mueva la cámara a mano.
 const PAUSA_GIRO_MANUAL := 300.0
 const LADO_AGUA := 190.0
-const DIVISIONES_AGUA := 160
+const DIVISIONES_AGUA := 64
 const ANCHO_PANEL := 540.0
 const MONEDAS_VICTORIA := 15
 const MONEDAS_POR_HUNDIDO := 1
@@ -414,11 +414,10 @@ func _texto_dispositivo() -> String:
 
 # Niveles: 0 súper bajo, 1 bajo, 2 medio, 3 alto. Los bajos apagan sombras, brillo y
 # antialias, bajan la resolución 3D y acortan la vista; súper bajo además va a 30 cuadros,
-# quita la lluvia y pone un mar plano. Con "automático" (-1) se elige según el dispositivo.
+# quita la lluvia y usa menos triángulos en el mar. Con "automático" (-1) se elige según el dispositivo.
 const NIVELES_GRAFICOS: Array[String] = ["Súper bajo", "Bajo", "Medio", "Alto"]
 
 var nivel_graficos := 1
-var agua_sencilla: StandardMaterial3D
 var botones_efectos: Array[Button] = []
 # Metros hasta el punto del mar más lejano que entra en pantalla: x desde la cámara, y desde el foco.
 var cobertura := Vector2(40.0, 30.0)
@@ -427,17 +426,18 @@ var cobertura := Vector2(40.0, 30.0)
 const EFECTOS_VISUALES := {
 	"lluvia": ["Lluvia", 1],
 	"fps60": ["60 FPS", 1],
-	"sombras": ["Sombras", 2],
-	"colores": ["Colores vivos", 2],
-	"resolucion": ["Alta resolución", 2],
+	# Estilo retro: sombras, brillo, ajuste de color y resolución completa solo si se encienden a mano.
+	"sombras": ["Sombras", 4],
+	"colores": ["Colores vivos", 4],
+	"resolucion": ["Alta resolución", 4],
 	"suavizado": ["Bordes suaves", 3],
-	"brillo": ["Brillo", 3],
+	"brillo": ["Brillo", 4],
 	"lejos": ["Vista lejana", 3],
 }
 
 
 const CALIDADES_MAR: Array[String] = ["Plano", "Suave", "Con olas", "Detallado"]
-const DIVISIONES_MAR: Array[int] = [40, 60, 100, DIVISIONES_AGUA]
+const DIVISIONES_MAR: Array[int] = [32, 44, DIVISIONES_AGUA, 96]
 var botones_mar: Array[Button] = []
 
 
@@ -461,7 +461,7 @@ func aplicar_graficos() -> void:
 	entorno.adjustment_enabled = efecto_visual("colores")
 	camara.far = 400.0 if efecto_visual("lejos") else [140.0, 180.0, 260.0, 400.0][nivel]
 	var mar := calidad_mar()
-	agua.material_override = material_agua if mar > 0 else _agua_sencilla()
+	agua.material_override = material_agua
 	material_agua.set_shader_parameter("detalle", mar >= 2)
 	var plano := agua.mesh as PlaneMesh
 	plano.subdivide_width = DIVISIONES_MAR[mar]
@@ -530,19 +530,9 @@ func _alcance_efectos() -> float:
 
 func _ajustar_pantalla(nivel: int) -> void:
 	var vista := get_viewport()
-	vista.scaling_3d_scale = 1.0 if efecto_visual("resolucion") else [0.8, 0.9, 1.0, 1.0][nivel]
+	vista.scaling_3d_scale = 1.0 if efecto_visual("resolucion") else [0.65, 0.72, 0.8, 0.9][nivel]
 	vista.msaa_3d = Viewport.MSAA_2X if efecto_visual("suavizado") else Viewport.MSAA_DISABLED
 	Engine.max_fps = 60 if efecto_visual("fps60") else 30
-
-
-# Mar plano de un color, sin el shader de olas, para los móviles más justos.
-func _agua_sencilla() -> StandardMaterial3D:
-	if agua_sencilla == null:
-		agua_sencilla = StandardMaterial3D.new()
-		agua_sencilla.albedo_color = Paleta.MAR_CLARO.lerp(Paleta.MAR_HONDO, 0.35)
-		agua_sencilla.roughness = 0.35
-		agua_sencilla.metallic_specular = 0.6
-	return agua_sencilla
 
 
 # Calcula el nivel según la memoria, los núcleos y la tarjeta gráfica. En el ordenador, alto;
@@ -1070,6 +1060,7 @@ func material(color: Color, textura := "general") -> StandardMaterial3D:
 		var nuevo := StandardMaterial3D.new()
 		nuevo.albedo_color = Paleta.armonizar(color)
 		nuevo.roughness = ASPEREZA.get(textura, 0.75)
+		nuevo.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 		Texturas.aplicar(nuevo, textura)
 		materiales[clave] = nuevo
 	return materiales[clave]

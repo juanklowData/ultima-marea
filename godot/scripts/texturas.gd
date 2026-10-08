@@ -17,8 +17,15 @@ const AJUSTES := {
 static var _hechas := {}
 
 
+# Con el estilo retro los materiales van lisos: sin grano ni relieve, que en el móvil
+# costaban seis lecturas de textura por píxel.
+const ACTIVAS := false
+
+
 # Prepara el material para el tipo y aclara su color para que el grano no lo oscurezca.
 static func aplicar(material: StandardMaterial3D, tipo: String) -> void:
+	if not ACTIVAS:
+		return
 	var hecha := _textura(tipo)
 	var ajuste: Array = AJUSTES[tipo]
 	material.albedo_texture = hecha[0]
