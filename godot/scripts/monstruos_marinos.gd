@@ -23,7 +23,11 @@ const CORREA := 420.0
 const CURA_EN_CASA := 0.2
 const REAPARICION := 90.0
 const SEPARACION := 12.0
+const TRAMOS := 13
+const SEPARACION_TRAMOS := 0.22
 const COLOR_PIEL := Color("2f8f7f")
+const COLOR_LOMO := Color("1d5f5a")
+const COLOR_MANCHA := Color("8fe0c8")
 const COLOR_VIENTRE := Color("e3c27a")
 const COLOR_ALETA := Color("d9a43a")
 const COLOR_BARRA := Color("c38bff")
@@ -42,9 +46,15 @@ class Monstruo:
 	var destello := 0.0
 	var furia := 0.0
 	var fase := 0.0
+	# Daño continuo de la bola de fuego (ardiendo) o de las cadenas.
+	var ardor := 0.0
+	var ardor_danio := 0.0
+	var ardor_fuego := false
+	var ardor_de: Barco
 	var agresor: Barco
 	var nodo: Node3D
 	var cabeza: Node3D
+	var mandibula: Node3D
 	var tramos: Array[Node3D] = []
 
 
@@ -114,39 +124,63 @@ func _crear(tipo: String, guarida: Vector2) -> void:
 	monstruos.append(monstruo)
 
 
-# Cuerpo de anillos que asoman del agua formando jorobas, cada uno con su púa dorada, y una
-# cabeza con ojos amarillos, mandíbula y dos aletas a los lados. Mira hacia -Z.
+# Cuerpo continuo de anillos solapados que se afinan hacia la cola: lomo oscuro con manchas
+# claras, vientre dorado y una cresta de aletas finas. El cuello sube hasta la cabeza, que
+# lleva ojos de reptil, cejas, dientes, mandíbula móvil, aletas a los lados y su cresta.
+# Termina en una aleta de cola en abanico. Mira hacia -Z.
 func _armar(monstruo: Monstruo) -> void:
 	var piel := mundo.material(COLOR_PIEL)
+	var lomo := mundo.material(COLOR_LOMO)
 	var vientre := mundo.material(COLOR_VIENTRE)
 	var aleta := mundo.material(COLOR_ALETA)
-	for k in 7:
+	var mancha := mundo.material(COLOR_MANCHA)
+	var hueso := mundo.material(Color("f2ead8"))
+	var ultimo := TRAMOS - 1
+	for k in TRAMOS:
 		var tramo := Node3D.new()
-		tramo.position = Vector3(0, 0, 0.45 + k * 0.42)
+		tramo.position = Vector3(0, 0, 0.3 + k * SEPARACION_TRAMOS)
+		tramo.set_meta("base", 0.42 * (1.0 - smoothstep(0.0, 4.0, k)) + 0.04)
 		monstruo.nodo.add_child(tramo)
-		var grueso := lerpf(0.62, 0.28, k / 6.0)
-		_pieza(tramo, esfera, piel, Vector3.ZERO, Vector3(grueso, grueso, grueso * 1.25))
-		_pieza(tramo, esfera, vientre, Vector3(0, -grueso * 0.16, 0), Vector3(grueso * 0.8, grueso * 0.7, grueso * 1.1))
-		_pieza(tramo, cono, aleta, Vector3(0, grueso * 0.55, 0), Vector3(0.12, grueso * 0.6, 0.22))
+		var g := lerpf(0.58, 0.16, float(k) / ultimo)
+		_pieza(tramo, esfera, piel, Vector3.ZERO, Vector3(g, g * 0.9, g * 1.45))
+		_pieza(tramo, esfera, lomo, Vector3(0, g * 0.2, 0), Vector3(g * 0.7, g * 0.55, g * 1.4))
+		_pieza(tramo, esfera, vientre, Vector3(0, -g * 0.2, 0), Vector3(g * 0.78, g * 0.6, g * 1.3))
+		if k % 2 == 1:
+			for lado: float in [-1.0, 1.0]:
+				_pieza(tramo, esfera, mancha, Vector3(lado * g * 0.36, g * 0.12, 0), Vector3(g * 0.22, g * 0.2, g * 0.32))
+		var cresta := _pieza(tramo, cono, aleta, Vector3(0, g * 0.5, g * 0.15), Vector3(0.035, g * 0.75, g * 1.1))
+		cresta.rotation.x = 0.35
 		monstruo.tramos.append(tramo)
-	var cola := _pieza(monstruo.tramos[-1], cono, aleta, Vector3(0, 0.05, 0.3), Vector3(0.45, 0.4, 0.05))
+	var cola := _pieza(monstruo.tramos[ultimo], cono, aleta, Vector3(0, 0.02, 0.28), Vector3(0.7, 0.5, 0.04))
 	cola.rotation.x = -PI / 2.0
 	monstruo.cabeza = Node3D.new()
-	monstruo.cabeza.position = Vector3(0, 0.5, 0)
+	monstruo.cabeza.position = Vector3(0, 0.5, -0.05)
 	monstruo.nodo.add_child(monstruo.cabeza)
 	var cabeza := monstruo.cabeza
-	_pieza(cabeza, esfera, piel, Vector3(0, 0, 0), Vector3(0.72, 0.6, 0.95))
-	_pieza(cabeza, esfera, piel, Vector3(0, -0.05, -0.42), Vector3(0.5, 0.36, 0.6))
-	_pieza(cabeza, esfera, vientre, Vector3(0, -0.2, -0.32), Vector3(0.44, 0.18, 0.62))
+	_pieza(cabeza, esfera, piel, Vector3.ZERO, Vector3(0.66, 0.52, 0.8))
+	_pieza(cabeza, esfera, lomo, Vector3(0, 0.12, 0.04), Vector3(0.5, 0.34, 0.72))
+	_pieza(cabeza, esfera, piel, Vector3(0, -0.02, -0.4), Vector3(0.46, 0.3, 0.58))
 	for lado: float in [-1.0, 1.0]:
-		_pieza(cabeza, esfera, mundo.material(Color("ffd84a")), Vector3(lado * 0.24, 0.16, -0.24), Vector3.ONE * 0.18)
-		_pieza(cabeza, esfera, mundo.material(Color("141414")), Vector3(lado * 0.28, 0.17, -0.3), Vector3(0.05, 0.12, 0.05))
-		var oreja := _pieza(cabeza, cono, aleta, Vector3(lado * 0.36, 0.12, 0.15), Vector3(0.1, 0.42, 0.3))
-		oreja.rotation = Vector3(0.5, 0, -lado * 1.1)
-		var cuerno := _pieza(cabeza, cono, mundo.material(Color("f2ead8")), Vector3(lado * 0.14, 0.32, 0.05), Vector3(0.09, 0.3, 0.09))
-		cuerno.rotation.x = 0.6
+		_pieza(cabeza, esfera, lomo, Vector3(lado * 0.08, 0.06, -0.66), Vector3(0.07, 0.05, 0.06))
+		_pieza(cabeza, esfera, mundo.material(Color("ffd84a")), Vector3(lado * 0.25, 0.13, -0.2), Vector3.ONE * 0.2)
+		_pieza(cabeza, esfera, mundo.material(Color("141414")), Vector3(lado * 0.33, 0.13, -0.24), Vector3(0.05, 0.15, 0.06))
+		_pieza(cabeza, esfera, lomo, Vector3(lado * 0.23, 0.25, -0.2), Vector3(0.18, 0.08, 0.26))
+		var oreja := _pieza(cabeza, cono, aleta, Vector3(lado * 0.32, 0.05, 0.18), Vector3(0.04, 0.5, 0.4))
+		oreja.rotation = Vector3(0.9, 0, -lado * 1.2)
+		var cuerno := _pieza(cabeza, cono, hueso, Vector3(lado * 0.15, 0.3, 0.12), Vector3(0.08, 0.32, 0.08))
+		cuerno.rotation.x = 0.8
+		for m in 2:
+			var diente := _pieza(cabeza, cono, hueso, Vector3(lado * (0.08 + m * 0.08), -0.15, -0.6 + m * 0.1), Vector3(0.05, 0.1, 0.05))
+			diente.rotation.x = PI
 	for m in 3:
-		_pieza(cabeza, cono, aleta, Vector3(0, 0.3 - m * 0.04, 0.2 + m * 0.18), Vector3(0.08, 0.3 - m * 0.06, 0.18))
+		var pua := _pieza(cabeza, cono, aleta, Vector3(0, 0.3 - m * 0.04, 0.12 + m * 0.16), Vector3(0.035, 0.32 - m * 0.06, 0.24))
+		pua.rotation.x = 0.4
+	monstruo.mandibula = Node3D.new()
+	monstruo.mandibula.position = Vector3(0, -0.14, -0.08)
+	cabeza.add_child(monstruo.mandibula)
+	_pieza(monstruo.mandibula, esfera, vientre, Vector3(0, -0.02, -0.3), Vector3(0.4, 0.14, 0.58))
+	for lado: float in [-1.0, 1.0]:
+		_pieza(monstruo.mandibula, cono, hueso, Vector3(lado * 0.1, 0.06, -0.48), Vector3(0.045, 0.09, 0.045))
 
 
 func _pieza(padre: Node3D, malla: Mesh, materia: Material, pos: Vector3, escala: Vector3) -> MeshInstance3D:
@@ -169,6 +203,14 @@ func actualizar(delta: float) -> void:
 			continue
 		monstruo.destello = maxf(0.0, monstruo.destello - delta * 3.0)
 		monstruo.recarga -= delta
+		if monstruo.ardor > 0.0:
+			monstruo.ardor -= delta
+			if monstruo.ardor_fuego and monstruo.nodo.visible and randf() < delta * 14.0:
+				var chispa := Vector3(randf_range(-0.6, 0.6), randf_range(1.0, 2.0), randf_range(-0.6, 0.6))
+				mundo.crear_efecto(mundo.malla_humo, Color(1.0, randf_range(0.4, 0.75), 0.1, 0.9), mundo.a_3d(monstruo.pos, 0.8), chispa, 0.5, 0.3, 0.6)
+			danar(monstruo, monstruo.ardor_danio * delta, monstruo.ardor_de)
+			if not monstruo.viva:
+				continue
 		var agresor := monstruo.agresor
 		if agresor != null and (not is_instance_valid(agresor) or not agresor.viva or agresor.pos.distance_to(monstruo.guarida) > CORREA \
 				or moba.escondido(agresor)):
@@ -237,14 +279,17 @@ func _mostrar(monstruo: Monstruo, _delta: float) -> void:
 	var t := mundo.tiempo * (1.0 + monstruo.furia)
 	nodo.position = Vector3(sitio.x, mundo.altura_mar(sitio.x, sitio.z) - 0.25, sitio.z)
 	nodo.rotation.y = -monstruo.rumbo
+	var ultimo := monstruo.tramos.size() - 1
 	for k in monstruo.tramos.size():
 		var tramo := monstruo.tramos[k]
-		tramo.position.y = sin(t * 3.0 - k * 0.9) * 0.28
-		tramo.position.x = sin(t * 1.6 - k * 0.6) * 0.12 * k / 6.0
-	var alza := 0.5 + monstruo.furia * 0.35 + sin(t * 2.0) * 0.08
-	monstruo.cabeza.position.y = alza
-	monstruo.cabeza.rotation.x = -monstruo.furia * 0.25 + sin(t * 2.0) * 0.06 + (0.35 if monstruo.recarga > RECARGA_ESCUPIR - 0.25 else 0.0)
-	monstruo.cabeza.rotation.z = sin(t * 1.3) * 0.12
+		var cuerpo := minf(1.0, k / 3.0)
+		tramo.position.y = tramo.get_meta("base") + monstruo.furia * 0.3 * (1.0 - cuerpo) + sin(t * 3.0 - k * 0.5) * 0.16 * cuerpo
+		tramo.position.x = sin(t * 1.6 - k * 0.4) * 0.14 * k / ultimo
+	var escupe := monstruo.recarga > RECARGA_ESCUPIR - 0.3
+	monstruo.cabeza.position.y = 0.5 + monstruo.furia * 0.3 + sin(t * 2.0) * 0.06
+	monstruo.cabeza.rotation.x = -monstruo.furia * 0.2 + sin(t * 2.0) * 0.05 + (0.25 if escupe else 0.0)
+	monstruo.cabeza.rotation.z = sin(t * 1.3) * 0.1
+	monstruo.mandibula.rotation.x = 0.55 if escupe else 0.06 + monstruo.furia * 0.12 + sin(t * 2.4) * 0.04
 
 
 func _revivir(monstruo: Monstruo) -> void:
@@ -253,6 +298,7 @@ func _revivir(monstruo: Monstruo) -> void:
 	monstruo.pos = monstruo.guarida
 	monstruo.agresor = null
 	monstruo.furia = 0.0
+	monstruo.ardor = 0.0
 	monstruo.nodo.visible = true
 	mundo.salpicar(monstruo.pos, 10)
 
@@ -265,8 +311,27 @@ func recibir_bala(bala: Principal.Bala) -> bool:
 		if monstruo.viva and monstruo.pos.distance_to(bala.pos) < TIPOS[monstruo.tipo]["radio"] + 4.0:
 			danar(monstruo, mundo._danio_bala(bala), bala.dueno)
 			mundo.salpicar(bala.pos, 4)
+			if monstruo.viva and bala.tipo == "bola_fuego":
+				_encender(monstruo, Comercio.DURACION_FUEGO, Comercio.DANIO_FUEGO, true, bala.dueno)
+			elif monstruo.viva and bala.tipo == "cadenas":
+				_encender(monstruo, Moba.DURACION_ATRAPADO, Moba.DANIO_ATRAPADO, false, bala.dueno)
 			return true
 	return false
+
+
+func _encender(monstruo: Monstruo, dura: float, por_segundo: float, fuego: bool, atacante: Barco) -> void:
+	monstruo.ardor = dura
+	monstruo.ardor_danio = por_segundo * (atacante.factor_danio if is_instance_valid(atacante) else 1.0)
+	monstruo.ardor_fuego = fuego
+	monstruo.ardor_de = atacante
+
+
+func vivos_cerca(punto: Vector2, alcance: float) -> Array[Monstruo]:
+	var lista: Array[Monstruo] = []
+	for monstruo in monstruos:
+		if monstruo.viva and monstruo.pos.distance_to(punto) < alcance + TIPOS[monstruo.tipo]["radio"]:
+			lista.append(monstruo)
+	return lista
 
 
 # Daño de habilidades en área.
@@ -290,6 +355,7 @@ func _vencer(monstruo: Monstruo, verdugo: Barco) -> void:
 	monstruo.viva = false
 	monstruo.vida = 0.0
 	monstruo.agresor = null
+	monstruo.ardor = 0.0
 	monstruo.espera = REAPARICION
 	monstruo.nodo.visible = false
 	mundo.salpicar(monstruo.pos, 16)
@@ -297,7 +363,7 @@ func _vencer(monstruo: Monstruo, verdugo: Barco) -> void:
 	for _i in 10:
 		var vel := Vector3(randf_range(-1.6, 1.6), randf_range(2.0, 4.0), randf_range(-1.6, 1.6))
 		mundo.crear_efecto(mundo.malla_gota, Color(COLOR_PIEL.lightened(0.3), 0.9), centro, vel, 1.0, 1.4, 0.0, 9.0)
-	var cazador: Moba.Heroe = moba.de_barco.get(verdugo) if verdugo != null else null
+	var cazador: Moba.Heroe = moba.de_barco.get(verdugo) if is_instance_valid(verdugo) else null
 	if cazador == null:
 		return
 	moba._ganar_oro(cazador, datos["oro"], mundo.a_3d(monstruo.pos, 2.0))

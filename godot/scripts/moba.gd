@@ -1696,6 +1696,8 @@ func _tragar(zona: Zona, delta: float) -> void:
 			bote.destello = 0.5
 			if bote.vida <= 0.0:
 				_hundir_bote(i, dueno)
+	for monstruo in monstruos.vivos_cerca(zona.pos, radio):
+		monstruos.danar(monstruo, DANIO_REMOLINO * 1.5 * dueno.factor_danio * delta, dueno)
 	if randf() < delta * 12.0:
 		var a := randf() * TAU
 		mundo.salpicar(zona.pos + Vector2.from_angle(a) * radio * randf_range(0.4, 0.9), 1)
@@ -1746,6 +1748,8 @@ func _vigilar_mina(zona: Zona) -> bool:
 	for bote in botes:
 		if bote.equipo != zona.heroe.equipo and bote.pos.distance_to(zona.pos) < TOQUE_MINA:
 			toca = true
+	if not monstruos.vivos_cerca(zona.pos, TOQUE_MINA).is_empty():
+		toca = true
 	if not toca:
 		return true
 	var dueno := zona.heroe.barco
@@ -1778,6 +1782,11 @@ func _tormenta(heroe: Heroe) -> void:
 	for bote in cercanos:
 		if blancos.size() < RAYOS:
 			blancos.append(bote)
+	var bestias := monstruos.vivos_cerca(barco.pos, ALCANCE_RAYOS)
+	bestias.sort_custom(func(a: MonstruosMarinos.Monstruo, b: MonstruosMarinos.Monstruo) -> bool: return a.pos.distance_to(barco.pos) < b.pos.distance_to(barco.pos))
+	for bestia in bestias:
+		if blancos.size() < RAYOS:
+			blancos.append(bestia)
 	if blancos.is_empty():
 		var a := barco.rumbo
 		for k in RAYOS:
@@ -1797,6 +1806,8 @@ func _tormenta(heroe: Heroe) -> void:
 			blanco.destello = 1.0
 			if blanco.vida <= 0.0 and i >= 0:
 				_hundir_bote(i, barco)
+		elif blanco is MonstruosMarinos.Monstruo:
+			monstruos.danar(blanco, DANIO_RAYO * 1.5 * barco.factor_danio, barco)
 	mundo._sonar_en_vista(mundo.voces_trueno, barco.position, -4.0, -20.0, 60.0)
 
 
