@@ -70,12 +70,13 @@ const GIRO_HEROE := 1.5
 # a la proa, dispara el cañón de proa o la andanada de un costado.
 const BOTON_CANONES := Vector2(-108.0, -108.0)
 const RADIO_CANONES := 48.0
-# Como en los MOBA: la habilidad en arco arriba a la izquierda de los cañones y la tienda
-# (solo en la base) encima, separada para no pulsarla sin querer.
-const BOTON_HABILIDAD := Vector2(-212.0, -192.0)
-const BOTON_TIENDA := Vector2(-92.0, -262.0)
+# Como en los MOBA: las tres habilidades en arco alrededor de los cañones, curar y volver a
+# la base más a la izquierda y la tienda (solo en la base) arriba, separada para no pulsarla sin querer.
+const BOTONES_HABILIDAD: Array[Vector2] = [Vector2(-236.0, -98.0), Vector2(-204.0, -204.0), Vector2(-98.0, -236.0)]
+const BOTON_CURAR := Vector2(-326.0, -150.0)
+const BOTON_TIENDA := Vector2(-320.0, -262.0)
 # Volver a la base: el barco se sumerge unos segundos y sale a flote junto al nexo.
-const BOTON_REGRESO := Vector2(-300.0, -100.0)
+const BOTON_REGRESO := Vector2(-336.0, -60.0)
 const DURACION_REGRESO := 4.0
 const DURACION_EMERGER := 0.8
 const ALCANCE_CANON := Principal.VEL_BALA * Principal.VIDA_BALA
@@ -105,79 +106,89 @@ const ESTILO_OBJETO := {
 	"polvora": {"categoria": "Recarga", "color": Color("ffb347")},
 }
 const HABILIDADES := {
-	"impulso": {"nombre": "Viento a favor", "corto": "Impulso", "espera": 12.0,
+	"impulso": {"nombre": "Viento a favor", "corto": "Impulso", "espera": 11.0,
 		"info": "Tu barco vuela un 80% más rápido durante 3 segundos."},
-	"andanada": {"nombre": "Andanada circular", "corto": "Andanada", "espera": 14.0,
+	"andanada": {"nombre": "Andanada circular", "corto": "Andanada", "espera": 15.0,
 		"info": "Dispara 12 balas a la vez en todas las direcciones."},
 	"escudo": {"nombre": "Casco de hierro", "corto": "Escudo", "espera": 18.0,
 		"info": "Recibes un 60% menos de daño durante 4 segundos y reparas un 15%."},
 	"fuego": {"nombre": "Bola de fuego", "corto": "Fuego", "espera": 9.0, "apuntar": true,
 		"info": "Lanza una bola de fuego que daña al rival y lo deja ardiendo unos segundos."},
-	"cadenas": {"nombre": "Balas encadenadas", "corto": "Cadenas", "espera": 11.0, "apuntar": true,
+	"cadenas": {"nombre": "Balas encadenadas", "corto": "Cadenas", "espera": 12.0, "apuntar": true,
 		"info": "Lanza cadenas que atrapan al rival: lo frenan y lo dañan mientras siga atrapado."},
-	"reparar": {"nombre": "Marea curativa", "corto": "Curar", "espera": 16.0,
+	"reparar": {"nombre": "Marea curativa", "corto": "Marea", "espera": 20.0,
 		"info": "Repara un 30% tu barco y un 20% a los aliados cercanos."},
-	"remolino": {"nombre": "Remolino", "corto": "Remolino", "espera": 14.0, "apuntar": true, "area": 120.0, "alcance": 260.0,
+	"remolino": {"nombre": "Remolino", "corto": "Remolino", "espera": 16.0, "apuntar": true, "area": 120.0, "alcance": 260.0,
 		"info": "Abre un remolino donde apuntes que arrastra y daña a los rivales durante 4 segundos."},
 	"kraken": {"nombre": "Tentáculos del kraken", "corto": "Kraken", "espera": 13.0, "apuntar": true, "area": 95.0, "alcance": 260.0,
 		"info": "Los tentáculos salen del mar donde apuntes: golpean fuerte y dejan aturdido al rival."},
-	"minas": {"nombre": "Barriles explosivos", "corto": "Minas", "espera": 12.0,
+	"minas": {"nombre": "Barriles explosivos", "corto": "Minas", "espera": 14.0,
 		"info": "Suelta tres barriles a popa que estallan cuando un rival los toca."},
-	"niebla": {"nombre": "Velo de niebla", "corto": "Niebla", "espera": 16.0,
+	"niebla": {"nombre": "Velo de niebla", "corto": "Niebla", "espera": 19.0,
 		"info": "Te vuelves invisible 4 segundos y navegas un 30% más rápido: los rivales te pierden."},
 	"arpon": {"nombre": "Arpón ballenero", "corto": "Arpón", "espera": 10.0, "apuntar": true,
 		"info": "Lanza un arpón que daña al rival y lo arrastra hasta tu barco."},
-	"rayos": {"nombre": "Tormenta de rayos", "corto": "Rayos", "espera": 14.0,
+	"rayos": {"nombre": "Tormenta de rayos", "corto": "Rayos", "espera": 17.0,
 		"info": "Tres rayos caen sobre los rivales más cercanos."},
+	"metralla": {"nombre": "Metralla", "corto": "Metralla", "espera": 8.0, "apuntar": true, "alcance": 260.0,
+		"info": "Dispara un abanico de cinco balas hacia donde apuntes."},
+	"curar": {"nombre": "Reparar barco", "corto": "Reparar", "espera": 30.0,
+		"info": "Todos los capitanes la tienen: tu tripulación clava tablas nuevas y repara un 25% del barco."},
 }
+# Las tres habilidades de cada capitán van en estos huecos; la cuarta es siempre curar.
+const CURAR := "curar"
+const CURA_PROPIA := 0.25
+const BALAS_METRALLA := 5
+const ABANICO_METRALLA := 0.5
+const TECLAS_HABILIDAD: Array[Key] = [KEY_Q, KEY_E, KEY_R, KEY_F]
 # Capitanes del MOBA: cada uno con su barco (aspecto), su habilidad y su forma de navegar.
 # Todos los barcos tienen el mismo tamaño en este modo; cambia el diseño.
 const CAPITANES: Array[Dictionary] = [
-	{"id": "brisa", "nombre": "Capitana Brisa", "corto": "Brisa", "barco": "La Golondrina", "habilidad": "impulso",
+	{"id": "brisa", "nombre": "Capitana Brisa", "corto": "Brisa", "barco": "La Golondrina", "habilidad": "impulso", "extras": ["metralla", "niebla"],
 		"vida": 85.0, "velocidad": 50.0, "giro": 1.0, "info": "Rápida y escurridiza.",
 		"aspecto": {"tipo": "balandro", "casco": "marino", "adorno": "plata", "velas": "cielo", "bandera": "estrella", "proa": "sirena", "popa": "faroles", "canones": "plata"},
 		"figura": {"piel": "f1c7a0", "abrigo": "2f63c6", "sombrero": "1f3a6b", "pelo": "e8c070", "pluma": "f2f2f2", "barba": "", "parche": false, "melena": true, "saludo": "ola"}},
-	{"id": "barbanegra", "nombre": "Barbanegra", "corto": "Barbanegra", "barco": "La Venganza", "habilidad": "andanada",
+	{"id": "barbanegra", "nombre": "Barbanegra", "corto": "Barbanegra", "barco": "La Venganza", "habilidad": "andanada", "extras": ["metralla", "minas"],
 		"vida": 105.0, "velocidad": 42.0, "giro": 0.85, "info": "Pirata temido, todo cañones.",
 		"aspecto": {"tipo": "bergantin", "casco": "corsario", "adorno": "negro", "velas": "pirata", "bandera": "jolly_roger", "proa": "dragon", "popa": "castillo", "canones": "hierro"},
 		"figura": {"piel": "d9a27a", "abrigo": "1f1d22", "sombrero": "141414", "pelo": "141414", "pluma": "b5302a", "barba": "141414", "parche": true, "saludo": "espada"}},
-	{"id": "hierro", "nombre": "Almirante Hierro", "corto": "Hierro", "barco": "El Coloso", "habilidad": "escudo",
+	{"id": "hierro", "nombre": "Almirante Hierro", "corto": "Hierro", "barco": "El Coloso", "habilidad": "escudo", "extras": ["andanada", "cadenas"],
 		"vida": 140.0, "velocidad": 34.0, "giro": 0.72, "info": "Lento, pero casi imposible de hundir.",
 		"aspecto": {"tipo": "galeon", "casco": "real", "adorno": "oro", "velas": "cruzada", "bandera": "real", "proa": "aguila", "popa": "galeria", "canones": "oro"},
 		"figura": {"piel": "e8b892", "abrigo": "2a3f78", "sombrero": "1b1b1e", "pelo": "d8d8d8", "pluma": "e2b13a", "barba": "d8d8d8", "parche": false, "saludo": "militar"}},
-	{"id": "escarlata", "nombre": "Lady Escarlata", "corto": "Escarlata", "barco": "Rosa de Fuego", "habilidad": "fuego",
+	{"id": "escarlata", "nombre": "Lady Escarlata", "corto": "Escarlata", "barco": "Rosa de Fuego", "habilidad": "fuego", "extras": ["minas", "impulso"],
 		"vida": 100.0, "velocidad": 42.0, "giro": 0.85, "info": "Incendia de lejos a quien se le cruce.",
 		"aspecto": {"tipo": "bergantin", "casco": "carmesi", "adorno": "cobre", "velas": "sol_rojo", "bandera": "sol", "proa": "sirena", "popa": "faroles", "canones": "bronce"},
 		"figura": {"piel": "f3d0b0", "abrigo": "a8402f", "sombrero": "5a1830", "pelo": "c2453a", "pluma": "e2b13a", "barba": "", "parche": false, "melena": true, "saludo": "reverencia"}},
-	{"id": "cadenas", "nombre": "Capitán Cadenas", "corto": "Cadenas", "barco": "El Ancla Negra", "habilidad": "cadenas",
+	{"id": "cadenas", "nombre": "Capitán Cadenas", "corto": "Cadenas", "barco": "El Ancla Negra", "habilidad": "cadenas", "extras": ["arpon", "escudo"],
 		"vida": 130.0, "velocidad": 36.0, "giro": 0.75, "info": "Atrapa a sus presas para que no escapen.",
 		"aspecto": {"tipo": "galeon", "casco": "ebano", "adorno": "plata", "velas": "remendada", "bandera": "tibias", "proa": "espolon", "popa": "castillo", "canones": "hierro"},
 		"figura": {"piel": "8d5a3b", "abrigo": "55595e", "sombrero": "2e2b2b", "pelo": "2e2b2b", "pluma": "", "barba": "3b2a22", "parche": false, "saludo": "punos"}},
-	{"id": "coral", "nombre": "Abuela Coral", "corto": "Coral", "barco": "La Perla Verde", "habilidad": "reparar",
+	{"id": "coral", "nombre": "Abuela Coral", "corto": "Coral", "barco": "La Perla Verde", "habilidad": "reparar", "extras": ["escudo", "remolino"],
 		"vida": 95.0, "velocidad": 46.0, "giro": 0.95, "info": "Cuida de su armada en plena batalla.",
 		"aspecto": {"tipo": "balandro", "casco": "esmeralda", "adorno": "turquesa", "velas": "arena", "bandera": "ancla", "proa": "sencilla", "popa": "camarote", "canones": "bronce"},
 		"figura": {"piel": "e8b892", "abrigo": "2f8f6f", "sombrero": "e3cc98", "pelo": "f2f2f2", "pluma": "3fbfb0", "barba": "", "parche": false, "melena": true, "saludo": "abuela"}},
-	{"id": "marea", "nombre": "Madame Marea", "corto": "Marea", "barco": "El Remolino", "habilidad": "remolino",
+	{"id": "marea", "nombre": "Madame Marea", "corto": "Marea", "barco": "El Remolino", "habilidad": "remolino", "extras": ["niebla", "kraken"],
 		"vida": 100.0, "velocidad": 42.0, "giro": 0.85, "info": "Bruja del mar que manda en las corrientes.",
 		"aspecto": {"tipo": "bergantin_medusa", "casco": "g_amatista", "adorno": "g_lavanda", "velas": "g_luna_cielo_nieve", "bandera": "g_estrella_amatista_nieve", "proa": "sirena_amatista", "popa": "cupula_amatista", "canones": "g_lavanda"},
 		"figura": {"piel": "c98e6a", "abrigo": "3a2a6b", "sombrero": "1f1a3a", "pelo": "e8e8f5", "pluma": "a88ad8", "barba": "", "parche": false, "melena": true, "saludo": "conjuro"}},
-	{"id": "nautilo", "nombre": "Capitán Nautilo", "corto": "Nautilo", "barco": "El Abisal", "habilidad": "kraken",
+	{"id": "nautilo", "nombre": "Capitán Nautilo", "corto": "Nautilo", "barco": "El Abisal", "habilidad": "kraken", "extras": ["remolino", "arpon"],
 		"vida": 125.0, "velocidad": 36.0, "giro": 0.75, "info": "Domó al kraken y ahora navega con él.",
 		"aspecto": {"tipo": "galeon_kraken", "casco": "g_abismo", "adorno": "g_turquesa_claro", "velas": "g_marco_hielo_zafiro", "bandera": "g_tibias_abismo_hielo", "proa": "pulpo_esmeralda", "popa": "torre_hielo", "canones": "g_jade"},
 		"figura": {"piel": "e0b090", "abrigo": "1f5a6b", "sombrero": "103040", "pelo": "6b4a30", "pluma": "3fe0d0", "barba": "6b4a30", "parche": false, "saludo": "catalejo"}},
-	{"id": "mecha", "nombre": "Mecha Ruiz", "corto": "Mecha", "barco": "La Chispa", "habilidad": "minas",
+	{"id": "mecha", "nombre": "Mecha Ruiz", "corto": "Mecha", "barco": "La Chispa", "habilidad": "minas", "extras": ["metralla", "andanada"],
 		"vida": 90.0, "velocidad": 48.0, "giro": 0.95, "info": "Artillera loca: deja la pólvora a su paso.",
 		"aspecto": {"tipo": "balandro_centella", "casco": "caoba", "adorno": "g_fuego", "velas": "g_sol_fuego_nieve", "bandera": "g_cuadros_carbon_fuego", "proa": "toro_cobre", "popa": "toldo_granate", "canones": "g_fuego_oscuro"},
 		"figura": {"piel": "c58c64", "abrigo": "8a4a1a", "sombrero": "3a2a1a", "pelo": "1b1b1b", "pluma": "e0a030", "barba": "", "parche": true, "melena": true, "saludo": "baile"}},
-	{"id": "niebla", "nombre": "Dama Niebla", "corto": "Niebla", "barco": "El Susurro", "habilidad": "niebla",
+	{"id": "niebla", "nombre": "Dama Niebla", "corto": "Niebla", "barco": "El Susurro", "habilidad": "niebla", "extras": ["impulso", "metralla"],
 		"vida": 85.0, "velocidad": 50.0, "giro": 1.0, "info": "Nadie la ve llegar ni la ve irse.",
 		"aspecto": {"tipo": "bergantin_bruma", "casco": "fantasma", "adorno": "g_ceniza_claro", "velas": "g_mitad_ceniza_hielo", "bandera": "g_luna_turquesa_sombra", "proa": "angel_plata", "popa": "fanales_carbon", "canones": "plata"},
 		"figura": {"piel": "ece4f2", "abrigo": "4a5560", "sombrero": "2a2f36", "pelo": "1b1b1e", "pluma": "c9ced6", "barba": "", "parche": false, "melena": true, "saludo": "sigilo"}},
-	{"id": "olaf", "nombre": "Olaf el Ballenero", "corto": "Olaf", "barco": "La Ballena Blanca", "habilidad": "arpon",
+	{"id": "olaf", "nombre": "Olaf el Ballenero", "corto": "Olaf", "barco": "La Ballena Blanca", "habilidad": "arpon", "extras": ["cadenas", "escudo"],
 		"vida": 120.0, "velocidad": 38.0, "giro": 0.78, "info": "Cazador del norte: lo que arponea, no se escapa.",
 		"aspecto": {"tipo": "galeon_narval", "casco": "hueso", "adorno": "madera", "velas": "franjas_rojas", "bandera": "g_franjas_plata_zafiro", "proa": "vikingo_bronce", "popa": "cabana_bronce", "canones": "g_caoba"},
 		"figura": {"piel": "f0c8a8", "abrigo": "5a6b2f", "sombrero": "4a2a1a", "pelo": "e0a030", "pluma": "", "barba": "e0a030", "parche": false, "saludo": "arpon"}},
-	{"id": "trueno", "nombre": "Señor Trueno", "corto": "Trueno", "barco": "La Tempestad", "habilidad": "rayos",
+	{"id": "trueno", "nombre": "Señor Trueno", "corto": "Trueno", "barco": "La Tempestad", "habilidad": "rayos", "extras": ["impulso", "remolino"],
 		"vida": 105.0, "velocidad": 40.0, "giro": 0.82, "info": "Llama a la tormenta y la tormenta responde.",
 		"aspecto": {"tipo": "galeon_relampago", "casco": "g_zafiro", "adorno": "g_cielo_claro", "velas": "g_rombo_cielo_sombra", "bandera": "g_marco_carbon_hielo", "proa": "aguila_plata", "popa": "timonera_zafiro", "canones": "g_zafiro_claro"},
 		"figura": {"piel": "a87050", "abrigo": "c9a227", "sombrero": "1b1b1e", "pelo": "2e2b2b", "pluma": "6fe6ff", "barba": "2e2b2b", "parche": false, "saludo": "trueno"}},
@@ -285,7 +296,8 @@ class Heroe:
 	var oro := ORO_INICIAL
 	var objetos := {"casco": 0, "canones": 0, "velas": 0, "polvora": 0}
 	var reaparece := 0.0
-	var habilidad := 0.0
+	# Recarga de cada habilidad: las tres del capitán y curar.
+	var esperas: Array[float] = [0.0, 0.0, 0.0, 0.0]
 	var impulso := 0.0
 	var escudo := 0.0
 	# Cadenas: segundos que le quedan atrapado, quién lo atrapó y las cadenas que lo rodean.
@@ -344,9 +356,11 @@ var esfera := SphereMesh.new()
 var toro := TorusMesh.new()
 var toro_limite := TorusMesh.new()
 var disco_limite := CylinderMesh.new()
-var boton_habilidad: Button
+# Las tres habilidades del capitán y curar, en ese orden.
+var botones_habilidad: Array[Button] = []
 # Habilidades que se apuntan: un toque tira recto por la proa; si se mantiene, se apunta
-# arrastrando el dedo (o con el ratón mientras se aguanta la R) y se tira al soltar.
+# arrastrando el dedo (o con el ratón mientras se aguanta su tecla) y se tira al soltar.
+var ranura_apunte := 0
 var dedo_apunte := -1
 var tecla_apunte := false
 var centro_apunte := Vector2.ZERO
@@ -377,7 +391,8 @@ var botones_tienda := {}
 var panel_capitanes: PanelContainer
 var botones_capitan := {}
 var barras_capitan := {}
-var icono_detalle: Control
+var iconos_detalle: Array[Button] = []
+var detalle_elegido := 0
 var texto_capitan: Label
 var texto_habilidad: Label
 var texto_detalle: Label
@@ -999,7 +1014,8 @@ func actualizar(delta: float) -> void:
 func _atender(heroe: Heroe, delta: float) -> void:
 	var barco := heroe.barco
 	heroe.oro += ORO_POR_SEGUNDO * delta
-	heroe.habilidad = maxf(0.0, heroe.habilidad - delta)
+	for k in heroe.esperas.size():
+		heroe.esperas[k] = maxf(0.0, heroe.esperas[k] - delta)
 	if heroe.impulso > 0.0:
 		heroe.impulso -= delta
 		if heroe.impulso <= 0.0:
@@ -1513,8 +1529,12 @@ func pilotar(barco: Barco, delta: float) -> void:
 		if barco.vida >= barco.vida_max * 0.95:
 			heroe.retirada = false
 		else:
-			if barco.es_bot and heroe.capitan["habilidad"] in ["impulso", "escudo", "reparar", "niebla", "minas"] and heroe.habilidad <= 0.0 and rival_de(barco) != null:
-				usar_habilidad(heroe)
+			if barco.es_bot:
+				var lista := habilidades_de(heroe.capitan)
+				for ranura in lista.size():
+					if heroe.esperas[ranura] <= 0.0 and (lista[ranura] == CURAR or lista[ranura] in ["impulso", "escudo", "reparar", "niebla", "minas"] and rival_de(barco) != null):
+						usar_habilidad(heroe, ranura)
+						break
 			_navegar(barco, BASES[heroe.equipo] if avance < 350.0 else _punto_en(puntos, avance - 300.0), delta)
 			return
 	heroe.pensar -= delta
@@ -1662,13 +1682,23 @@ func _esquivar(barco: Barco) -> Vector2:
 # Habilidades
 
 # "hacia" es la dirección apuntada por el jugador; sin ella, los bots apuntan solos.
-func usar_habilidad(heroe: Heroe, hacia := Vector2.ZERO, largo := 1.0) -> void:
+func usar_habilidad(heroe: Heroe, ranura: int, hacia := Vector2.ZERO, largo := 1.0) -> void:
 	var barco := heroe.barco
-	if not barco.viva or heroe.habilidad > 0.0:
+	if not barco.viva or heroe.esperas[ranura] > 0.0:
 		return
-	var clave: String = heroe.capitan["habilidad"]
-	heroe.habilidad = ESPERA_ENSAYO if ensayo else HABILIDADES[clave]["espera"]
+	var clave := habilidad_en(heroe, ranura)
+	heroe.esperas[ranura] = ESPERA_ENSAYO if ensayo else HABILIDADES[clave]["espera"]
 	match clave:
+		"curar":
+			barco.vida = minf(barco.vida_max, barco.vida + barco.vida_max * CURA_PROPIA)
+			mundo._brillo_reparacion(barco.position + Vector3(0, 0.6, 0))
+			mundo.voz_equipar.play()
+		"metralla":
+			var centro := hacia if hacia != Vector2.ZERO else (_punto_objetivo(heroe, clave, Vector2.ZERO, 1.0, 0.3) - barco.pos).normalized()
+			for k in BALAS_METRALLA:
+				var direccion := centro.rotated(ABANICO_METRALLA * (k / float(BALAS_METRALLA - 1) - 0.5))
+				mundo.disparar_desde(barco.pos + direccion * barco.radio * 0.9, direccion, barco, null, barco.equipo, Principal.DANIO_BALA * 0.9 * barco.factor_danio)
+			mundo._sonar_en_vista(mundo.voces_canon, barco.position, -6.0, -22.0, 40.0)
 		"impulso":
 			heroe.impulso = DURACION_IMPULSO
 			_aplicar(heroe)
@@ -1720,6 +1750,18 @@ func usar_habilidad(heroe: Heroe, hacia := Vector2.ZERO, largo := 1.0) -> void:
 			mundo._sonar_en_vista(mundo.voces_canon, barco.position, -10.0, -26.0, 40.0)
 		"rayos":
 			_tormenta(heroe)
+
+
+static func habilidades_de(capitan: Dictionary) -> Array[String]:
+	var lista: Array[String] = [capitan["habilidad"]]
+	for clave in capitan["extras"]:
+		lista.append(clave)
+	lista.append(CURAR)
+	return lista
+
+
+func habilidad_en(heroe: Heroe, ranura: int) -> String:
+	return habilidades_de(heroe.capitan)[ranura]
 
 
 # Centro de un remolino o de los tentáculos: donde apuntó el jugador (a la distancia que
@@ -2363,44 +2405,44 @@ func _rayo() -> Node3D:
 
 
 func _usar_habilidad_bot(heroe: Heroe, datos: Array) -> void:
+	var lista := habilidades_de(heroe.capitan)
+	for ranura in lista.size():
+		if heroe.esperas[ranura] <= 0.0 and _conviene_habilidad(heroe, lista[ranura], datos):
+			usar_habilidad(heroe, ranura)
+			return
+
+
+func _conviene_habilidad(heroe: Heroe, clave: String, datos: Array) -> bool:
 	var barco := heroe.barco
-	if heroe.habilidad > 0.0:
-		return
 	var dist := barco.pos.distance_to(datos[0])
-	match heroe.capitan["habilidad"]:
+	match clave:
 		"impulso":
-			if heroe.blanco is Barco and dist > 260.0:
-				usar_habilidad(heroe)
+			return heroe.blanco is Barco and dist > 260.0
 		"andanada":
 			var cerca := _rivales_cerca(heroe, 200.0).size() * 2
 			for bote in botes:
 				if bote.equipo != heroe.equipo and bote.pos.distance_to(barco.pos) < 200.0:
 					cerca += 1
-			if cerca >= 3:
-				usar_habilidad(heroe)
+			return cerca >= 3
 		"fuego", "cadenas", "arpon":
-			if heroe.blanco is Barco and dist < ALCANCE_LANZADO * 0.9:
-				usar_habilidad(heroe)
-		"remolino", "kraken":
-			if heroe.blanco is Barco and dist < HABILIDADES[heroe.capitan["habilidad"]]["alcance"]:
-				usar_habilidad(heroe)
+			return heroe.blanco is Barco and dist < ALCANCE_LANZADO * 0.9
+		"remolino", "kraken", "metralla":
+			return heroe.blanco is Barco and dist < HABILIDADES[clave]["alcance"]
 		"minas":
-			if heroe.blanco is Barco and dist < 220.0 or heroe.blanco is Bote and dist < 120.0:
-				usar_habilidad(heroe)
+			return heroe.blanco is Barco and dist < 220.0 or heroe.blanco is Bote and dist < 120.0
 		"rayos":
-			if heroe.blanco is Barco and dist < ALCANCE_RAYOS * 0.9 or _rivales_cerca(heroe, ALCANCE_RAYOS).size() >= 2:
-				usar_habilidad(heroe)
+			return heroe.blanco is Barco and dist < ALCANCE_RAYOS * 0.9 or _rivales_cerca(heroe, ALCANCE_RAYOS).size() >= 2
 		"reparar":
 			var herido := barco.vida < barco.vida_max * 0.55
 			for otro in heroes:
 				if otro.equipo == heroe.equipo and otro.barco.viva and otro.barco.vida < otro.barco.vida_max * 0.45 \
 						and otro.barco.pos.distance_to(barco.pos) < ALCANCE_CURA:
 					herido = true
-			if herido:
-				usar_habilidad(heroe)
+			return herido
+		"curar":
+			return barco.vida < barco.vida_max * 0.45
 		_:
-			if barco.vida < barco.vida_max * 0.6 and dist < 300.0:
-				usar_habilidad(heroe)
+			return barco.vida < barco.vida_max * 0.6 and dist < 300.0
 
 
 func _comprar_bot(heroe: Heroe) -> void:
@@ -2447,9 +2489,7 @@ func texto_aviso() -> String:
 	if heroe != null and not heroe.barco.viva:
 		return ""
 	if ensayo:
-		if apuntable():
-			return tr("Ensayo: toca la habilidad para tirar recto o mantenla para apuntar")
-		return tr("Ensayo: usa tu habilidad con el botón o la tecla R")
+		return tr("Ensayo: prueba tus habilidades (Q, E, R y F para reparar); mantén las de apuntar y suelta")
 	return tr("Fuertes: %d contra %d") % [torres_en_pie(0), torres_en_pie(1)]
 
 
@@ -2466,7 +2506,8 @@ func _anunciar(texto: String, color: Color) -> void:
 	anuncio_vida = DURACION_ANUNCIO
 
 
-# Teclado: Espacio apunta los cañones con el ratón (al soltar, disparan), R usa la habilidad,
+# Teclado: Espacio apunta los cañones con el ratón (al soltar, disparan), Q, E y R usan las
+# habilidades y F cura,
 # T activa el piloto automático y B abre la tienda en la base (fuera de ella, vuelve a la base).
 func tecla(evento: InputEvent) -> bool:
 	var pulsada := evento as InputEventKey
@@ -2485,23 +2526,25 @@ func tecla(evento: InputEvent) -> bool:
 		if pulsada.pressed and boton_canones.visible and not ensayo:
 			cambiar_auto()
 		return true
-	if pulsada.keycode == KEY_R and apuntable():
-		if pulsada.pressed and _lista_para_apuntar():
-			_empezar_apunte()
-			tecla_apunte = true
-		elif not pulsada.pressed and tecla_apunte:
-			if sobre_cancelar(mundo.get_viewport().get_mouse_position()):
-				cancelar_apunte()
-			else:
-				tecla_apunte = false
-				_soltar_apunte()
+	var ranura := TECLAS_HABILIDAD.find(pulsada.keycode)
+	if ranura != -1:
+		if apuntable(ranura):
+			if pulsada.pressed and _lista_para_apuntar(ranura):
+				_empezar_apunte()
+				ranura_apunte = ranura
+				tecla_apunte = true
+			elif not pulsada.pressed and tecla_apunte and ranura == ranura_apunte:
+				if sobre_cancelar(mundo.get_viewport().get_mouse_position()):
+					cancelar_apunte()
+				else:
+					tecla_apunte = false
+					_soltar_apunte()
+		elif pulsada.pressed and botones_habilidad[ranura].visible:
+			_usar_jugador(ranura)
 		return true
 	if not pulsada.pressed:
 		return false
 	match pulsada.keycode:
-		KEY_R:
-			if boton_habilidad.visible:
-				_usar_jugador()
 		KEY_B:
 			if boton_tienda.visible:
 				abrir_tienda()
@@ -2516,8 +2559,12 @@ func tecla(evento: InputEvent) -> bool:
 
 func crear_interfaz(capa: CanvasLayer) -> void:
 	var comercio := mundo.comercio
-	boton_habilidad = comercio._boton_redondo(BOTON_HABILIDAD, _dibujar_habilidad, _usar_jugador)
-	capa.add_child(boton_habilidad)
+	botones_habilidad.clear()
+	for ranura in TECLAS_HABILIDAD.size():
+		var sitio := BOTON_CURAR if ranura == TECLAS_HABILIDAD.size() - 1 else BOTONES_HABILIDAD[ranura]
+		var boton := comercio._boton_redondo(sitio, _dibujar_habilidad.bind(ranura), _usar_jugador.bind(ranura))
+		capa.add_child(boton)
+		botones_habilidad.append(boton)
 	boton_canones = comercio._boton_redondo(BOTON_CANONES, _dibujar_canones, func() -> void: pass)
 	var lado := (RADIO_CANONES + 8.0) * 2.0
 	Ui.anclar(boton_canones, Vector2(1, 1), BOTON_CANONES - Vector2.ONE * lado / 2.0, Vector2.ONE * lado)
@@ -2586,7 +2633,7 @@ func _crear_seleccion(capa: CanvasLayer) -> void:
 	var cuerpo: VBoxContainer = partes[1]
 	cuerpo.add_theme_constant_override("separation", 6)
 	cuerpo.add_child(Ui.etiqueta_panel(tr("Elige tu capitán"), 34, Principal.COLOR_ORO))
-	cuerpo.add_child(Ui.etiqueta_panel(tr("Cada capitán navega su propio barco y tiene una habilidad única"), 17, Color("c9d1d3")))
+	cuerpo.add_child(Ui.etiqueta_panel(tr("Cada capitán tiene su barco y tres habilidades propias; todos pueden reparar el barco"), 17, Color("c9d1d3")))
 	var rejilla := GridContainer.new()
 	rejilla.columns = 6
 	rejilla.add_theme_constant_override("h_separation", 6)
@@ -2605,25 +2652,25 @@ func _crear_seleccion(capa: CanvasLayer) -> void:
 	texto_capitan = Ui.etiqueta_panel("", 20, Principal.COLOR_TEXTO)
 	cuerpo.add_child(texto_capitan)
 	var detalle := HBoxContainer.new()
-	detalle.add_theme_constant_override("separation", 14)
+	detalle.add_theme_constant_override("separation", 8)
 	cuerpo.add_child(detalle)
-	icono_detalle = Control.new()
-	icono_detalle.custom_minimum_size = Vector2(64, 64)
-	icono_detalle.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	icono_detalle.draw.connect(func() -> void:
-		var c := icono_detalle.size / 2.0
-		icono_detalle.draw_circle(c, 31.0, Principal.COLOR_ORO)
-		icono_detalle.draw_circle(c, 28.0, Color("16384a"))
-		dibujar_icono(icono_detalle, c, capitan_elegido()["habilidad"], 1.0))
-	detalle.add_child(icono_detalle)
-	var columna := VBoxContainer.new()
-	columna.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	columna.add_theme_constant_override("separation", 2)
-	detalle.add_child(columna)
-	texto_habilidad = Ui.etiqueta_panel("", 22, Principal.COLOR_ORO)
-	columna.add_child(texto_habilidad)
-	texto_detalle = Ui.etiqueta_panel("", 16, Principal.COLOR_TEXTO)
-	columna.add_child(texto_detalle)
+	iconos_detalle.clear()
+	for ranura in TECLAS_HABILIDAD.size():
+		var icono := Button.new()
+		icono.focus_mode = Control.FOCUS_NONE
+		icono.custom_minimum_size = Vector2(0, 64)
+		icono.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var vacio := StyleBoxEmpty.new()
+		for estado in ["normal", "hover", "pressed", "focus"]:
+			icono.add_theme_stylebox_override(estado, vacio)
+		icono.draw.connect(_dibujar_icono_detalle.bind(icono, ranura))
+		icono.pressed.connect(_ver_habilidad.bind(ranura))
+		detalle.add_child(icono)
+		iconos_detalle.append(icono)
+	texto_habilidad = Ui.etiqueta_panel("", 20, Principal.COLOR_ORO)
+	cuerpo.add_child(texto_habilidad)
+	texto_detalle = Ui.etiqueta_panel("", 15, Principal.COLOR_TEXTO)
+	cuerpo.add_child(texto_detalle)
 	for nombre in ["Vida", "Velocidad"]:
 		var fila := HBoxContainer.new()
 		fila.add_theme_constant_override("separation", 10)
@@ -2637,7 +2684,7 @@ func _crear_seleccion(capa: CanvasLayer) -> void:
 		fila.add_child(barra)
 		barras_capitan[nombre] = barra
 		cuerpo.add_child(fila)
-	var ensayar := Ui.boton(tr("Ensayar habilidad"), false)
+	var ensayar := Ui.boton(tr("Ensayar habilidades"), false)
 	ensayar.custom_minimum_size = Vector2(0, 50)
 	ensayar.add_theme_font_size_override("font_size", 22)
 	ensayar.pressed.connect(empezar_ensayo)
@@ -2702,15 +2749,34 @@ func elegir(id: String, con_sonido := true) -> void:
 		var boton: Button = botones_capitan[clave]
 		Ui.estilo_boton(boton, clave == id)
 		boton.queue_redraw()
-	var habilidad: Dictionary = HABILIDADES[capitan["habilidad"]]
-	texto_capitan.text = tr(capitan["nombre"]) + "  ·  " + tr(capitan["barco"])
-	texto_habilidad.text = tr(habilidad["nombre"])
-	texto_detalle.text = tr(habilidad["info"]) + "\n" + tr(capitan["info"])
+	texto_capitan.text = tr(capitan["nombre"]) + "  ·  " + tr(capitan["barco"]) + "\n" + tr(capitan["info"])
 	barras_capitan["Vida"].set_meta("avance", capitan["vida"] / 140.0)
 	barras_capitan["Velocidad"].set_meta("avance", capitan["velocidad"] / 50.0)
 	for barra in barras_capitan.values():
 		barra.queue_redraw()
-	icono_detalle.queue_redraw()
+	_ver_habilidad(0)
+
+
+# Al tocar una de las cuatro habilidades del panel se explica debajo.
+func _ver_habilidad(ranura: int) -> void:
+	detalle_elegido = ranura
+	var habilidad: Dictionary = HABILIDADES[habilidades_de(capitan_elegido())[ranura]]
+	texto_habilidad.text = tr(habilidad["nombre"]) + "  ·  " + tr("Recarga: %d s") % int(habilidad["espera"])
+	texto_detalle.text = tr(habilidad["info"])
+	for icono in iconos_detalle:
+		icono.queue_redraw()
+
+
+func _dibujar_icono_detalle(icono: Button, ranura: int) -> void:
+	var clave: String = habilidades_de(capitan_elegido())[ranura]
+	var c := Vector2(icono.size.x / 2.0, 26.0)
+	var marcado := ranura == detalle_elegido
+	icono.draw_circle(c, 25.0, Principal.COLOR_ORO if marcado else Color("4f6a72"))
+	icono.draw_circle(c, 22.0, Color("16384a"))
+	dibujar_icono(icono, c, clave, 1.0)
+	var texto := tr(HABILIDADES[clave]["corto"])
+	icono.draw_string(ThemeDB.fallback_font, Vector2(0, icono.size.y - 1), texto, HORIZONTAL_ALIGNMENT_CENTER, icono.size.x, 12,
+			Principal.COLOR_ORO if marcado else Color("c9d1d3"))
 
 
 # Al volver al menú el barco del muelle vuelve a ser el del jugador.
@@ -2850,8 +2916,9 @@ func cerrar_tienda() -> void:
 func ocultar() -> void:
 	cerrar_tienda()
 	cancelar_apunte()
-	if boton_habilidad != null:
-		boton_habilidad.visible = false
+	if not botones_habilidad.is_empty():
+		for boton in botones_habilidad:
+			boton.visible = false
 		boton_tienda.visible = false
 		boton_terminar.visible = false
 
@@ -2988,20 +3055,20 @@ func _habilitar_compra(heroe: Heroe, clave: String) -> void:
 	Ui.estilo_boton(boton, not bloqueado)
 
 
-func _usar_jugador() -> void:
+func _usar_jugador(ranura: int) -> void:
 	var heroe := heroe_jugador()
-	if heroe != null and not apuntable():
-		usar_habilidad(heroe)
+	if heroe != null and not apuntable(ranura):
+		usar_habilidad(heroe, ranura)
 
 
-func apuntable() -> bool:
+func apuntable(ranura: int) -> bool:
 	var heroe := heroe_jugador()
-	return heroe != null and HABILIDADES[heroe.capitan["habilidad"]].get("apuntar", false)
+	return heroe != null and HABILIDADES[habilidad_en(heroe, ranura)].get("apuntar", false)
 
 
-func _lista_para_apuntar() -> bool:
+func _lista_para_apuntar(ranura: int) -> bool:
 	var heroe := heroe_jugador()
-	return boton_habilidad.visible and heroe != null and heroe.habilidad <= 0.0 and dedo_apunte == -1 and not tecla_apunte
+	return botones_habilidad[ranura].visible and heroe != null and heroe.esperas[ranura] <= 0.0 and dedo_apunte == -1 and not tecla_apunte
 
 
 func _empezar_apunte() -> void:
@@ -3015,12 +3082,15 @@ func toque_habilidad(evento: InputEvent) -> bool:
 	var toque := evento as InputEventScreenTouch
 	if toque:
 		if toque.pressed:
-			if apuntable() and _lista_para_apuntar() and boton_habilidad.get_global_rect().grow(10.0).has_point(toque.position):
-				_empezar_apunte()
-				dedo_apunte = toque.index
-				centro_apunte = boton_habilidad.get_global_rect().get_center()
-				dedo_sitio = toque.position
-				return true
+			for ranura in botones_habilidad.size():
+				var boton := botones_habilidad[ranura]
+				if apuntable(ranura) and _lista_para_apuntar(ranura) and boton.get_global_rect().grow(6.0).has_point(toque.position):
+					_empezar_apunte()
+					ranura_apunte = ranura
+					dedo_apunte = toque.index
+					centro_apunte = boton.get_global_rect().get_center()
+					dedo_sitio = toque.position
+					return true
 		elif toque.index == dedo_apunte:
 			if sobre_cancelar(toque.position):
 				cancelar_apunte()
@@ -3060,7 +3130,7 @@ func _seguir_apunte(delta: float) -> void:
 func _soltar_apunte() -> void:
 	var heroe := heroe_jugador()
 	if heroe != null and heroe.barco.viva:
-		usar_habilidad(heroe, apunte if apunte != Vector2.ZERO else heroe.barco.proa(), apunte_largo)
+		usar_habilidad(heroe, ranura_apunte, apunte if apunte != Vector2.ZERO else heroe.barco.proa(), apunte_largo)
 	_empezar_apunte()
 
 
@@ -3077,7 +3147,7 @@ func mostrando_apunte() -> bool:
 # Botón pequeño encima del de la habilidad: soltar el dedo (o la tecla con el ratón) ahí
 # anula el tiro.
 func _boton_cancelar() -> Array:
-	var rect := boton_habilidad.get_global_rect()
+	var rect := botones_habilidad[ranura_apunte].get_global_rect()
 	var radio := rect.size.x * 0.3
 	return [rect.get_center() - Vector2(0.0, rect.size.y / 2.0 + radio + 18.0), radio]
 
@@ -3381,7 +3451,7 @@ func _direccion_en_mar(tiron: Vector2) -> Vector2:
 
 
 func _alcance_apunte(heroe: Heroe) -> float:
-	return HABILIDADES[heroe.capitan["habilidad"]].get("alcance", ALCANCE_LANZADO)
+	return HABILIDADES[habilidad_en(heroe, ranura_apunte)].get("alcance", ALCANCE_LANZADO)
 
 
 # Franja sobre el agua con la trayectoria del tiro mientras se apunta; con remolino o
@@ -3390,7 +3460,7 @@ func _dibujar_apunte(lienzo: Control, camara: Camera3D) -> void:
 	var barco := mundo.jugador
 	var heroe := heroe_jugador()
 	var hacia := apunte if apunte != Vector2.ZERO else barco.proa()
-	var datos: Dictionary = HABILIDADES[heroe.capitan["habilidad"]]
+	var datos: Dictionary = HABILIDADES[habilidad_en(heroe, ranura_apunte)]
 	var alcance := _alcance_apunte(heroe) * (apunte_largo if datos.has("area") else 1.0)
 	var puntos := PackedVector2Array()
 	for k in 13:
@@ -3422,7 +3492,9 @@ func _dibujar_apunte(lienzo: Control, camara: Camera3D) -> void:
 func _actualizar_interfaz() -> void:
 	var heroe := heroe_jugador()
 	var jugando := heroe != null and heroe.barco.viva and mundo.estado == Principal.Estado.JUGANDO and not mundo.panel_partida.visible
-	boton_habilidad.visible = jugando
+	for boton in botones_habilidad:
+		boton.visible = jugando
+		boton.queue_redraw()
 	boton_canones.visible = jugando
 	boton_canones.queue_redraw()
 	boton_regreso.visible = jugando and not ensayo and not en_fuente(heroe.barco)
@@ -3430,7 +3502,6 @@ func _actualizar_interfaz() -> void:
 	if mundo.estado != Principal.Estado.JUGANDO or ensayo:
 		auto = false
 	boton_terminar.visible = ensayo and mundo.estado == Principal.Estado.JUGANDO and not mundo.panel_partida.visible
-	boton_habilidad.queue_redraw()
 	boton_tienda.queue_redraw()
 	_pintar_limites()
 	boton_tienda.visible = jugando and en_fuente(heroe.barco)
@@ -3510,26 +3581,58 @@ static func dibujar_icono(lienzo: CanvasItem, c: Vector2, clave: String, alfa: f
 		"rayos":
 			var rayo := PackedVector2Array([c + Vector2(3, -15), c + Vector2(-7, 1), c + Vector2(0, 1), c + Vector2(-4, 15), c + Vector2(8, -3), c + Vector2(1, -3), c + Vector2(6, -15)])
 			lienzo.draw_colored_polygon(rayo, Color(Color("ffe24a"), alfa))
+		"metralla":
+			var boca := c + Vector2(0, 12)
+			for k in 5:
+				var punta := boca + Vector2.UP.rotated((k - 2) * 0.32) * 24.0
+				lienzo.draw_line(boca, punta, Color(trazo, alfa * 0.5), 1.5, true)
+				lienzo.draw_circle(punta, 3.0, trazo)
+			lienzo.draw_circle(boca, 4.0, trazo)
+		"curar":
+			# Dos tablas clavadas en cruz y un martillo encima.
+			var madera := Color(Color("c98a4b"), alfa)
+			var veta := Color(Color("7a4a24"), alfa)
+			for giro: float in [0.5, -0.5]:
+				var largo := Vector2.RIGHT.rotated(giro) * 13.0
+				var ancho := Vector2.DOWN.rotated(giro) * 4.0
+				var centro := c + Vector2(-2, 3)
+				var tabla := PackedVector2Array([centro - largo - ancho, centro + largo - ancho, centro + largo + ancho, centro - largo + ancho])
+				lienzo.draw_colored_polygon(tabla, madera)
+				lienzo.draw_polyline(tabla + PackedVector2Array([tabla[0]]), veta, 1.2, true)
+				for lado: float in [-0.75, 0.75]:
+					lienzo.draw_circle(centro + largo * lado, 1.5, Color(Color("d9dde2"), alfa))
+			var mango_desde := c + Vector2(3, -2)
+			var mango_hasta := c + Vector2(13, -12)
+			lienzo.draw_line(mango_desde, mango_hasta, Color(Color("8a5a32"), alfa), 3.0, true)
+			var cabeza := (mango_hasta - mango_desde).normalized().orthogonal()
+			lienzo.draw_line(mango_hasta - cabeza * 6.0, mango_hasta + cabeza * 6.0, Color(Color("b9c0c8"), alfa), 5.0, true)
 
 
 # Botón de la habilidad con su dibujo y la recarga como un reloj que se vacía.
-func _dibujar_habilidad() -> void:
+func _dibujar_habilidad(ranura: int) -> void:
 	var heroe := heroe_jugador()
 	if heroe == null:
 		return
-	var tipo: String = heroe.capitan["habilidad"]
-	var listo := heroe.habilidad <= 0.0
-	var c := mundo.comercio._fondo_boton(boton_habilidad, listo)
+	var boton := botones_habilidad[ranura]
+	var tipo := habilidad_en(heroe, ranura)
+	var espera := heroe.esperas[ranura]
+	var listo := espera <= 0.0
+	var c := mundo.comercio._fondo_boton(boton, listo)
 	var trazo := Color("fff3dc") if listo else Color(1, 1, 1, 0.45)
-	dibujar_icono(boton_habilidad, c + Vector2(0, -7), tipo, 1.0 if listo else 0.45)
-	if not listo:
-		var parte: float = heroe.habilidad / HABILIDADES[tipo]["espera"]
-		boton_habilidad.draw_arc(c, Comercio.RADIO_BOTON - 3.0, -PI / 2.0, -PI / 2.0 + TAU * parte, 32, Color(0, 0, 0, 0.55), 6.0, true)
-	var texto := str(ceili(heroe.habilidad)) if not listo else tr(HABILIDADES[tipo]["corto"])
+	dibujar_icono(boton, c + Vector2(0, -7), tipo, 1.0 if listo else 0.45)
 	var fuente := ThemeDB.fallback_font
+	if not listo:
+		var total: float = ESPERA_ENSAYO if ensayo else HABILIDADES[tipo]["espera"]
+		boton.draw_arc(c, Comercio.RADIO_BOTON - 3.0, -PI / 2.0, -PI / 2.0 + TAU * minf(1.0, espera / total), 32, Color(0, 0, 0, 0.55), 6.0, true)
+	var texto := str(ceili(espera)) if not listo else tr(HABILIDADES[tipo]["corto"])
 	var ancho := fuente.get_string_size(texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
-	boton_habilidad.draw_string_outline(fuente, c + Vector2(-ancho / 2.0, 22), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.8))
-	boton_habilidad.draw_string(fuente, c + Vector2(-ancho / 2.0, 22), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, trazo)
+	boton.draw_string_outline(fuente, c + Vector2(-ancho / 2.0, 22), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.8))
+	boton.draw_string(fuente, c + Vector2(-ancho / 2.0, 22), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, trazo)
+	if not OS.has_feature("mobile"):
+		var letra := OS.get_keycode_string(TECLAS_HABILIDAD[ranura])
+		var esquina := c + Vector2(Comercio.RADIO_BOTON * 0.62, -Comercio.RADIO_BOTON * 0.62)
+		boton.draw_circle(esquina, 9.0, Color(0.05, 0.12, 0.16, 0.95))
+		boton.draw_string(fuente, esquina + Vector2(-4.5, 4.5), letra, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Principal.COLOR_ORO)
 
 
 # Barras de vida de torres y botes, nivel de cada capitán, escudos y el anuncio.
