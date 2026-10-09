@@ -81,9 +81,11 @@ var agil := false
 var modelo: Node3D
 var desgaste: Desgaste
 var aro: MeshInstance3D
+# Aspecto de un barco lejano cuyo modelo aún no se ha montado; se monta con armar() al acercarse.
+var aspecto_pendiente: Personalizacion
 
 
-func preparar(aspecto: Personalizacion, jugador: bool, nuevo_mundo: Principal) -> void:
+func preparar(aspecto: Personalizacion, jugador: bool, nuevo_mundo: Principal, diferir := false) -> void:
 	mundo = nuevo_mundo
 	es_jugador = jugador
 	mando = Mando.LOCAL if jugador else Mando.BOT
@@ -91,10 +93,28 @@ func preparar(aspecto: Personalizacion, jugador: bool, nuevo_mundo: Principal) -
 	deriva = randf() * TAU
 	for arma in recargas:
 		recargas[arma] = 0.2
-	vestir(aspecto)
+	vestir(aspecto, diferir)
 
 
-func vestir(aspecto: Personalizacion) -> void:
+func sin_modelo() -> bool:
+	return aspecto_pendiente != null
+
+
+# Monta el modelo y el desgaste que vestir() dejó para cuando el barco se viera.
+func armar() -> void:
+	if aspecto_pendiente == null:
+		return
+	modelo = ModeloBarco.crear(aspecto_pendiente)
+	aspecto_pendiente = null
+	add_child(modelo)
+	desgaste = Desgaste.new()
+	add_child(desgaste)
+	desgaste.preparar(mundo, tipo)
+	if not es_jugador:
+		mundo.islas.preparar_aparicion(self, "MeshInstance3D")
+
+
+func vestir(aspecto: Personalizacion, diferir := false) -> void:
 	tipo = aspecto.tipo
 	var datos: Dictionary = TIPOS[tipo]
 	vida_max = datos["vida"]
@@ -112,13 +132,20 @@ func vestir(aspecto: Personalizacion) -> void:
 	altura = datos["altura"]
 	if modelo != null:
 		modelo.queue_free()
-	modelo = ModeloBarco.crear(aspecto)
-	add_child(modelo)
+		modelo = null
 	if desgaste != null:
 		desgaste.queue_free()
-	desgaste = Desgaste.new()
-	add_child(desgaste)
-	desgaste.preparar(mundo, tipo)
+		desgaste = null
+	aspecto_pendiente = aspecto
+	if diferir:
+		visible = false
+	else:
+		modelo = ModeloBarco.crear(aspecto)
+		aspecto_pendiente = null
+		add_child(modelo)
+		desgaste = Desgaste.new()
+		add_child(desgaste)
+		desgaste.preparar(mundo, tipo)
 	if es_jugador:
 		_crear_aro()
 
@@ -263,7 +290,8 @@ func colocar(delta: float) -> void:
 	var escora := escora_ola + vel_giro * 0.18 * marcha
 	position = Vector3(centro.x, flotacion + vaiven * 0.06 * marcha - hundimiento * 2.6 - sumergido * sumergido * 4.5, centro.y)
 	rotation = Vector3(cabeceo + hundimiento * 0.35, -rumbo, escora + hundimiento * 0.8)
-	desgaste.actualizar(delta, 1.0 - vida / vida_max, hundimiento)
+	if desgaste != null:
+		desgaste.actualizar(delta, 1.0 - vida / vida_max, hundimiento)
 	if aro != null:
 		aro.visible = viva and not mundo.en_puerto()
 		aro.global_position = Vector3(position.x, h_centro + 0.14, position.z)

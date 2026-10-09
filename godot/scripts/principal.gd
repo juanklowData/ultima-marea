@@ -72,6 +72,8 @@ const VIDA_COFRE := 45.0
 const BOTS_CON_COFRE := 0.2
 # Tamaño de las tablas y cofres que flotan (solo el dibujo; se recogen igual de cerca).
 const ESCALA_FLOTANTES := 0.6
+# Gotas, humo, espuma y astillas a la vez, por nivel de gráficos; los que pasen no se crean.
+const MAX_EFECTOS: Array[int] = [90, 140, 220, 320]
 const ESPERA_BUSQUEDA := 4.0
 const ESPERA_BOTS := 1.4
 const NOMBRES_PIRATAS: Array[String] = [
@@ -171,6 +173,7 @@ var balas: Array = []
 var tablas: Array = []
 var cofres: Array = []
 var efectos: Array = []
+var reserva_efectos: Array = []
 var islotes: Array[Circulo]:
 	get:
 		return islas.islotes
@@ -670,8 +673,13 @@ func _process(delta: float) -> void:
 		_amarrar()
 
 	var vista := alcance_vista()
+	# Como mucho un modelo nuevo por cuadro, y un poco antes de que entre en pantalla.
 	for barco in barcos:
-		var cerca := a_3d(barco.pos).distance_to(Vector3(foco.x, 0.0, foco.z)) < vista
+		if barco.sin_modelo() and barco.viva and _por_armar(barco):
+			barco.armar()
+			break
+	for barco in barcos:
+		var cerca := not barco.sin_modelo() and a_3d(barco.pos).distance_to(Vector3(foco.x, 0.0, foco.z)) < vista
 		if cerca or barco == jugador:
 			barco.colocar(delta)
 		barco.visible = (cerca or barco == jugador) and barco.hundimiento < 1.0 \
@@ -750,6 +758,14 @@ func paso_lejano(cosa, indice: int, delta: float) -> float:
 	var paso: float = cosa.pendiente
 	cosa.pendiente = 0.0
 	return paso
+
+
+func _a_la_vista(sitio: Vector3) -> bool:
+	return Vector2(sitio.x - foco.x, sitio.z - foco.z).length() < alcance_vista() + 5.0
+
+
+func _por_armar(barco: Barco) -> bool:
+	return a_3d(barco.pos).distance_to(Vector3(foco.x, 0.0, foco.z)) < alcance_vista() * 1.3
 
 
 func a_3d(punto: Vector2, altura := 0.0) -> Vector3:
@@ -1108,30 +1124,35 @@ func _malla(padre: Node3D, forma: Mesh, color: Color, pos: Vector3, textura := "
 	return pieza
 
 
-func _crear_tabla() -> Node3D:
-	var nodo := Node3D.new()
-	var tabla := BoxMesh.new()
-	tabla.size = Vector3(1.0, 0.08, 0.22)
-	for i in 3:
-		var pieza := _malla(nodo, tabla, COLORES_TABLA[i], Vector3(randf_range(-0.06, 0.06), 0.0, (i - 1) * 0.25), "madera")
-		pieza.rotation.y = randf_range(-0.08, 0.08)
-	var travesano := BoxMesh.new()
-	travesano.size = Vector3(0.12, 0.06, 0.8)
-	for lado in [-1.0, 1.0]:
-		_malla(nodo, travesano, Color("5e4028"), Vector3(lado * 0.32, 0.07, 0.0), "madera")
+var mallas_tabla := {}
 
-	var aro := TorusMesh.new()
-	aro.inner_radius = 0.82
-	aro.outer_radius = 0.95
-	aro.rings = 32
-	aro.ring_segments = 4
-	var brillo := StandardMaterial3D.new()
-	brillo.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	brillo.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	brillo.albedo_color = Color(1.0, 0.85, 0.4, 0.7)
+
+func _crear_tabla() -> Node3D:
+	if mallas_tabla.is_empty():
+		var tabla := BoxMesh.new()
+		tabla.size = Vector3(1.0, 0.08, 0.22)
+		var travesano := BoxMesh.new()
+		travesano.size = Vector3(0.12, 0.06, 0.8)
+		var aro := TorusMesh.new()
+		aro.inner_radius = 0.82
+		aro.outer_radius = 0.95
+		aro.rings = 32
+		aro.ring_segments = 4
+		var brillo := StandardMaterial3D.new()
+		brillo.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		brillo.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		brillo.albedo_color = Color(1.0, 0.85, 0.4, 0.7)
+		mallas_tabla = {"tabla": tabla, "travesano": travesano, "aro": aro, "brillo": brillo}
+	var nodo := Node3D.new()
+	for i in 3:
+		var pieza := _malla(nodo, mallas_tabla["tabla"], COLORES_TABLA[i], Vector3(randf_range(-0.06, 0.06), 0.0, (i - 1) * 0.25), "madera")
+		pieza.rotation.y = randf_range(-0.08, 0.08)
+	for lado in [-1.0, 1.0]:
+		_malla(nodo, mallas_tabla["travesano"], Color("5e4028"), Vector3(lado * 0.32, 0.07, 0.0), "madera")
+
 	var anillo := MeshInstance3D.new()
-	anillo.mesh = aro
-	anillo.material_override = brillo
+	anillo.mesh = mallas_tabla["aro"]
+	anillo.material_override = mallas_tabla["brillo"]
 	anillo.scale = Vector3(1.0, 0.2, 1.0)
 	anillo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	nodo.add_child(anillo)
@@ -1430,7 +1451,7 @@ func _preparar_mar(carga: PantallaCarga) -> void:
 	await _avanzar_carga(carga, "Llamando a los piratas...", 0.6)
 	var nombres := _nombres_bots(TOTAL_BARCOS - 1)
 	for i in range(1, TOTAL_BARCOS):
-		var bot := _crear_barco(Personalizacion.al_azar(), false, _punto_libre(300.0, alcance))
+		var bot := _crear_barco(Personalizacion.al_azar(), false, _punto_libre(300.0, alcance), true)
 		bot.nombre = nombres[i - 1]
 		bot.botin = randi_range(0, BOTIN_INICIAL_BOTS)
 		bot.es_bot = true
@@ -1441,6 +1462,12 @@ func _preparar_mar(carga: PantallaCarga) -> void:
 			await get_tree().process_frame
 	for barco in barcos:
 		Moba.ritmo_heroe(barco)
+	# Solo se montan ya los rivales que se verán al zarpar; los demás, al acercarse.
+	foco = jugador.position
+	for barco in barcos:
+		if barco.sin_modelo() and _por_armar(barco):
+			barco.armar()
+			await get_tree().process_frame
 	peligros.apartar_krakens()
 	await _avanzar_carga(carga, "Soltando tiburones y barriles...", 0.88)
 	for _i in TOTAL_TABLAS:
@@ -1484,7 +1511,7 @@ func _vaciar_mar() -> void:
 	avisos_botin.clear()
 	botin_perdido = 0
 	for efecto in efectos:
-		efecto.nodo.queue_free()
+		_guardar_efecto(efecto)
 	efectos.clear()
 	fauna.limpiar()
 
@@ -1505,13 +1532,13 @@ func _vaciar_mar() -> void:
 	rayo_vida = 0.0
 
 
-func _crear_barco(aspecto: Personalizacion, es_jugador: bool, pos: Vector2) -> Barco:
+func _crear_barco(aspecto: Personalizacion, es_jugador: bool, pos: Vector2, diferir := false) -> Barco:
 	var barco := Barco.new()
 	barco.pos = pos
 	barco.rumbo = randf_range(-PI, PI)
 	capa_barcos.add_child(barco)
-	barco.preparar(aspecto, es_jugador, self)
-	if not es_jugador:
+	barco.preparar(aspecto, es_jugador, self, diferir)
+	if not es_jugador and not diferir:
 		islas.preparar_aparicion(barco, "MeshInstance3D")
 	barco.colocar(0.0)
 	barcos.append(barco)
@@ -1608,6 +1635,9 @@ func _actualizar_tablas(delta: float) -> void:
 				if tabla.vel.length() < 2.0:
 					tabla.vel = Vector2.ZERO
 		var sitio := a_3d(tabla.pos)
+		tabla.nodo.visible = _a_la_vista(sitio)
+		if not tabla.nodo.visible:
+			continue
 		var hundida := clampf((tabla.edad - VIDA_RESTOS + 2.0) / 2.0, 0.0, 1.0)
 		tabla.nodo.position = a_3d(tabla.pos, 0.1 + altura_mar(sitio.x, sitio.z) - hundida * 0.6)
 		tabla.nodo.rotation.y += delta * 0.5
@@ -2011,6 +2041,10 @@ func _actualizar_cofres(delta: float) -> void:
 		cofre.pos += (peligros.arrastre(cofre.pos) + peligros.viento(cofre.pos) * 0.5 + cofre.vel) * delta
 		cofre.vel *= maxf(0.0, 1.0 - delta * 1.5)
 		var sitio := a_3d(cofre.pos)
+		cofre.nodo.visible = _a_la_vista(sitio)
+		if not cofre.nodo.visible:
+			cofre.nodo.position = sitio
+			continue
 		var hundido := clampf((cofre.edad - vida + 3.0) / 3.0, 0.0, 1.0)
 		cofre.nodo.position = a_3d(cofre.pos, altura_mar(sitio.x, sitio.z) - 0.1 - hundido * 0.9)
 		cofre.nodo.rotation = Vector3(sin(tiempo * 1.6 + cofre.fase) * 0.12, cofre.nodo.rotation.y + delta * 0.4, cos(tiempo * 1.3 + cofre.fase) * 0.1)
@@ -2266,22 +2300,16 @@ func _tocar_final(evento: InputEvent) -> void:
 # Efectos
 
 func crear_efecto(forma: Mesh, color: Color, pos: Vector3, vel: Vector3, vida: float, escala: float, crece: float, gravedad := 0.0, sombreado := false) -> void:
-	if pos.distance_to(foco) > _alcance_efectos():
+	if pos.distance_to(foco) > _alcance_efectos() or efectos.size() >= MAX_EFECTOS[nivel_graficos]:
 		return
-	var efecto := Efecto.new()
-	efecto.material = StandardMaterial3D.new()
-	efecto.material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	if not sombreado:
-		efecto.material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var efecto: Efecto = reserva_efectos.pop_back() if not reserva_efectos.is_empty() else _nuevo_efecto()
+	efecto.material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL if sombreado else BaseMaterial3D.SHADING_MODE_UNSHADED
 	efecto.material.albedo_color = color
-	efecto.nodo = MeshInstance3D.new()
 	efecto.nodo.mesh = forma
-	efecto.nodo.material_override = efecto.material
-	efecto.nodo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	efecto.nodo.visible = true
 	efecto.nodo.position = pos
 	efecto.nodo.scale = Vector3.ONE * escala
 	efecto.nodo.rotation = Vector3(randf() * TAU, randf() * TAU, 0.0) if forma == malla_astilla else Vector3.ZERO
-	add_child(efecto.nodo)
 	efecto.color = color
 	efecto.vel = vel
 	efecto.vida = vida
@@ -2306,8 +2334,26 @@ func _actualizar_efectos(delta: float) -> void:
 		color.a *= resto
 		efecto.material.albedo_color = color
 		if efecto.vida <= 0.0:
-			efecto.nodo.queue_free()
+			_guardar_efecto(efecto)
 			efectos.remove_at(i)
+
+
+# Los efectos acabados se esconden y se reutilizan: crear y borrar nodos y materiales
+# cientos de veces por segundo da tirones en el móvil.
+func _nuevo_efecto() -> Efecto:
+	var efecto := Efecto.new()
+	efecto.material = StandardMaterial3D.new()
+	efecto.material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	efecto.nodo = MeshInstance3D.new()
+	efecto.nodo.material_override = efecto.material
+	efecto.nodo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(efecto.nodo)
+	return efecto
+
+
+func _guardar_efecto(efecto: Efecto) -> void:
+	efecto.nodo.visible = false
+	reserva_efectos.append(efecto)
 
 
 func dejar_estela(pos: Vector2, fuerza: float) -> void:
