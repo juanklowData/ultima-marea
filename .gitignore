@@ -8,11 +8,15 @@ android_builds/
 ios_builds/
 *.keystore
 *.jks
+UltimaMarea_iPhone/
 
 # Descargas en bruto y copias de seguridad locales
 descargas_musica/
 muestras_musica/
 respaldo_codigo_*/
+_tmp_claude/
+*.bundle
+_byop_cambios.tar.gz
 
 # Archivos de prueba temporales
 prueba_temporal.gd
