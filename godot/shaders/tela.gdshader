@@ -4,6 +4,8 @@ render_mode cull_disabled;
 uniform sampler2D dibujo : source_color, filter_linear_mipmap;
 // 0 = vela (se hincha y riza por el centro); 1 = bandera (ondea desde el asta, en UV.x = 1).
 uniform float ondear = 0.0;
+// Lona pintada a mano (res://texturas/tela.png); blanca si no se asigna.
+uniform sampler2D lona : hint_default_white, filter_linear_mipmap, repeat_enable;
 
 void vertex() {
 	vec3 origen = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
@@ -19,7 +21,9 @@ void vertex() {
 
 void fragment() {
 	vec4 color = texture(dibujo, UV);
-	ALBEDO = color.rgb;
+	// La lona se repite tres veces por vela; se divide por su brillo medio para no oscurecer.
+	vec3 trama = texture(lona, UV * vec2(3.0, 3.0)).rgb / 0.82;
+	ALBEDO = color.rgb * mix(vec3(1.0), trama, 1.0 - ondear * 0.5);
 	ROUGHNESS = 0.95;
 	SPECULAR = 0.2;
 }

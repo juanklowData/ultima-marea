@@ -133,7 +133,7 @@ func crear_interfaz(capa: CanvasLayer) -> void:
 func abrir() -> void:
 	cerrar()
 	mundo._mostrar(Principal.Estado.RED)
-	texto_capitan.text = tr("Tu capitán: %s") % tr(mundo.moba.capitan_elegido()["nombre"])
+	texto_capitan.text = tr("Tu dios: %s") % tr(mundo.moba.capitan_elegido()["nombre"])
 	_escuchar()
 	_pintar()
 	_pintar_lista()

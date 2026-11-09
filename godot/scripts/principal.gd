@@ -228,6 +228,7 @@ var niebla: Niebla
 var recompensas: Recompensas
 var emotes: Emotes
 var moba: Moba
+var superv: Supervivencia
 var red: Red
 var libre: MarLibre
 var fauna: Fauna
@@ -449,6 +450,10 @@ const EFECTOS_VISUALES := {
 	"suavizado": ["Bordes suaves", 3],
 	"brillo": ["Brillo", 4],
 	"lejos": ["Vista lejana", 3],
+	# Contorno de tinta de cuento ilustrado: dobla el dibujo de barcos e islas.
+	"contornos": ["Contornos", 2],
+	# Filtro de pantalla con el estilo propio del juego (acuarela, tinta y papel).
+	"cuento": ["Estilo cuento", 1],
 }
 
 
@@ -474,6 +479,8 @@ func aplicar_graficos() -> void:
 	sol.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL if nivel <= 2 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sol.directional_shadow_max_distance = 60.0 if nivel <= 2 else 90.0
 	entorno.glow_enabled = efecto_visual("brillo")
+	Texturas.poner_contornos(efecto_visual("contornos"))
+	_poner_filtro_cuento(efecto_visual("cuento"))
 	entorno.adjustment_enabled = efecto_visual("colores")
 	camara.far = 400.0 if efecto_visual("lejos") else [140.0, 180.0, 260.0, 400.0][nivel]
 	var mar := calidad_mar()
@@ -514,6 +521,38 @@ func _cobertura_pantalla() -> Vector2:
 	var lado := largo * cos(medio) * tan(medio) * aspecto
 	var delante := alto / tan(borde) - atras
 	return Vector2(Vector2(largo, lado).length(), Vector2(delante, lado).length())
+
+
+# Capa con el filtro de "cuento pintado" encima del 3D y debajo de la interfaz.
+var filtro_cuento: CanvasLayer
+
+
+func _poner_filtro_cuento(encendido: bool) -> void:
+	if filtro_cuento == null:
+		if not encendido:
+			return
+		filtro_cuento = CanvasLayer.new()
+		filtro_cuento.layer = -1
+		var lienzo := ColorRect.new()
+		lienzo.set_anchors_preset(Control.PRESET_FULL_RECT)
+		lienzo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var materia := ShaderMaterial.new()
+		materia.shader = load("res://shaders/cuento.gdshader")
+		if ResourceLoader.exists("res://texturas/papel.png"):
+			materia.set_shader_parameter("papel", load("res://texturas/papel.png"))
+		lienzo.material = materia
+		filtro_cuento.add_child(lienzo)
+		add_child(filtro_cuento)
+	filtro_cuento.visible = encendido
+
+
+# Metros desde el foco hasta donde se arman las islas. En la supervivencia solo lo que cabe
+# en pantalla (con la cámara más alejada) y un margen: lo demás se arma al acercarse y se
+# descarga al alejarse, para que los móviles modestos no carguen el mar entero.
+func alcance_construccion() -> float:
+	if modo == "supervivencia" and not efecto_visual("lejos"):
+		return minf(alcance_vista(), cobertura.y + 6.0)
+	return alcance_vista()
 
 
 # Metros desde el foco hasta donde se dibujan barcos e islas en partida.
@@ -663,9 +702,9 @@ func _process(delta: float) -> void:
 		return
 	delta = minf(delta, 0.05)
 	tiempo += delta
-	if estado == Estado.JUGANDO:
+	if estado == Estado.JUGANDO and not superv.pausado():
 		_actualizar(delta)
-	else:
+	elif estado != Estado.JUGANDO:
 		golpe = maxf(0.0, golpe - delta)
 	if estado == Estado.BUSCANDO:
 		_avanzar_busqueda(delta)
@@ -697,13 +736,17 @@ func _process(delta: float) -> void:
 		comercio.animar(delta)
 	elif modo == "moba":
 		comercio.animar_llamas(delta)
+	elif modo == "supervivencia":
+		comercio.animar_llamas(delta)
+		moba.canones_tormenta(delta)
+		superv.animar(delta)
 	else:
 		moba.canones_tormenta(delta)
 	fauna.animar(delta)
 	emotes.actualizar(delta)
 	# En puerto la cámara mira al horizonte y las islas se ven más lejos.
 	var en_partida := estado == Estado.JUGANDO or estado == Estado.FIN
-	islas.recortar(delta, foco, vista + 8.0 if en_partida else 170.0)
+	islas.recortar(delta, foco, alcance_construccion() + 8.0 if en_partida else 170.0)
 	_actualizar_tormenta(delta)
 	_actualizar_agua()
 
@@ -718,6 +761,8 @@ func _actualizar(delta: float) -> void:
 		libre.actualizar(delta)
 	elif modo == "moba":
 		moba.actualizar(delta)
+	elif modo == "supervivencia":
+		superv.actualizar(delta)
 	else:
 		_mover_zona(delta)
 	for i in barcos.size():
@@ -732,7 +777,8 @@ func _actualizar(delta: float) -> void:
 		peligros.actualizar(delta)
 		tiburones.actualizar(delta)
 		barriles.actualizar(delta)
-		misiones.actualizar(delta)
+		if modo != "supervivencia":
+			misiones.actualizar(delta)
 	_separar_barcos()
 	_recoger_tablas()
 	_recoger_cofres()
@@ -805,6 +851,8 @@ func destino_bot(barco: Barco) -> Vector2:
 func rival_de(barco: Barco) -> Barco:
 	if modo == "moba":
 		return moba.rival_de(barco)
+	if modo == "supervivencia":
+		return superv.rival_de(barco)
 	return libre.rival_de(barco) if modo == "libre" else rival_mas_cercano(barco)
 
 
@@ -836,6 +884,8 @@ func _crear_escena() -> void:
 	add_child(emotes)
 	moba = Moba.new()
 	add_child(moba)
+	superv = Supervivencia.new()
+	add_child(superv)
 	red = Red.new()
 	red.name = "Red"
 	add_child(red)
@@ -860,6 +910,7 @@ func _crear_escena() -> void:
 	recompensas.preparar(self)
 	emotes.preparar(self)
 	moba.preparar(self)
+	superv.preparar(self)
 	red.preparar(self)
 	libre.preparar(self)
 	fauna.preparar(self)
@@ -1110,7 +1161,7 @@ func material(color: Color, textura := "general") -> StandardMaterial3D:
 		nuevo.albedo_color = Paleta.armonizar(color)
 		nuevo.roughness = ASPEREZA.get(textura, 0.75)
 		nuevo.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-		Texturas.aplicar(nuevo, textura)
+		Texturas.aplicar(nuevo, Texturas.tipo_de_color(color) if textura == "general" else textura)
 		materiales[clave] = nuevo
 	return materiales[clave]
 
@@ -1440,6 +1491,9 @@ func _preparar_mar(carga: PantallaCarga) -> void:
 		foco = jugador.position
 		camara.position = jugador.position + Vector3(0.0, 5.0, 11.0)
 		return
+	if modo == "supervivencia":
+		await _preparar_supervivencia(carga)
+		return
 	await _avanzar_carga(carga, "Levantando las islas...", 0.15)
 	islas.generar()
 	peligros.reiniciar()
@@ -1481,6 +1535,29 @@ func _preparar_mar(carga: PantallaCarga) -> void:
 
 
 
+# Único modo de juego: el barco del dios solo en el mar, los piratas llegan en oleadas.
+func _preparar_supervivencia(carga: PantallaCarga) -> void:
+	await _avanzar_carga(carga, "Levantando las islas...", 0.15)
+	islas.generar()
+	peligros.reiniciar()
+	misiones.vaciar()
+	var capitan := moba.capitan_elegido()
+	jugador = _crear_barco(Moba.aspecto_de(capitan), true, _punto_libre(100.0, ZONA_INICIAL * 0.3))
+	jugador.nombre = tr(capitan["nombre"])
+	await islas.construir_cerca(jugador.pos * ESCALA, alcance_construccion(),
+			func(parte: float) -> void: carga.paso(tr("Levantando las islas..."), lerpf(0.15, 0.7, parte)))
+	await _avanzar_carga(carga, "Despertando a los dioses...", 0.75)
+	superv.empezar(capitan)
+	peligros.apartar_krakens()
+	await _avanzar_carga(carga, "Soltando tiburones y barriles...", 0.88)
+	for _i in TOTAL_TABLAS:
+		_soltar_tabla()
+	tiburones.reiniciar()
+	barriles.reiniciar()
+	foco = jugador.position
+	camara.position = jugador.position + Vector3(0.0, 5.0, 11.0)
+
+
 func _danio_bala(bala: Bala) -> float:
 	if bala.danio >= 0.0:
 		return bala.danio
@@ -1494,6 +1571,7 @@ func _vaciar_mar() -> void:
 	persecucion.vaciar()
 	emotes.vaciar()
 	moba.vaciar()
+	superv.vaciar()
 	niebla.vaciar()
 	tesoros.vaciar()
 	for barco in barcos:
@@ -1772,6 +1850,9 @@ func disparar(barco: Barco, arma: String, hacia := Vector2.ZERO) -> void:
 	if hacia != Vector2.ZERO:
 		direccion = hacia.normalized()
 	salidas = salidas.slice(0, cuantas)
+	var con_bendiciones := modo == "supervivencia" and barco == jugador
+	if con_bendiciones:
+		superv.balas_extra(barco, direccion, salidas)
 	for k in salidas.size():
 		var bala := Bala.new()
 		bala.pos = salidas[k]
@@ -1779,10 +1860,13 @@ func disparar(barco: Barco, arma: String, hacia := Vector2.ZERO) -> void:
 		bala.vida = VIDA_BALA
 		bala.dueno = barco
 		bala.tipo = tipo
+		if con_bendiciones:
+			bala.tipo = superv.tipo_bala()
+			bala.vida = superv.vida_bala()
 		bala.equipo = barco.equipo
 		bala.nodo = MeshInstance3D.new()
 		bala.nodo.mesh = malla_bala
-		bala.nodo.material_override = comercio.material_bala(tipo) if tipo != "" else material(Color("1d2024"))
+		bala.nodo.material_override = comercio.material_bala(bala.tipo) if bala.tipo != "" else material(Color("1d2024"))
 		bala.nodo.position = a_3d(bala.pos, 1.0)
 		add_child(bala.nodo)
 		balas.append(bala)
@@ -2110,6 +2194,8 @@ func al_hundirse(barco: Barco) -> void:
 		libre.al_hundirse(barco, verdugo)
 	elif modo == "moba":
 		moba.al_hundirse(barco, verdugo)
+	elif modo == "supervivencia":
+		superv.al_hundirse(barco, verdugo)
 	tesoros.soltar_todos(barco)
 	if modo == "libre":
 		comercio.al_hundirse(barco)
@@ -2153,6 +2239,10 @@ func _revisar_fin(delta: float) -> void:
 				else:
 					titulo_final.text = tr("Derrota")
 					texto_final.text = tr("La armada rival derribó tu nexo.")
+			elif modo == "supervivencia":
+				superv.terminar()
+				titulo_final.text = "[salto]%s[/salto]" % tr("¡Sobreviviste!") if resultado == "victoria" else tr("Hundido")
+				texto_final.text = superv.texto_final()
 			elif resultado == "victoria":
 				titulo_final.text = "[salto]%s[/salto]" % tr("Victoria")
 				texto_final.text = tr("Tu barco quedó solo en el mar.")
@@ -2168,6 +2258,16 @@ func _revisar_fin(delta: float) -> void:
 			resultado = "victoria" if moba.ganador == jugador.equipo else "hundido"
 			puesto = 1 if moba.ganador == jugador.equipo else 25
 			cierre = 2.5
+		return
+	if modo == "supervivencia":
+		if not jugador.viva:
+			resultado = "hundido"
+			puesto = superv.puesto()
+			cierre = 2.0
+		elif superv.ganado:
+			resultado = "victoria"
+			puesto = 1
+			cierre = 1.5
 		return
 	var vivos := _contar_vivos()
 	if not jugador.viva:
@@ -2495,10 +2595,12 @@ func _input(event: InputEvent) -> void:
 	if modo == "libre" and comercio.tecla(event):
 		get_viewport().set_input_as_handled()
 		return
+	if modo == "supervivencia" and estado == Estado.JUGANDO and superv.toque(event):
+		return
 	if modo == "moba" and (moba.tecla(event) or moba.toque_habilidad(event) or moba.toque_canones(event) or moba.toque_auto(event)):
 		get_viewport().set_input_as_handled()
 		return
-	if modo == "tormenta" and (moba.tecla_canones(event) or moba.toque_canones(event)):
+	if (modo == "tormenta" or modo == "supervivencia") and (moba.tecla_canones(event) or moba.toque_canones(event)):
 		get_viewport().set_input_as_handled()
 		return
 
@@ -2667,6 +2769,7 @@ func _crear_interfaz() -> void:
 	misiones.crear_interfaz(capa)
 	emotes.crear_interfaz(capa)
 	moba.crear_interfaz(capa)
+	superv.crear_interfaz(capa)
 	red.crear_interfaz(capa)
 
 
@@ -2765,10 +2868,12 @@ func _crear_menu(capa: CanvasLayer) -> void:
 	var modos := HBoxContainer.new()
 	modos.add_theme_constant_override("separation", 10)
 	cuerpo.add_child(modos)
-	for nombre in ["tormenta", "moba"]:
+	for nombre in ["supervivencia"]:
 		var boton_modo := _tarjeta_modo(nombre)
-		if nombre == "moba":
+		if nombre == "moba" or nombre == "supervivencia":
 			boton_modo.pressed.connect(func() -> void: moba.abrir_seleccion())
+		elif nombre == "tierra":
+			boton_modo.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://escenas/moba_tierra.tscn"))
 		else:
 			boton_modo.pressed.connect(_buscar_partida.bind(nombre))
 		modos.add_child(boton_modo)
@@ -2816,7 +2921,9 @@ func _ficha_tesoro(fila: HBoxContainer, icono: TextureRect, color: Color) -> Lab
 const MODOS_MENU := {
 	"tormenta": {"nombre": "Tormenta", "info": "Esquiva la tormenta", "color": Color("6a55d8")},
 	"libre": {"nombre": "Libre", "info": "Explora y comercia", "color": Color("1f9e8c")},
-	"moba": {"nombre": "MOBA 1v1", "info": "Capitanes frente a frente", "color": Color("d0533f")},
+	"moba": {"nombre": "MOBA de Dioses", "info": "Dioses frente a frente", "color": Color("d0533f")},
+	"supervivencia": {"nombre": "¡A la mar!", "info": "Tu dios contra oleadas de piratas malditos", "color": Color("1f8a9e")},
+	"tierra": {"nombre": "MOBA en Tierra", "info": "Dioses 5 contra 5 a pie", "color": Color("4f9a3a")},
 }
 
 
@@ -2879,9 +2986,29 @@ func _dibujar_modo(boton: Button, nombre: String) -> void:
 				var cruz := mango.lerp(punta, 0.22)
 				boton.draw_line(cruz - guarda, cruz + guarda, COLOR_ORO, 3.0, true)
 				boton.draw_circle(mango, 2.5, COLOR_ORO)
+		"supervivencia":
+			# Un tridente dorado sobre las olas.
+			for k in 3:
+				var x := (k - 1) * 9.0
+				boton.draw_line(c + Vector2(x, -2), c + Vector2(x, -20), COLOR_ORO, 3.0, true)
+				boton.draw_colored_polygon(PackedVector2Array([c + Vector2(x - 4, -18), c + Vector2(x + 4, -18), c + Vector2(x, -26)]), COLOR_ORO)
+			boton.draw_line(c + Vector2(-10, -2), c + Vector2(10, -2), COLOR_ORO, 3.0, true)
+			boton.draw_line(c + Vector2(0, -2), c + Vector2(0, 20), COLOR_ORO, 3.0, true)
+			for k in 3:
+				boton.draw_arc(c + Vector2(-14 + k * 14, 18), 7.0, PI, TAU, 8, Color("8ff0ff"), 2.5, true)
+		"tierra":
+			# Una torre de piedra con su cristal, sobre la hierba.
+			boton.draw_rect(Rect2(c + Vector2(-16, 10), Vector2(32, 6)), Color("6fd06b"))
+			boton.draw_colored_polygon(PackedVector2Array([c + Vector2(-8, 10), c + Vector2(8, 10), c + Vector2(6, -6), c + Vector2(-6, -6)]), Color("dfe6ee"))
+			boton.draw_rect(Rect2(c + Vector2(-10, -10), Vector2(20, 5)), Color("b8c0c8"))
+			boton.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -24), c + Vector2(6, -15), c + Vector2(0, -11), c + Vector2(-6, -15)]), Color("8fd8ff"))
 	var fuente := ThemeDB.fallback_font
-	boton.draw_string_outline(fuente, Vector2(0, 95), tr(datos["nombre"]), HORIZONTAL_ALIGNMENT_CENTER, ancho, 21, 6, Color(0, 0, 0, 0.6))
-	boton.draw_string(fuente, Vector2(0, 95), tr(datos["nombre"]), HORIZONTAL_ALIGNMENT_CENTER, ancho, 21, Color.WHITE)
+	var nombre_modo := tr(datos["nombre"])
+	var tam_letra := 21
+	while tam_letra > 13 and fuente.get_string_size(nombre_modo, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_letra).x > ancho - 10:
+		tam_letra -= 1
+	boton.draw_string_outline(fuente, Vector2(0, 95), nombre_modo, HORIZONTAL_ALIGNMENT_CENTER, ancho, tam_letra, 6, Color(0, 0, 0, 0.6))
+	boton.draw_string(fuente, Vector2(0, 95), nombre_modo, HORIZONTAL_ALIGNMENT_CENTER, ancho, tam_letra, Color.WHITE)
 	boton.draw_string(fuente, Vector2(4, 116), tr(datos["info"]), HORIZONTAL_ALIGNMENT_CENTER, ancho - 8, 12, Color(1, 1, 1, 0.75))
 
 
@@ -3295,7 +3422,7 @@ func _crear_busqueda(capa: CanvasLayer) -> void:
 
 func _buscar_partida(nuevo_modo := "tormenta") -> void:
 	modo = nuevo_modo
-	titulo_busqueda.text = "MAR LIBRE" if modo == "libre" else ("1 CONTRA 1" if modo == "moba" else "TODOS CONTRA TODOS")
+	titulo_busqueda.text = "MAR LIBRE" if modo == "libre" else ("1 CONTRA 1" if modo == "moba" else ("MAR MALDITO" if modo == "supervivencia" else "TODOS CONTRA TODOS"))
 	campo_nombre.release_focus()
 	tiempo_busqueda = 0.0
 	_mostrar(Estado.BUSCANDO)
@@ -3315,10 +3442,17 @@ func _avanzar_busqueda(delta: float) -> void:
 		else:
 			_zarpar()
 		return
+	if modo == "supervivencia":
+		if tiempo_busqueda < 1.0:
+			texto_busqueda.text = tr("Invocando a los dioses") + puntos
+			texto_jugadores.text = superv.texto_records()
+		else:
+			_zarpar()
+		return
 	if modo == "moba":
 		if tiempo_busqueda < 1.4:
 			texto_busqueda.text = tr("Formando las armadas") + puntos
-			texto_jugadores.text = tr("Tu barco azul contra el barco rojo: un capitán por bando")
+			texto_jugadores.text = tr("Tu barco azul contra el barco rojo: un dios por bando")
 		elif tiempo_busqueda < 3.0:
 			texto_busqueda.text = tr("Completando con bots") + puntos
 			texto_jugadores.text = tr("Derriba los fuertes de cada carril y luego el nexo enemigo para ganar.")
@@ -3851,6 +3985,11 @@ func _pintar_hud() -> void:
 		cifra_hundidos.text = str(marcador.x)
 		cifra_veces_hundido.text = str(marcador.y)
 		return
+	if modo == "supervivencia":
+		texto_vivos.text = superv.texto_estado()
+		texto_tormenta.text = peligro if peligro != "" else superv.texto_aviso()
+		texto_mision.visible = false
+		return
 	texto_vivos.text = tr("A flote: %d") % _contar_vivos()
 	if peligro != "":
 		texto_tormenta.text = peligro
@@ -3901,7 +4040,7 @@ func _dibujar_marcadores() -> void:
 	misiones.dibujar(marcadores, camara)
 	if modo == "moba":
 		moba.dibujar(marcadores, camara)
-	elif modo == "tormenta":
+	elif modo == "tormenta" or modo == "supervivencia":
 		moba.dibujar_apunte_tormenta(marcadores, camara)
 	if modo == "libre":
 		libre.dibujar(marcadores, camara)

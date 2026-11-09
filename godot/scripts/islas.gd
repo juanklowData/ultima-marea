@@ -55,6 +55,8 @@ var algas: Array[ArrayMesh] = []
 # Mallas sueltas del fondo: rama, esfera, semiesfera, caja, cono.
 var piezas_fondo := {}
 var espera_recorte := 0.0
+# Metros 3D más allá del margen de construir a partir de los que una isla se descarga.
+const DISTANCIA_DESCARGA := 15.0
 # Islas ya repartidas cuyo modelo aún no se ha construido porque quedan lejos.
 var pendientes: Array[Circulo] = []
 # Solo en el puerto: el muelle y el ángulo de la orilla de donde sale (NAN en partida).
@@ -127,12 +129,39 @@ func construir_cerca(punto: Vector2, alcance: float, avance := Callable()) -> vo
 
 func _a_la_vista(isla: Circulo, punto: Vector2, alcance: float) -> bool:
 	var r := isla.radio * Principal.ESCALA
-	return (isla.pos * Principal.ESCALA).distance_to(punto) < alcance + MARGEN_CONSTRUIR + maxf(r * ALCANCE_ORILLA * 1.15, r + alcance_fondo(r))
+	return (isla.pos * Principal.ESCALA).distance_to(punto) < alcance + _margen() + maxf(r * ALCANCE_ORILLA * 1.15, r + alcance_fondo(r))
 
 
+# En la supervivencia se arma más justo (el alcance ya es la pantalla): menos objetos a la vez.
+func _margen() -> float:
+	return 8.0 if mundo.modo == "supervivencia" else MARGEN_CONSTRUIR
+
+
+# Cada isla se arma siempre con la misma semilla (sale de su posición), así al volver a
+# construirla tras descargarla queda idéntica.
 func _construir(isla: Circulo) -> void:
 	pendientes.erase(isla)
-	add_child(_crear_rocas(isla) if isla.radio <= RADIO_ROCAS else _crear_isla(isla))
+	var orillas_antes := materiales_orilla.size()
+	seed(hash(Vector2i(roundi(isla.pos.x), roundi(isla.pos.y))))
+	var nodo := _crear_rocas(isla) if isla.radio <= RADIO_ROCAS else _crear_isla(isla)
+	randomize()
+	nodo.set_meta("circulo", isla)
+	nodo.set_meta("orillas", materiales_orilla.slice(orillas_antes))
+	add_child(nodo)
+
+
+# Descarga una isla que quedó muy lejos: se borra su modelo (y sus animales) y vuelve a la
+# lista de pendientes para armarse otra vez si el barco regresa. Así en un mar grande solo
+# existe en memoria lo que está cerca, que es lo que salva a los móviles modestos.
+func _descargar(nodo: Node3D) -> void:
+	var isla: Circulo = nodo.get_meta("circulo")
+	for materia in nodo.get_meta("orillas", []):
+		materiales_orilla.erase(materia)
+	mundo.fauna.olvidar(nodo)
+	remove_child(nodo)
+	nodo.queue_free()
+	if not pendientes.has(isla):
+		pendientes.append(isla)
 
 
 # El puerto del menú: una sola isla con su muelle, que sale de su orilla oeste, su
@@ -199,10 +228,18 @@ func recortar(delta: float, foco: Vector3, alcance: float) -> void:
 			espera_recorte = 0.05
 			break
 	var cercanas: Array = []
+	var descargada := false
 	for nodo: Node3D in get_children():
 		var r: float = nodo.get_meta("radio", 0.0)
 		var lejos := Vector2(nodo.position.x, nodo.position.z).distance_to(foco_plano)
-		nodo.visible = lejos < alcance + maxf(r * ALCANCE_ORILLA * 1.15, r + alcance_fondo(r))
+		var borde := alcance + maxf(r * ALCANCE_ORILLA * 1.15, r + alcance_fondo(r))
+		# Muy lejos (más allá del margen de construir y algo más, para no armar y desarmar
+		# la misma isla al ir y venir por el borde): se descarga, como mucho una por vuelta.
+		if not descargada and nodo.has_meta("circulo") and lejos > borde + _margen() + DISTANCIA_DESCARGA:
+			_descargar(nodo)
+			descargada = true
+			continue
+		nodo.visible = lejos < borde
 		if nodo.visible:
 			cercanas.append([lejos, nodo])
 	cercanas.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
@@ -478,6 +515,8 @@ static func hondura_fondo(t: float) -> float:
 # Lecho de arena que baja desde la orilla, con corales, algas, anémonas y estrellas.
 # Con el agua opaca del estilo retro no se vería: no se crea.
 func _fondo(nodo: Node3D, r: float, isla: Circulo, cantidad: int) -> void:
+	# Con gráficos bajos el fondo lleva menos corales y algas: son muchos objetos pequeños.
+	cantidad = maxi(2, roundi(cantidad * [0.35, 0.6, 1.0, 1.0][mundo.nivel_graficos]))
 	if not FONDO_VISIBLE:
 		return
 	if material_fondo == null:
@@ -549,7 +588,7 @@ func _preparar_fondo() -> void:
 	material_fondo.vertex_color_use_as_albedo = true
 	material_fondo.vertex_color_is_srgb = true
 	material_fondo.roughness = 0.95
-	Texturas.aplicar(material_fondo, "arena")
+	Texturas.aplicar(material_fondo, "arena", false)
 	material_alga = ShaderMaterial.new()
 	material_alga.shader = SHADER_ALGA
 	var rama := CylinderMesh.new()
@@ -814,7 +853,7 @@ func _preparar_palmeras() -> void:
 	material_tronco.vertex_color_use_as_albedo = true
 	material_tronco.vertex_color_is_srgb = true
 	material_tronco.roughness = 0.9
-	Texturas.aplicar(material_tronco, "madera")
+	Texturas.aplicar(material_tronco, "corteza")
 	material_hojas = ShaderMaterial.new()
 	material_hojas.shader = SHADER_PALMERA
 	malla_coco = SphereMesh.new()

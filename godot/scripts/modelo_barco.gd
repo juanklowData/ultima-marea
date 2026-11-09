@@ -990,8 +990,7 @@ static func _material(color: Color, brilla := false) -> StandardMaterial3D:
 			material.emission = color
 			material.emission_energy_multiplier = 1.4
 		else:
-			var marron := color.h < 0.13 and color.s > 0.2 and color.v < 0.75
-			Texturas.aplicar(material, "madera" if marron else "general")
+			Texturas.aplicar(material, Texturas.tipo_de_color(color))
 		_materiales[clave] = material
 	return _materiales[clave]
 
@@ -1003,6 +1002,8 @@ static func _material_tela(dibujo: Texture2D, bandera := false) -> ShaderMateria
 		material.shader = SHADER_TELA
 		material.set_shader_parameter("dibujo", dibujo)
 		material.set_shader_parameter("ondear", 1.0 if bandera else 0.0)
+		if ResourceLoader.exists("res://texturas/tela.png"):
+			material.set_shader_parameter("lona", load("res://texturas/tela.png"))
 		_materiales[clave] = material
 	return _materiales[clave]
 
@@ -1014,6 +1015,6 @@ static func _material_vertices() -> StandardMaterial3D:
 		material.vertex_color_is_srgb = true
 		material.roughness = 0.75
 		material.cull_mode = BaseMaterial3D.CULL_DISABLED
-		Texturas.aplicar(material, "madera")
+		Texturas.aplicar(material, "casco")
 		_materiales["vertices"] = material
 	return _materiales["vertices"]

@@ -106,82 +106,82 @@ const ESTILO_OBJETO := {
 	"polvora": {"categoria": "Recarga", "color": Color("ffb347")},
 }
 const HABILIDADES := {
-	"impulso": {"nombre": "Viento a favor", "corto": "Impulso", "espera": 11.0,
-		"info": "Tu barco vuela un 80% más rápido durante 3 segundos."},
-	"andanada": {"nombre": "Andanada circular", "corto": "Andanada", "espera": 15.0,
+	"impulso": {"nombre": "Vuelo de Ehécatl", "corto": "Vuelo", "espera": 11.0,
+		"info": "El viento de Ehécatl empuja tu barco: vuela un 80% más rápido durante 3 segundos."},
+	"andanada": {"nombre": "Furia de Ares", "corto": "Furia", "espera": 15.0,
 		"info": "Dispara 12 balas a la vez en todas las direcciones."},
-	"escudo": {"nombre": "Casco de hierro", "corto": "Escudo", "espera": 18.0,
-		"info": "Recibes un 60% menos de daño durante 4 segundos y reparas un 15%."},
-	"fuego": {"nombre": "Bola de fuego", "corto": "Fuego", "espera": 9.0, "apuntar": true,
-		"info": "Lanza una bola de fuego que daña al rival y lo deja ardiendo unos segundos."},
-	"cadenas": {"nombre": "Balas encadenadas", "corto": "Cadenas", "espera": 12.0, "apuntar": true,
-		"info": "Lanza cadenas que atrapan al rival: lo frenan y lo dañan mientras siga atrapado."},
-	"reparar": {"nombre": "Marea curativa", "corto": "Marea", "espera": 20.0,
-		"info": "Repara un 30% tu barco y un 20% a los aliados cercanos."},
-	"remolino": {"nombre": "Remolino", "corto": "Remolino", "espera": 16.0, "apuntar": true, "area": 120.0, "alcance": 260.0,
+	"escudo": {"nombre": "Égida", "corto": "Égida", "espera": 18.0,
+		"info": "El escudo de Atenea te cubre: recibes un 60% menos de daño durante 4 segundos y reparas un 15%."},
+	"fuego": {"nombre": "Disco solar", "corto": "Sol", "espera": 9.0, "apuntar": true,
+		"info": "Lanza un disco de sol ardiente que daña al rival y lo deja ardiendo unos segundos."},
+	"cadenas": {"nombre": "Vendas del embalsamador", "corto": "Vendas", "espera": 12.0, "apuntar": true,
+		"info": "Lanza vendas de momia que atrapan al rival: lo frenan y lo dañan mientras siga atrapado."},
+	"reparar": {"nombre": "Aguas de Iguaque", "corto": "Iguaque", "espera": 20.0,
+		"info": "Las aguas sagradas de la laguna reparan un 30% tu barco y un 20% a los aliados cercanos."},
+	"remolino": {"nombre": "Torbellino del tridente", "corto": "Torbellino", "espera": 16.0, "apuntar": true, "area": 120.0, "alcance": 260.0,
 		"info": "Abre un remolino donde apuntes que arrastra y daña a los rivales durante 4 segundos."},
-	"kraken": {"nombre": "Tentáculos del kraken", "corto": "Kraken", "espera": 13.0, "apuntar": true, "area": 95.0, "alcance": 260.0,
-		"info": "Los tentáculos salen del mar donde apuntes: golpean fuerte y dejan aturdido al rival."},
-	"minas": {"nombre": "Barriles explosivos", "corto": "Minas", "espera": 14.0,
-		"info": "Suelta tres barriles a popa que estallan cuando un rival los toca."},
-	"niebla": {"nombre": "Velo de niebla", "corto": "Niebla", "espera": 19.0,
+	"kraken": {"nombre": "Hijos de Tiamat", "corto": "Monstruos", "espera": 13.0, "apuntar": true, "area": 95.0, "alcance": 260.0,
+		"info": "Los monstruos de Tiamat salen del mar donde apuntes: golpean fuerte y dejan aturdido al rival."},
+	"minas": {"nombre": "Bombas de lava", "corto": "Lava", "espera": 14.0,
+		"info": "Suelta tres rocas de lava a popa que estallan cuando un rival las toca."},
+	"niebla": {"nombre": "Disfraz de Loki", "corto": "Disfraz", "espera": 19.0,
 		"info": "Te vuelves invisible 4 segundos y navegas un 30% más rápido: los rivales te pierden."},
-	"arpon": {"nombre": "Arpón ballenero", "corto": "Arpón", "espera": 10.0, "apuntar": true,
-		"info": "Lanza un arpón que daña al rival y lo arrastra hasta tu barco."},
-	"rayos": {"nombre": "Tormenta de rayos", "corto": "Rayos", "espera": 17.0,
+	"arpon": {"nombre": "Gungnir", "corto": "Gungnir", "espera": 10.0, "apuntar": true,
+		"info": "Odín arroja su lanza, que daña al rival y lo arrastra hasta tu barco."},
+	"rayos": {"nombre": "Ira de Mjölnir", "corto": "Mjölnir", "espera": 17.0,
 		"info": "Tres rayos caen sobre los rivales más cercanos."},
-	"metralla": {"nombre": "Metralla", "corto": "Metralla", "espera": 8.0, "apuntar": true, "alcance": 260.0,
-		"info": "Dispara un abanico de cinco balas hacia donde apuntes."},
+	"metralla": {"nombre": "Lanzas de bronce", "corto": "Lanzas", "espera": 8.0, "apuntar": true, "alcance": 260.0,
+		"info": "Lanza un abanico de cinco lanzas hacia donde apuntes."},
 	# Las que siguen son exclusivas de un capitán. "tipo" dice cómo funcionan: un pulso alrededor
 	# del barco, un impacto donde se apunta (tras un aviso), una mejora temporal o una ráfaga.
-	"ventarron": {"nombre": "Ventarrón", "corto": "Ventarrón", "espera": 13.0, "tipo": "pulso", "radio": 170.0, "danio": 8.0, "empuje": 140.0, "color": Color("bfe8ff"),
+	"ventarron": {"nombre": "Aliento de Ehécatl", "corto": "Aliento", "espera": 13.0, "tipo": "pulso", "radio": 170.0, "danio": 8.0, "empuje": 140.0, "color": Color("bfe8ff"),
 		"info": "Una ráfaga de viento aparta de golpe a los rivales que te rodean."},
-	"barlovento": {"nombre": "Barlovento", "corto": "Barlovento", "espera": 17.0, "tipo": "mejora", "dura": 5.0, "vel": 1.3, "recarga": 0.6, "color": Color("8fe0ff"),
+	"barlovento": {"nombre": "Plumas de quetzal", "corto": "Plumas", "espera": 17.0, "tipo": "mejora", "dura": 5.0, "vel": 1.3, "recarga": 0.6, "color": Color("8fe0ff"),
 		"info": "Durante 5 segundos navegas un 30% más rápido y recargas los cañones mucho antes."},
-	"abordaje": {"nombre": "¡Al abordaje!", "corto": "Abordaje", "espera": 18.0, "tipo": "mejora", "dura": 4.0, "vel": 1.5, "danio": 1.4, "color": Color("ff8a5c"),
+	"abordaje": {"nombre": "Grito de guerra", "corto": "Grito", "espera": 18.0, "tipo": "mejora", "dura": 4.0, "vel": 1.5, "danio": 1.4, "color": Color("ff8a5c"),
 		"info": "Durante 4 segundos vas un 50% más rápido y tus disparos hacen un 40% más de daño."},
-	"mortero": {"nombre": "Mortero", "corto": "Mortero", "espera": 12.0, "tipo": "impacto", "apuntar": true, "alcance": 300.0, "area": 90.0, "retardo": 1.0, "danio": 32.0, "color": Color("d9d2c4"),
-		"info": "Un proyectil enorme cae donde apuntes al cabo de un segundo y golpea muy fuerte."},
-	"fortaleza": {"nombre": "Fortaleza", "corto": "Fortaleza", "espera": 24.0, "tipo": "mejora", "dura": 6.0, "defensa": 0.7, "regen": 0.04, "color": Color("e2b13a"),
+	"mortero": {"nombre": "Lanza de Palas", "corto": "Lanza", "espera": 12.0, "tipo": "impacto", "apuntar": true, "alcance": 300.0, "area": 90.0, "retardo": 1.0, "danio": 32.0, "color": Color("d9d2c4"),
+		"info": "La lanza de Atenea cae del cielo donde apuntes al cabo de un segundo y golpea muy fuerte."},
+	"fortaleza": {"nombre": "Muralla de Atenas", "corto": "Muralla", "espera": 24.0, "tipo": "mejora", "dura": 6.0, "defensa": 0.7, "regen": 0.04, "color": Color("e2b13a"),
 		"info": "Durante 6 segundos recibes un 30% menos de daño y reparas un 4% por segundo."},
-	"lluvia_fuego": {"nombre": "Lluvia de fuego", "corto": "Lluvia", "espera": 14.0, "tipo": "impacto", "apuntar": true, "alcance": 280.0, "area": 110.0, "retardo": 0.8, "danio": 14.0, "quema": 3.0, "color": Color("ff7a2a"),
-		"info": "Una lluvia de brasas cae donde apuntes y deja ardiendo a los rivales."},
-	"anillo_fuego": {"nombre": "Anillo de fuego", "corto": "Anillo", "espera": 17.0, "tipo": "pulso", "radio": 150.0, "danio": 12.0, "quema": 2.5, "color": Color("ff9a3d"),
+	"lluvia_fuego": {"nombre": "Ira del sol", "corto": "Ira solar", "espera": 14.0, "tipo": "impacto", "apuntar": true, "alcance": 280.0, "area": 110.0, "retardo": 0.8, "danio": 14.0, "quema": 3.0, "color": Color("ff7a2a"),
+		"info": "Una lluvia de rayos de sol cae donde apuntes y deja ardiendo a los rivales."},
+	"anillo_fuego": {"nombre": "Corona de llamas", "corto": "Corona", "espera": 17.0, "tipo": "pulso", "radio": 150.0, "danio": 12.0, "quema": 2.5, "color": Color("ff9a3d"),
 		"info": "Las llamas estallan alrededor de tu barco e incendian a quien esté cerca."},
-	"ancla": {"nombre": "Ancla de hierro", "corto": "Ancla", "espera": 15.0, "tipo": "impacto", "apuntar": true, "alcance": 240.0, "area": 70.0, "retardo": 0.5, "danio": 24.0, "aturde": 1.2, "color": Color("9aa3ab"),
-		"info": "Deja caer un ancla gigante donde apuntes: daña y deja aturdido al rival."},
-	"grilletes": {"nombre": "Lluvia de grilletes", "corto": "Grilletes", "espera": 19.0, "tipo": "pulso", "radio": 160.0, "danio": 8.0, "frena": 3.0, "color": Color("c9ced6"),
-		"info": "Lanza grilletes a tu alrededor que enredan las velas de los rivales y los frenan."},
-	"brisa_marina": {"nombre": "Brisa marina", "corto": "Brisa", "espera": 24.0, "tipo": "mejora", "dura": 6.0, "regen": 0.05, "vel": 1.15, "color": Color("7dffb2"),
-		"info": "Una brisa suave repara tu barco un 5% por segundo durante 6 segundos."},
-	"ola": {"nombre": "Ola gigante", "corto": "Ola", "espera": 14.0, "tipo": "pulso", "radio": 190.0, "danio": 10.0, "empuje": 200.0, "color": Color("6fd6e8"),
-		"info": "Levanta una ola que empuja lejos a los rivales cercanos."},
-	"maldicion": {"nombre": "Maldición", "corto": "Maldición", "espera": 13.0, "tipo": "impacto", "apuntar": true, "alcance": 280.0, "area": 100.0, "retardo": 0.6, "danio": 12.0, "frena": 3.5, "color": Color("b07ae8"),
+	"ancla": {"nombre": "Balanza de las almas", "corto": "Balanza", "espera": 15.0, "tipo": "impacto", "apuntar": true, "alcance": 240.0, "area": 70.0, "retardo": 0.5, "danio": 24.0, "aturde": 1.2, "color": Color("9aa3ab"),
+		"info": "La balanza del juicio cae donde apuntes: daña y deja aturdido al rival."},
+	"grilletes": {"nombre": "Lazos del Duat", "corto": "Duat", "espera": 19.0, "tipo": "pulso", "radio": 160.0, "danio": 8.0, "frena": 3.0, "color": Color("c9ced6"),
+		"info": "Lazos del inframundo brotan a tu alrededor, enredan las velas de los rivales y los frenan."},
+	"brisa_marina": {"nombre": "Abrazo de la madre", "corto": "Abrazo", "espera": 24.0, "tipo": "mejora", "dura": 6.0, "regen": 0.05, "vel": 1.15, "color": Color("7dffb2"),
+		"info": "Bachué te envuelve: repara tu barco un 5% por segundo durante 6 segundos."},
+	"ola": {"nombre": "Serpiente de la laguna", "corto": "Serpiente", "espera": 14.0, "tipo": "pulso", "radio": 190.0, "danio": 10.0, "empuje": 200.0, "color": Color("6fd6e8"),
+		"info": "Bachué se vuelve serpiente de agua y empuja lejos a los rivales cercanos."},
+	"maldicion": {"nombre": "Cólera de Poseidón", "corto": "Cólera", "espera": 13.0, "tipo": "impacto", "apuntar": true, "alcance": 280.0, "area": 100.0, "retardo": 0.6, "danio": 12.0, "frena": 3.5, "color": Color("b07ae8"),
 		"info": "Lanza una maldición donde apuntes que daña y frena a los rivales."},
-	"marejada": {"nombre": "Marejada", "corto": "Marejada", "espera": 19.0, "tipo": "pulso", "radio": 200.0, "danio": 10.0, "empuje": -150.0, "color": Color("8f7ae8"),
+	"marejada": {"nombre": "Mar embravecido", "corto": "Marejada", "espera": 19.0, "tipo": "pulso", "radio": 200.0, "danio": 10.0, "empuje": -150.0, "color": Color("8f7ae8"),
 		"info": "La corriente arrastra hacia tu barco a los rivales cercanos."},
-	"tinta": {"nombre": "Nube de tinta", "corto": "Tinta", "espera": 15.0, "tipo": "pulso", "radio": 170.0, "danio": 6.0, "frena": 2.5, "color": Color("2b2b3a"),
-		"info": "Suelta tinta de calamar a tu alrededor: los rivales se frenan y no ven por dónde van."},
-	"tiburones": {"nombre": "Ataque de tiburones", "corto": "Tiburones", "espera": 18.0, "tipo": "impacto", "apuntar": true, "alcance": 260.0, "area": 80.0, "retardo": 0.4, "danio": 26.0, "color": Color("8aa4b0"),
-		"info": "Tus tiburones saltan donde apuntes y muerden con fuerza."},
-	"cohetes": {"nombre": "Cohetes", "corto": "Cohetes", "espera": 9.0, "tipo": "balas", "apuntar": true, "alcance": 300.0, "balas": 3, "abanico": 0.25, "danio": 1.6, "color": Color("ffb347"),
-		"info": "Dispara tres cohetes potentes hacia donde apuntes."},
-	"polvorin": {"nombre": "Polvorín", "corto": "Polvorín", "espera": 20.0, "tipo": "pulso", "radio": 160.0, "danio": 24.0, "quema": 1.5, "color": Color("ff6a2a"),
-		"info": "Hace estallar la pólvora de la bodega: gran explosión a tu alrededor."},
-	"punal": {"nombre": "Bala certera", "corto": "Certera", "espera": 10.0, "tipo": "balas", "apuntar": true, "alcance": 300.0, "balas": 1, "abanico": 0.0, "danio": 3.0, "color": Color("dfe6ee"),
-		"info": "Un solo disparo silencioso que hace el triple de daño."},
-	"sombra": {"nombre": "Sombra", "corto": "Sombra", "espera": 16.0, "tipo": "mejora", "dura": 4.0, "vel": 1.2, "danio": 1.5, "color": Color("9aa0b5"),
-		"info": "Durante 4 segundos tus disparos hacen un 50% más de daño y navegas algo más rápido."},
-	"narval": {"nombre": "Narval", "corto": "Narval", "espera": 14.0, "tipo": "impacto", "apuntar": true, "alcance": 220.0, "area": 70.0, "retardo": 0.3, "danio": 28.0, "aturde": 0.6, "color": Color("e8eef2"),
-		"info": "Un narval embiste desde el agua donde apuntes: golpea fuerte y aturde."},
-	"rompehielos": {"nombre": "Rompehielos", "corto": "Rompehielos", "espera": 20.0, "tipo": "mejora", "dura": 4.0, "vel": 1.4, "defensa": 0.6, "color": Color("bfe8ff"),
+	"tinta": {"nombre": "Aguas del caos", "corto": "Caos", "espera": 15.0, "tipo": "pulso", "radio": 170.0, "danio": 6.0, "frena": 2.5, "color": Color("2b2b3a"),
+		"info": "Tiamat oscurece el mar a tu alrededor: los rivales se frenan y no ven por dónde van."},
+	"tiburones": {"nombre": "Tiburones de Tiamat", "corto": "Tiburones", "espera": 18.0, "tipo": "impacto", "apuntar": true, "alcance": 260.0, "area": 80.0, "retardo": 0.4, "danio": 26.0, "color": Color("8aa4b0"),
+		"info": "Los tiburones de Tiamat saltan donde apuntes y muerden con fuerza."},
+	"cohetes": {"nombre": "Chorros de lava", "corto": "Chorros", "espera": 9.0, "tipo": "balas", "apuntar": true, "alcance": 300.0, "balas": 3, "abanico": 0.25, "danio": 1.6, "color": Color("ffb347"),
+		"info": "Dispara tres chorros de lava hacia donde apuntes."},
+	"polvorin": {"nombre": "Erupción", "corto": "Erupción", "espera": 20.0, "tipo": "pulso", "radio": 160.0, "danio": 24.0, "quema": 1.5, "color": Color("ff6a2a"),
+		"info": "Haces estallar el volcán: gran explosión de lava a tu alrededor."},
+	"punal": {"nombre": "Dardo de muérdago", "corto": "Muérdago", "espera": 10.0, "tipo": "balas", "apuntar": true, "alcance": 300.0, "balas": 1, "abanico": 0.0, "danio": 3.0, "color": Color("dfe6ee"),
+		"info": "Un dardo silencioso de muérdago que hace el triple de daño."},
+	"sombra": {"nombre": "Engaño", "corto": "Engaño", "espera": 16.0, "tipo": "mejora", "dura": 4.0, "vel": 1.2, "danio": 1.5, "color": Color("9aa0b5"),
+		"info": "Durante 4 segundos tus golpes a traición hacen un 50% más de daño y navegas algo más rápido."},
+	"narval": {"nombre": "Cuervos de Odín", "corto": "Cuervos", "espera": 14.0, "tipo": "impacto", "apuntar": true, "alcance": 220.0, "area": 70.0, "retardo": 0.3, "danio": 28.0, "aturde": 0.6, "color": Color("e8eef2"),
+		"info": "Hugin y Munin caen en picado donde apuntes: golpean fuerte y aturden."},
+	"rompehielos": {"nombre": "Galope de Sleipnir", "corto": "Sleipnir", "espera": 20.0, "tipo": "mejora", "dura": 4.0, "vel": 1.4, "defensa": 0.6, "color": Color("bfe8ff"),
 		"info": "Durante 4 segundos vas un 40% más rápido y recibes un 40% menos de daño."},
 	"relampago": {"nombre": "Relámpago", "corto": "Relámpago", "espera": 8.0, "tipo": "impacto", "apuntar": true, "alcance": 300.0, "area": 60.0, "retardo": 0.2, "danio": 30.0, "rayo": true, "color": Color("ffe24a"),
 		"info": "Un rayo cae casi al instante justo donde apuntes."},
-	"trueno": {"nombre": "Trueno", "corto": "Trueno", "espera": 21.0, "tipo": "pulso", "radio": 200.0, "danio": 10.0, "aturde": 0.8, "color": Color("6fe6ff"),
+	"trueno": {"nombre": "Trueno de Asgard", "corto": "Trueno", "espera": 21.0, "tipo": "pulso", "radio": 200.0, "danio": 10.0, "aturde": 0.8, "color": Color("6fe6ff"),
 		"info": "Un trueno ensordecedor daña y aturde a los rivales que te rodean."},
 	"curar": {"nombre": "Reparar barco", "corto": "Reparar", "espera": 30.0,
-		"info": "Todos los capitanes la tienen: tu tripulación clava tablas nuevas y repara un 25% del barco."},
+		"info": "Todos los dioses la tienen: tu tripulación clava tablas nuevas y repara un 25% del barco."},
 }
 # Las tres habilidades de cada capitán van en estos huecos; la cuarta es siempre curar.
 const CURAR := "curar"
@@ -189,63 +189,79 @@ const CURA_PROPIA := 0.25
 const BALAS_METRALLA := 5
 const ABANICO_METRALLA := 0.5
 const TECLAS_HABILIDAD: Array[Key] = [KEY_Q, KEY_E, KEY_R, KEY_F]
-# Capitanes del MOBA: cada uno con su barco (aspecto), su habilidad y su forma de navegar.
-# Todos los barcos tienen el mismo tamaño en este modo; cambia el diseño.
+# Dioses del MOBA: cada uno al mando de su barco, con su forma de navegar y sus tres poderes.
+# Vienen de panteones distintos. Todos los barcos tienen el mismo tamaño en este modo; cambia el diseño.
+# En "figura", "tocado" cambia el sombrero pirata por el del dios, "objeto" es lo que lleva en la
+# mano derecha y "aura" el color del halo que brilla detrás de la cabeza.
 const CAPITANES: Array[Dictionary] = [
-	{"id": "brisa", "nombre": "Capitana Brisa", "corto": "Brisa", "barco": "La Golondrina", "habilidad": "impulso", "extras": ["ventarron", "barlovento"],
-		"vida": 85.0, "velocidad": 50.0, "giro": 1.0, "info": "Rápida y escurridiza.",
+	{"id": "quetzalcoatl", "nombre": "Quetzalcóatl", "corto": "Quetzal", "barco": "La Serpiente Emplumada", "panteon": "Azteca", "habilidad": "impulso", "extras": ["ventarron", "barlovento"],
+		"vida": 85.0, "velocidad": 50.0, "giro": 1.0, "info": "Serpiente emplumada, señor del viento: nadie lo alcanza.",
 		"aspecto": {"tipo": "balandro", "casco": "marino", "adorno": "plata", "velas": "cielo", "bandera": "estrella", "proa": "sirena", "popa": "faroles", "canones": "plata"},
-		"figura": {"piel": "f1c7a0", "abrigo": "2f63c6", "sombrero": "1f3a6b", "pelo": "e8c070", "pluma": "f2f2f2", "barba": "", "parche": false, "melena": true, "saludo": "ola"}},
-	{"id": "barbanegra", "nombre": "Barbanegra", "corto": "Barbanegra", "barco": "La Venganza", "habilidad": "andanada", "extras": ["metralla", "abordaje"],
-		"vida": 105.0, "velocidad": 42.0, "giro": 0.85, "info": "Pirata temido, todo cañones.",
-		"aspecto": {"tipo": "bergantin", "casco": "corsario", "adorno": "negro", "velas": "pirata", "bandera": "jolly_roger", "proa": "dragon", "popa": "castillo", "canones": "hierro"},
-		"figura": {"piel": "d9a27a", "abrigo": "1f1d22", "sombrero": "141414", "pelo": "141414", "pluma": "b5302a", "barba": "141414", "parche": true, "saludo": "espada"}},
-	{"id": "hierro", "nombre": "Almirante Hierro", "corto": "Hierro", "barco": "El Coloso", "habilidad": "escudo", "extras": ["mortero", "fortaleza"],
-		"vida": 140.0, "velocidad": 34.0, "giro": 0.72, "info": "Lento, pero casi imposible de hundir.",
+		"figura": {"piel": "c98a5e", "abrigo": "1f8a5a", "sombrero": "1f8a5a", "pelo": "141414", "pluma": "3fd27a", "barba": "", "parche": false, "melena": true, "saludo": "ola",
+			"tocado": "penacho", "aura": "6fe8a0"}},
+	{"id": "ares", "nombre": "Ares", "corto": "Ares", "barco": "El Furor", "panteon": "Griego", "habilidad": "andanada", "extras": ["metralla", "abordaje"],
+		"vida": 105.0, "velocidad": 42.0, "giro": 0.85, "info": "Dios griego de la guerra: vive para el combate.",
+		"aspecto": {"tipo": "bergantin", "casco": "carmesi", "adorno": "oro", "velas": "sangre", "bandera": "estrella", "proa": "dragon", "popa": "castillo", "canones": "bronce"},
+		"figura": {"piel": "d9a27a", "abrigo": "8a1f1f", "sombrero": "b8892f", "pelo": "2a1a12", "pluma": "c0302a", "barba": "2a1a12", "parche": false, "saludo": "espada",
+			"tocado": "casco_cresta", "aura": "ff5a3a"}},
+	{"id": "atenea", "nombre": "Atenea", "corto": "Atenea", "barco": "La Égida", "panteon": "Griego", "habilidad": "escudo", "extras": ["mortero", "fortaleza"],
+		"vida": 140.0, "velocidad": 34.0, "giro": 0.72, "info": "Diosa de la sabiduría y la estrategia: casi imposible de hundir.",
 		"aspecto": {"tipo": "galeon", "casco": "real", "adorno": "oro", "velas": "cruzada", "bandera": "real", "proa": "aguila", "popa": "galeria", "canones": "oro"},
-		"figura": {"piel": "e8b892", "abrigo": "2a3f78", "sombrero": "1b1b1e", "pelo": "d8d8d8", "pluma": "e2b13a", "barba": "d8d8d8", "parche": false, "saludo": "militar"}},
-	{"id": "escarlata", "nombre": "Lady Escarlata", "corto": "Escarlata", "barco": "Rosa de Fuego", "habilidad": "fuego", "extras": ["lluvia_fuego", "anillo_fuego"],
-		"vida": 100.0, "velocidad": 42.0, "giro": 0.85, "info": "Incendia de lejos a quien se le cruce.",
+		"figura": {"piel": "efc9a4", "abrigo": "e8e2d0", "sombrero": "d9b46a", "pelo": "6b4a2a", "pluma": "2a4fa8", "barba": "", "parche": false, "melena": true, "saludo": "militar",
+			"tocado": "casco_cresta", "objeto": "escudo", "aura": "ffe08a"}},
+	{"id": "ra", "nombre": "Ra", "corto": "Ra", "barco": "La Barca Solar", "panteon": "Egipcio", "habilidad": "fuego", "extras": ["lluvia_fuego", "anillo_fuego"],
+		"vida": 100.0, "velocidad": 42.0, "giro": 0.85, "info": "Dios egipcio del sol: quema de lejos a quien se le cruce.",
 		"aspecto": {"tipo": "bergantin", "casco": "carmesi", "adorno": "cobre", "velas": "sol_rojo", "bandera": "sol", "proa": "sirena", "popa": "faroles", "canones": "bronce"},
-		"figura": {"piel": "f3d0b0", "abrigo": "a8402f", "sombrero": "5a1830", "pelo": "c2453a", "pluma": "e2b13a", "barba": "", "parche": false, "melena": true, "saludo": "reverencia"}},
-	{"id": "cadenas", "nombre": "Capitán Cadenas", "corto": "Cadenas", "barco": "El Ancla Negra", "habilidad": "cadenas", "extras": ["ancla", "grilletes"],
-		"vida": 130.0, "velocidad": 36.0, "giro": 0.75, "info": "Atrapa a sus presas para que no escapen.",
+		"figura": {"piel": "b87a4b", "abrigo": "f2ead8", "sombrero": "ff8a1a", "pelo": "141414", "pluma": "", "barba": "", "parche": false, "saludo": "reverencia",
+			"tocado": "disco_solar", "objeto": "baculo", "aura": "ffb02a"}},
+	{"id": "anubis", "nombre": "Anubis", "corto": "Anubis", "barco": "La Barca de los Muertos", "panteon": "Egipcio", "habilidad": "cadenas", "extras": ["ancla", "grilletes"],
+		"vida": 130.0, "velocidad": 36.0, "giro": 0.75, "info": "Guardián del inframundo egipcio: ningún alma se le escapa.",
 		"aspecto": {"tipo": "galeon", "casco": "ebano", "adorno": "plata", "velas": "remendada", "bandera": "tibias", "proa": "espolon", "popa": "castillo", "canones": "hierro"},
-		"figura": {"piel": "8d5a3b", "abrigo": "55595e", "sombrero": "2e2b2b", "pelo": "2e2b2b", "pluma": "", "barba": "3b2a22", "parche": false, "saludo": "punos"}},
-	{"id": "coral", "nombre": "Abuela Coral", "corto": "Coral", "barco": "La Perla Verde", "habilidad": "reparar", "extras": ["brisa_marina", "ola"],
-		"vida": 95.0, "velocidad": 46.0, "giro": 0.95, "info": "Cuida de su armada en plena batalla.",
+		"figura": {"piel": "2a2622", "abrigo": "1b1b22", "sombrero": "1f1c1a", "pelo": "", "pluma": "", "barba": "", "parche": false, "saludo": "punos",
+			"tocado": "chacal", "objeto": "baculo", "aura": "d9b46a"}},
+	{"id": "bachue", "nombre": "Bachué", "corto": "Bachué", "barco": "La Laguna Sagrada", "panteon": "Muisca", "habilidad": "reparar", "extras": ["brisa_marina", "ola"],
+		"vida": 95.0, "velocidad": 46.0, "giro": 0.95, "info": "Madre de los muiscas, nacida de la laguna de Iguaque: cuida de su armada.",
 		"aspecto": {"tipo": "balandro", "casco": "esmeralda", "adorno": "turquesa", "velas": "arena", "bandera": "ancla", "proa": "sencilla", "popa": "camarote", "canones": "bronce"},
-		"figura": {"piel": "e8b892", "abrigo": "2f8f6f", "sombrero": "e3cc98", "pelo": "f2f2f2", "pluma": "3fbfb0", "barba": "", "parche": false, "melena": true, "saludo": "abuela"}},
-	{"id": "marea", "nombre": "Madame Marea", "corto": "Marea", "barco": "El Remolino", "habilidad": "remolino", "extras": ["maldicion", "marejada"],
-		"vida": 100.0, "velocidad": 42.0, "giro": 0.85, "info": "Bruja del mar que manda en las corrientes.",
+		"figura": {"piel": "b9805a", "abrigo": "2f8f6f", "sombrero": "e0b04a", "pelo": "141414", "pluma": "3fbfb0", "barba": "", "parche": false, "melena": true, "saludo": "abuela",
+			"tocado": "diadema", "aura": "7dffb2"}},
+	{"id": "poseidon", "nombre": "Poseidón", "corto": "Poseidón", "barco": "El Hipocampo", "panteon": "Griego", "habilidad": "remolino", "extras": ["maldicion", "marejada"],
+		"vida": 100.0, "velocidad": 42.0, "giro": 0.85, "info": "Señor de los mares: las corrientes obedecen a su tridente.",
 		"aspecto": {"tipo": "bergantin_medusa", "casco": "g_amatista", "adorno": "g_lavanda", "velas": "g_luna_cielo_nieve", "bandera": "g_estrella_amatista_nieve", "proa": "sirena_amatista", "popa": "cupula_amatista", "canones": "g_lavanda"},
-		"figura": {"piel": "c98e6a", "abrigo": "3a2a6b", "sombrero": "1f1a3a", "pelo": "e8e8f5", "pluma": "a88ad8", "barba": "", "parche": false, "melena": true, "saludo": "conjuro"}},
-	{"id": "nautilo", "nombre": "Capitán Nautilo", "corto": "Nautilo", "barco": "El Abisal", "habilidad": "kraken", "extras": ["tinta", "tiburones"],
-		"vida": 125.0, "velocidad": 36.0, "giro": 0.75, "info": "Domó al kraken y ahora navega con él.",
+		"figura": {"piel": "d6a27e", "abrigo": "1f5f8a", "sombrero": "d9b46a", "pelo": "e8eef2", "pluma": "", "barba": "e8eef2", "parche": false, "saludo": "conjuro",
+			"tocado": "corona", "objeto": "tridente", "aura": "6fd6ff"}},
+	{"id": "tiamat", "nombre": "Tiamat", "corto": "Tiamat", "barco": "La Bestia del Abismo", "panteon": "Babilónico", "habilidad": "kraken", "extras": ["tinta", "tiburones"],
+		"vida": 125.0, "velocidad": 36.0, "giro": 0.75, "info": "Diosa babilónica del mar primordial: madre de los monstruos.",
 		"aspecto": {"tipo": "galeon_kraken", "casco": "g_abismo", "adorno": "g_turquesa_claro", "velas": "g_marco_hielo_zafiro", "bandera": "g_tibias_abismo_hielo", "proa": "pulpo_esmeralda", "popa": "torre_hielo", "canones": "g_jade"},
-		"figura": {"piel": "e0b090", "abrigo": "1f5a6b", "sombrero": "103040", "pelo": "6b4a30", "pluma": "3fe0d0", "barba": "6b4a30", "parche": false, "saludo": "catalejo"}},
-	{"id": "mecha", "nombre": "Mecha Ruiz", "corto": "Mecha", "barco": "La Chispa", "habilidad": "minas", "extras": ["cohetes", "polvorin"],
-		"vida": 90.0, "velocidad": 48.0, "giro": 0.95, "info": "Artillera loca: deja la pólvora a su paso.",
+		"figura": {"piel": "7fb8a8", "abrigo": "1f4a5a", "sombrero": "2a1a3a", "pelo": "1f2a4a", "pluma": "", "barba": "", "parche": false, "melena": true, "saludo": "catalejo",
+			"tocado": "cuernos", "objeto": "nada", "aura": "3fe0d0"}},
+	{"id": "pele", "nombre": "Pele", "corto": "Pele", "barco": "La Lengua de Lava", "panteon": "Hawaiano", "habilidad": "minas", "extras": ["cohetes", "polvorin"],
+		"vida": 90.0, "velocidad": 48.0, "giro": 0.95, "info": "Diosa hawaiana de los volcanes: deja lava ardiente a su paso.",
 		"aspecto": {"tipo": "balandro_centella", "casco": "caoba", "adorno": "g_fuego", "velas": "g_sol_fuego_nieve", "bandera": "g_cuadros_carbon_fuego", "proa": "toro_cobre", "popa": "toldo_granate", "canones": "g_fuego_oscuro"},
-		"figura": {"piel": "c58c64", "abrigo": "8a4a1a", "sombrero": "3a2a1a", "pelo": "1b1b1b", "pluma": "e0a030", "barba": "", "parche": true, "melena": true, "saludo": "baile"}},
-	{"id": "niebla", "nombre": "Dama Niebla", "corto": "Niebla", "barco": "El Susurro", "habilidad": "niebla", "extras": ["punal", "sombra"],
-		"vida": 85.0, "velocidad": 50.0, "giro": 1.0, "info": "Nadie la ve llegar ni la ve irse.",
+		"figura": {"piel": "a86a44", "abrigo": "a8301a", "sombrero": "ff6a1a", "pelo": "1b1b1b", "pluma": "", "barba": "", "parche": false, "melena": true, "saludo": "baile",
+			"tocado": "llamas", "aura": "ff6a2a"}},
+	{"id": "loki", "nombre": "Loki", "corto": "Loki", "barco": "El Naglfar", "panteon": "Nórdico", "habilidad": "niebla", "extras": ["punal", "sombra"],
+		"vida": 85.0, "velocidad": 50.0, "giro": 1.0, "info": "El embaucador nórdico: nadie lo ve llegar ni lo ve irse.",
 		"aspecto": {"tipo": "bergantin_bruma", "casco": "fantasma", "adorno": "g_ceniza_claro", "velas": "g_mitad_ceniza_hielo", "bandera": "g_luna_turquesa_sombra", "proa": "angel_plata", "popa": "fanales_carbon", "canones": "plata"},
-		"figura": {"piel": "ece4f2", "abrigo": "4a5560", "sombrero": "2a2f36", "pelo": "1b1b1e", "pluma": "c9ced6", "barba": "", "parche": false, "melena": true, "saludo": "sigilo"}},
-	{"id": "olaf", "nombre": "Olaf el Ballenero", "corto": "Olaf", "barco": "La Ballena Blanca", "habilidad": "arpon", "extras": ["narval", "rompehielos"],
-		"vida": 120.0, "velocidad": 38.0, "giro": 0.78, "info": "Cazador del norte: lo que arponea, no se escapa.",
+		"figura": {"piel": "ecd8c0", "abrigo": "2f5a2a", "sombrero": "d9b46a", "pelo": "1b1b1e", "pluma": "", "barba": "", "parche": false, "melena": true, "saludo": "sigilo",
+			"tocado": "cuernos_largos", "aura": "8fe86f"}},
+	{"id": "odin", "nombre": "Odín", "corto": "Odín", "barco": "El Cuervo", "panteon": "Nórdico", "habilidad": "arpon", "extras": ["narval", "rompehielos"],
+		"vida": 120.0, "velocidad": 38.0, "giro": 0.78, "info": "Padre de todos los dioses nórdicos: lo que alcanza su lanza no se escapa.",
 		"aspecto": {"tipo": "galeon_narval", "casco": "hueso", "adorno": "madera", "velas": "franjas_rojas", "bandera": "g_franjas_plata_zafiro", "proa": "vikingo_bronce", "popa": "cabana_bronce", "canones": "g_caoba"},
-		"figura": {"piel": "f0c8a8", "abrigo": "5a6b2f", "sombrero": "4a2a1a", "pelo": "e0a030", "pluma": "", "barba": "e0a030", "parche": false, "saludo": "arpon"}},
-	{"id": "trueno", "nombre": "Señor Trueno", "corto": "Trueno", "barco": "La Tempestad", "habilidad": "rayos", "extras": ["relampago", "trueno"],
-		"vida": 105.0, "velocidad": 40.0, "giro": 0.82, "info": "Llama a la tormenta y la tormenta responde.",
+		"figura": {"piel": "f0c8a8", "abrigo": "3a4a6b", "sombrero": "3a3a42", "pelo": "d8d8d8", "pluma": "", "barba": "d8d8d8", "parche": true, "saludo": "arpon",
+			"tocado": "ala_ancha", "aura": "bfd8ff"}},
+	{"id": "thor", "nombre": "Thor", "corto": "Thor", "barco": "La Tormenta de Asgard", "panteon": "Nórdico", "habilidad": "rayos", "extras": ["relampago", "trueno"],
+		"vida": 105.0, "velocidad": 40.0, "giro": 0.82, "info": "Dios nórdico del trueno: llama a la tormenta y la tormenta responde.",
 		"aspecto": {"tipo": "galeon_relampago", "casco": "g_zafiro", "adorno": "g_cielo_claro", "velas": "g_rombo_cielo_sombra", "bandera": "g_marco_carbon_hielo", "proa": "aguila_plata", "popa": "timonera_zafiro", "canones": "g_zafiro_claro"},
-		"figura": {"piel": "a87050", "abrigo": "c9a227", "sombrero": "1b1b1e", "pelo": "2e2b2b", "pluma": "6fe6ff", "barba": "2e2b2b", "parche": false, "saludo": "trueno"}},
+		"figura": {"piel": "f0c8a8", "abrigo": "9a2a2a", "sombrero": "b8c0c8", "pelo": "c8402a", "pluma": "", "barba": "c8402a", "parche": false, "saludo": "trueno",
+			"tocado": "casco_alado", "objeto": "martillo", "aura": "6fe6ff"}},
 ]
 const LARGO_COMUN := 4.3
 const RADIO_COMUN := 32.0
 const ALTURA_COMUN := 5.4
 # Escala del capitán en cubierta, en proporción al barco común.
 const ALTURA_CAPITAN := 0.62
+# Tamaño del dios en cubierta respecto a un capitán normal.
+const ESCALA_DIOS := 2.3
 # Ángulo de cámara al elegir capitán: desde el lado del muelle, un poco hacia la proa.
 const GIRO_SELECCION := -0.3
 const DURACION_IMPULSO := 3.0
@@ -397,7 +413,7 @@ var siguiente_bote := 0
 # Armada del jugador de este móvil (1 cuando se une a una partida por wifi): la suya se ve
 # siempre azul y la rival roja.
 var mi_lado := 0
-var elegido := "barbanegra"
+var elegido := "ares"
 var figura_muelle: FiguraCapitan
 var ensayo := false
 var boton_terminar: Button
@@ -454,6 +470,8 @@ var detalle_elegido := 0
 var texto_capitan: Label
 var texto_habilidad: Label
 var texto_detalle: Label
+var texto_records: Label
+var boton_zarpar: Button
 
 
 func preparar(nuevo_mundo: Principal) -> void:
@@ -753,12 +771,92 @@ func igualar_barco(barco: Barco, capitan: Dictionary) -> void:
 	barco.set_meta("capitan", capitan["id"])
 	if barco.es_jugador:
 		barco._crear_aro()
+	# El dios va de pie en cubierta, delante del timón y más grande que un capitán, para que se
+	# vea bien desde la cámara alta del móvil.
+	var vieja := barco.modelo.get_node_or_null("Dios")
+	if vieja != null:
+		barco.modelo.remove_child(vieja)
+		vieja.queue_free()
 	var figura := crear_figura(capitan["figura"])
+	figura.name = "Dios"
 	var timon: Node3D = barco.modelo.get_node("Timon")
-	figura.position = timon.position
-	figura.scale = timon.scale
+	# A proa, delante del trinquete: ahí no lo tapan el camarote ni las velas grandes.
+	var largo: float = medidas["largo"]
+	var z := -largo * 0.34
+	figura.position = Vector3(0, ModeloBarco.altura_cubierta(ModeloBarco._t_de_z(z, largo), medidas["alto"]), z)
+	figura.scale = timon.scale * ESCALA_DIOS
 	barco.modelo.add_child(figura)
-	figura.tomar_timon(timon.get_node("Rueda"))
+	figura.set_process(true)
+	_poner_aura(barco, Color(capitan["figura"].get("aura", "ffe08a")))
+
+
+# Halo de luz del color del dios sobre el agua, bajo el barco. Es un disco sin luces ni sombras
+# (barato en el móvil) que late despacio.
+func _poner_aura(barco: Barco, color: Color) -> void:
+	var vieja := barco.get_node_or_null("AuraDios")
+	if vieja != null:
+		barco.remove_child(vieja)
+		vieja.queue_free()
+	if not _materiales_aura.has(color):
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		# Los halos claros (dioses) suman luz; los oscuros (piratas malditos) tiñen el agua.
+		material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD if color.v > 0.5 else BaseMaterial3D.BLEND_MODE_MIX
+		material.albedo_color = Color(color, 0.45 if color.v > 0.5 else 0.7)
+		material.vertex_color_use_as_albedo = true
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_materiales_aura[color] = material
+	var aura := MeshInstance3D.new()
+	aura.name = "AuraDios"
+	aura.mesh = _malla_aura()
+	aura.material_override = _materiales_aura[color]
+	aura.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var r := RADIO_COMUN * Principal.ESCALA * 1.2
+	aura.scale = Vector3(r, 1.0, r)
+	aura.position.y = 0.1
+	barco.add_child(aura)
+	var latido := aura.create_tween().set_loops()
+	latido.tween_property(aura, "scale", Vector3(r * 1.12, 1.0, r * 1.12), 1.1).set_trans(Tween.TRANS_SINE)
+	latido.tween_property(aura, "scale", Vector3(r, 1.0, r), 1.1).set_trans(Tween.TRANS_SINE)
+
+
+var _materiales_aura := {}
+var _disco_aura: Mesh
+
+
+# Disco con el borde más brillante que el centro, hecho con anillos de vértices.
+func _malla_aura() -> Mesh:
+	if _disco_aura != null:
+		return _disco_aura
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var lados := 32
+	var anillos: Array[float] = [0.0, 0.55, 0.85, 1.0]
+	var brillos: Array[float] = [0.25, 0.45, 1.0, 0.0]
+	for a in anillos.size() - 1:
+		for k in lados:
+			var a0 := TAU * k / lados
+			var a1 := TAU * (k + 1) / lados
+			var v := [Vector3(cos(a0) * anillos[a], 0, sin(a0) * anillos[a]), Vector3(cos(a1) * anillos[a], 0, sin(a1) * anillos[a]),
+				Vector3(cos(a0) * anillos[a + 1], 0, sin(a0) * anillos[a + 1]), Vector3(cos(a1) * anillos[a + 1], 0, sin(a1) * anillos[a + 1])]
+			var c := [brillos[a], brillos[a], brillos[a + 1], brillos[a + 1]]
+			for i: int in [0, 2, 1, 1, 2, 3]:
+				st.set_color(Color(1, 1, 1, c[i]))
+				st.add_vertex(v[i])
+	_disco_aura = st.commit()
+	return _disco_aura
+
+
+# Al usar un poder, el dios alza los brazos y sube un chorro de chispas de su color.
+func _invocar(barco: Barco, color: Color) -> void:
+	var figura := barco.modelo.get_node_or_null("Dios") as FiguraCapitan
+	if figura != null and figura.visible:
+		figura.invocar()
+	for k in 10:
+		var hacia := Vector2.from_angle(TAU * k / 10.0 + randf() * 0.3)
+		var pos := barco.position + Vector3(hacia.x * 0.9, barco.altura * 0.35, hacia.y * 0.9)
+		mundo.crear_efecto(mundo.malla_humo, Color(color, 0.9), pos, Vector3(hacia.x * 0.6, 3.2, hacia.y * 0.6), 0.6, 0.3, 1.2)
 
 
 static func crear_figura(datos: Dictionary) -> FiguraCapitan:
@@ -1818,6 +1916,7 @@ func usar_habilidad(heroe: Heroe, ranura: int, hacia := Vector2.ZERO, largo := 1
 		mundo.red.avisar_habilidad(ranura, hacia, largo)
 	var clave := habilidad_en(heroe, ranura)
 	heroe.esperas[ranura] = ESPERA_ENSAYO if ensayo else HABILIDADES[clave]["espera"]
+	_invocar(barco, Color(heroe.capitan["figura"].get("aura", "ffe08a")) if clave == CURAR else HABILIDADES[clave].get("color", Color(heroe.capitan["figura"].get("aura", "ffe08a"))))
 	match clave:
 		"curar":
 			barco.vida = minf(barco.vida_max, barco.vida + barco.vida_max * CURA_PROPIA)
@@ -3029,8 +3128,9 @@ func _crear_seleccion(capa: CanvasLayer) -> void:
 	var cuerpo: VBoxContainer = partes[1]
 	var pie: VBoxContainer = partes[2]
 	cuerpo.add_theme_constant_override("separation", 6)
-	cuerpo.add_child(Ui.etiqueta_panel(tr("Elige tu capitán"), 34, Principal.COLOR_ORO))
-	cuerpo.add_child(Ui.etiqueta_panel(tr("Cada capitán tiene su barco y tres habilidades propias; todos pueden reparar el barco"), 17, Color("c9d1d3")))
+	cuerpo.add_child(Ui.etiqueta_panel(tr("Elige tu dios"), 34, Principal.COLOR_ORO))
+	texto_records = Ui.etiqueta_panel("", 17, Color("c9d1d3"))
+	cuerpo.add_child(texto_records)
 	var rejilla := GridContainer.new()
 	rejilla.columns = 6
 	rejilla.add_theme_constant_override("h_separation", 6)
@@ -3083,6 +3183,7 @@ func _crear_seleccion(capa: CanvasLayer) -> void:
 		cuerpo.add_child(fila)
 	var extras := HBoxContainer.new()
 	extras.add_theme_constant_override("separation", 12)
+	extras.visible = false
 	pie.add_child(extras)
 	var ensayar := Ui.boton(tr("Ensayar habilidades"), false)
 	ensayar.custom_minimum_size = Vector2(0, 50)
@@ -3109,8 +3210,9 @@ func _crear_seleccion(capa: CanvasLayer) -> void:
 	var zarpar := Ui.boton(tr("¡Zarpar!"), true)
 	zarpar.custom_minimum_size = Vector2(0, 64)
 	zarpar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	zarpar.pressed.connect(mundo._buscar_partida.bind("moba"))
+	zarpar.pressed.connect(func() -> void: mundo.superv.zarpar_o_desbloquear())
 	botones.add_child(zarpar)
+	boton_zarpar = zarpar
 
 
 func abrir_seleccion() -> void:
@@ -3155,7 +3257,7 @@ func elegir(id: String, con_sonido := true) -> void:
 		var boton: Button = botones_capitan[clave]
 		Ui.estilo_boton(boton, clave == id)
 		boton.queue_redraw()
-	texto_capitan.text = tr(capitan["nombre"]) + "  ·  " + tr(capitan["barco"]) + "\n" + tr(capitan["info"])
+	texto_capitan.text = tr(capitan["nombre"]) + " (" + tr(capitan["panteon"]) + ")  ·  " + tr(capitan["barco"]) + "\n" + tr(capitan["info"])
 	barras_capitan["Vida"].set_meta("avance", capitan["vida"] / 140.0)
 	barras_capitan["Velocidad"].set_meta("avance", capitan["velocidad"] / 50.0)
 	for barra in barras_capitan.values():
@@ -3166,9 +3268,16 @@ func elegir(id: String, con_sonido := true) -> void:
 # Al tocar una de las cuatro habilidades del panel se explica debajo.
 func _ver_habilidad(ranura: int) -> void:
 	detalle_elegido = ranura
-	var habilidad: Dictionary = HABILIDADES[habilidades_de(capitan_elegido())[ranura]]
-	texto_habilidad.text = tr(habilidad["nombre"]) + "  ·  " + tr("Recarga: %d s") % int(habilidad["espera"])
-	texto_detalle.text = tr(habilidad["info"])
+	# En el modo único se muestra solo el poder divino del dios.
+	var id: String = capitan_elegido()["id"]
+	for k in iconos_detalle.size():
+		iconos_detalle[k].visible = k == 0
+	texto_habilidad.text = tr("Poder divino: %s") % mundo.superv.nombre_poder(id)
+	texto_detalle.text = mundo.superv.info_poder(id)
+	texto_records.text = mundo.superv.texto_records()
+	if boton_zarpar != null:
+		boton_zarpar.text = mundo.superv.texto_boton_zarpar(id)
+		Ui.estilo_boton(boton_zarpar, mundo.superv.desbloqueado(id) or mundo.personalizacion.monedas >= mundo.superv.precio(id))
 	for icono in iconos_detalle:
 		icono.queue_redraw()
 
@@ -3198,6 +3307,13 @@ func _dibujar_tarjeta(boton: Button, capitan: Dictionary) -> void:
 	var fuente := ThemeDB.fallback_font
 	var claro: bool = capitan["id"] == elegido
 	boton.draw_string(fuente, Vector2(2, boton.size.y - 7), tr(capitan["corto"]), HORIZONTAL_ALIGNMENT_CENTER, boton.size.x - 4, 13, Color("2a1a0c") if claro else Principal.COLOR_TEXTO)
+	# Dioses aún bloqueados: velo oscuro con candado y precio.
+	if mundo != null and not mundo.superv.desbloqueado(capitan["id"]):
+		var c := Vector2(boton.size.x / 2.0, 34.0)
+		boton.draw_circle(c, 28.0, Color(0, 0, 0, 0.55))
+		boton.draw_rect(Rect2(c + Vector2(-9, -2), Vector2(18, 14)), Principal.COLOR_ORO)
+		boton.draw_arc(c + Vector2(0, -3), 6.5, PI, TAU, 10, Principal.COLOR_ORO, 3.0, true)
+		boton.draw_string(fuente, c + Vector2(-30, 26), str(mundo.superv.precio(capitan["id"])), HORIZONTAL_ALIGNMENT_CENTER, 60, 13, Principal.COLOR_ORO)
 
 
 # Retrato del capitán en un medallón dorado: hombros con abrigo y charreteras, cara con ojos,
@@ -3215,6 +3331,8 @@ static func dibujar_retrato(lienzo: CanvasItem, c: Vector2, r: float, datos: Dic
 	lienzo.draw_circle(c, r + 1.0, oro)
 	lienzo.draw_circle(c, dentro, Color("1d4656"))
 	lienzo.draw_circle(c + Vector2(0, -r * 0.2), r * 0.7, Color("2b6479"))
+	if datos.has("aura"):
+		lienzo.draw_arc(c + Vector2(0, -r * 0.05), r * 0.5, 0.0, TAU, 32, Color(datos["aura"]), maxf(1.5, r * 0.07), true)
 	var pelo := Color(datos["pelo"]) if datos["pelo"] != "" else Color.TRANSPARENT
 	if melena and datos["pelo"] != "":
 		lienzo.draw_colored_polygon(_recortar(c, dentro, _elipse(c + Vector2(0, r * 0.28), r * 0.47, r * 0.6)), pelo)
@@ -3263,6 +3381,9 @@ static func dibujar_retrato(lienzo: CanvasItem, c: Vector2, r: float, datos: Dic
 		lienzo.draw_colored_polygon(_elipse(c + Vector2(r * 0.13, -r * 0.02), r * 0.095, r * 0.08), tinta)
 	lienzo.draw_colored_polygon(_elipse(c + Vector2(0, r * 0.06), r * 0.045, r * 0.06), sombra)
 
+	if datos.get("tocado", "") != "":
+		_retrato_tocado(lienzo, c, r, datos, dentro, trazo)
+		return
 	var tela := Color(datos["sombrero"])
 	lienzo.draw_colored_polygon(_elipse(c + Vector2(0, -r * 0.5), r * 0.34, r * 0.27), tela.darkened(0.2))
 	var ala := PackedVector2Array()
@@ -3283,6 +3404,76 @@ static func dibujar_retrato(lienzo: CanvasItem, c: Vector2, r: float, datos: Dic
 		lienzo.draw_colored_polygon(_recortar(c, dentro, _elipse(c + Vector2(r * 0.42, -r * 0.62), r * 0.3, r * 0.085, -0.65)), pluma)
 		lienzo.draw_line(c + Vector2(r * 0.22, -r * 0.46), c + Vector2(r * 0.6, -r * 0.78), pluma.darkened(0.3), maxf(1.0, trazo * 0.6), true)
 
+
+# Tocado de los dioses en el retrato, en lugar del sombrero pirata.
+static func _retrato_tocado(lienzo: CanvasItem, c: Vector2, r: float, datos: Dictionary, dentro: float, trazo: float) -> void:
+	var oro := Color("d9b46a")
+	var tela := Color(datos["sombrero"])
+	var acento := Color(datos["pluma"]) if datos["pluma"] != "" else oro
+	var casco := func(color: Color) -> void:
+		lienzo.draw_colored_polygon(_recortar(c, dentro, _elipse(c + Vector2(0, -r * 0.12), r * 0.37, r * 0.34, 0.0, PI, TAU)), color)
+		lienzo.draw_line(c + Vector2(-r * 0.37, -r * 0.12), c + Vector2(r * 0.37, -r * 0.12), color.darkened(0.35), trazo, true)
+	match str(datos["tocado"]):
+		"penacho":
+			var colores := [acento, Color("2aa8a0"), Color("d23a2a"), Color("2aa8a0"), acento]
+			for k in 9:
+				var a := lerpf(-1.2, 1.2, k / 8.0)
+				var punta := c + Vector2(0, -r * 0.3) + Vector2(sin(a), -cos(a)) * r * 0.42
+				lienzo.draw_colored_polygon(_recortar(c, dentro, _elipse(punta, r * 0.085, r * 0.3, a)), colores[k % colores.size()])
+			lienzo.draw_rect(Rect2(c + Vector2(-r * 0.36, -r * 0.3), Vector2(r * 0.72, r * 0.1)), oro)
+			lienzo.draw_circle(c + Vector2(0, -r * 0.25), r * 0.07, Color("3fd2c8"))
+		"casco_cresta":
+			lienzo.draw_colored_polygon(_recortar(c, dentro, _elipse(c + Vector2(0, -r * 0.52), r * 0.12, r * 0.32, 0.0, PI, TAU)), acento)
+			casco.call(tela)
+			lienzo.draw_rect(Rect2(c + Vector2(-r * 0.04, -r * 0.14), Vector2(r * 0.08, r * 0.2)), tela)
+		"disco_solar":
+			lienzo.draw_circle(c + Vector2(0, -r * 0.6), r * 0.26, tela)
+			lienzo.draw_circle(c + Vector2(0, -r * 0.6), r * 0.18, tela.lightened(0.35))
+			for lado: float in [-1.0, 1.0]:
+				lienzo.draw_rect(Rect2(c + Vector2(lado * r * 0.37 - r * 0.07, -r * 0.12), Vector2(r * 0.14, r * 0.5)), Color("2a4fa8"))
+			casco.call(oro)
+		"chacal":
+			var piel := Color(datos["piel"])
+			for lado: float in [-1.0, 1.0]:
+				lienzo.draw_colored_polygon(_recortar(c, dentro, PackedVector2Array([c + Vector2(lado * r * 0.08, -r * 0.3), c + Vector2(lado * r * 0.32, -r * 0.25), c + Vector2(lado * r * 0.26, -r * 0.88)])), piel)
+				lienzo.draw_colored_polygon(_recortar(c, dentro, PackedVector2Array([c + Vector2(lado * r * 0.15, -r * 0.34), c + Vector2(lado * r * 0.26, -r * 0.32), c + Vector2(lado * r * 0.24, -r * 0.68)])), oro)
+			lienzo.draw_colored_polygon(_elipse(c + Vector2(0, r * 0.17), r * 0.13, r * 0.2), piel.lightened(0.08))
+			lienzo.draw_circle(c + Vector2(0, r * 0.32), r * 0.05, Color("101010"))
+			for lado: float in [-1.0, 1.0]:
+				lienzo.draw_circle(c + Vector2(lado * r * 0.13, -r * 0.02), r * 0.045, oro)
+		"diadema":
+			lienzo.draw_arc(c + Vector2(0, -r * 0.02), r * 0.34, PI * 1.08, PI * 1.92, 16, oro, r * 0.09, true)
+			lienzo.draw_circle(c + Vector2(0, -r * 0.37), r * 0.08, oro)
+			for k in 4:
+				var a := PI * (1.2 + k * 0.2)
+				lienzo.draw_circle(c + Vector2(0, -r * 0.02) + Vector2(cos(a), sin(a)) * r * 0.34, r * 0.035, Color("1fd27a"))
+		"corona":
+			lienzo.draw_rect(Rect2(c + Vector2(-r * 0.3, -r * 0.42), Vector2(r * 0.6, r * 0.12)), oro)
+			for k in 5:
+				var x := lerpf(-0.26, 0.26, k / 4.0) * r
+				lienzo.draw_colored_polygon(PackedVector2Array([c + Vector2(x - r * 0.06, -r * 0.41), c + Vector2(x + r * 0.06, -r * 0.41), c + Vector2(x, -r * 0.62)]), oro)
+			lienzo.draw_circle(c + Vector2(0, -r * 0.36), r * 0.04, Color("4fd6ff"))
+		"cuernos":
+			for lado: float in [-1.0, 1.0]:
+				lienzo.draw_colored_polygon(_recortar(c, dentro, PackedVector2Array([c + Vector2(lado * r * 0.14, -r * 0.3), c + Vector2(lado * r * 0.3, -r * 0.22), c + Vector2(lado * r * 0.5, -r * 0.55), c + Vector2(lado * r * 0.62, -r * 0.82)])), Color("e8dcc0"))
+		"llamas":
+			var fuegos := [Color("ff4a1a"), Color("ff9a1a"), Color("ffd84a")]
+			for k in 5:
+				var x := lerpf(-0.24, 0.24, k / 4.0) * r
+				lienzo.draw_colored_polygon(_recortar(c, dentro, _elipse(c + Vector2(x, -r * (0.48 + (k % 2) * 0.1)), r * 0.1, r * 0.24)), fuegos[k % 3])
+		"cuernos_largos":
+			for lado: float in [-1.0, 1.0]:
+				lienzo.draw_colored_polygon(_recortar(c, dentro, PackedVector2Array([c + Vector2(lado * r * 0.2, -r * 0.3), c + Vector2(lado * r * 0.34, -r * 0.24), c + Vector2(lado * r * 0.44, -r * 0.95)])), tela)
+			casco.call(tela)
+		"ala_ancha":
+			lienzo.draw_colored_polygon(_recortar(c, dentro, _elipse(c + Vector2(0, -r * 0.5), r * 0.24, r * 0.22)), tela.darkened(0.15))
+			lienzo.draw_colored_polygon(_recortar(c, dentro, _elipse(c + Vector2(0, -r * 0.3), r * 0.75, r * 0.12)), tela)
+			lienzo.draw_rect(Rect2(c + Vector2(-r * 0.23, -r * 0.43), Vector2(r * 0.46, r * 0.07)), Color("2a1f18"))
+		"casco_alado":
+			for lado: float in [-1.0, 1.0]:
+				for k in 3:
+					lienzo.draw_colored_polygon(_recortar(c, dentro, _elipse(c + Vector2(lado * r * (0.42 + k * 0.05), -r * (0.3 + k * 0.1)), r * 0.06, r * 0.22, lado * (0.5 + k * 0.2))), Color("f2f2f2"))
+			casco.call(tela)
 
 static func _elipse(centro: Vector2, rx: float, ry: float, giro := 0.0, desde := 0.0, hasta := TAU) -> PackedVector2Array:
 	var puntos := PackedVector2Array()
@@ -3640,8 +3831,9 @@ func canones_tormenta(delta: float) -> void:
 	_seguir_canones(delta)
 
 
+# La guía de tiro sale en cuanto se pulsa el botón (al frente) y sigue al dedo al arrastrar.
 func dibujar_apunte_tormenta(lienzo: Control, camara: Camera3D) -> void:
-	if apuntando_canones() and mundo.jugador != null and mundo.jugador.viva:
+	if (dedo_canon != -1 or tecla_canon) and mundo.jugador != null and mundo.jugador.viva:
 		_dibujar_apunte_canon(lienzo, camara)
 
 
